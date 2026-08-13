@@ -1,0 +1,67 @@
+plugins {
+    id 'java-library'
+    id "org.jetbrains.kotlin.jvm"
+}
+
+base {
+    archivesName = "${mod_id}-${project.name}-${libs.versions.minecraft.get()}"
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(libs.versions.java.get())
+    withSourcesJar()
+}
+
+kotlin {
+    jvmToolchain(Integer.parseInt(libs.versions.java.get()))
+    compilerOptions {
+        freeCompilerArgs.add('-jvm-default=enable')
+        freeCompilerArgs.add('-Xcollection-literals')
+    }
+}
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+    google()
+    // Kotlin for Forge（neoforge 模块的 forgeKotlin 依赖）
+    maven {
+        name = 'Kotlin for Forge'
+        url = 'https://thedarkcolour.github.io/KotlinForForge/'
+        content { includeGroup "thedarkcolour" }
+    }
+}
+
+processResources {
+    var expandProps = [
+            'version'                      : version,
+            'group'                        : project.group, //Else we target the task's group.
+            'minecraft_version'            : libs.versions.minecraft.get(),
+            'minecraft_version_range'      : libs.versions.minecraftRange.get(),
+            'fabric_loader_version'        : libs.versions.fabricLoader.get(),
+            'fabric_kotlin_version'        : libs.versions.fabricKotlin.get(),
+            'mod_name'                     : mod_name,
+            'mod_author'                   : mod_author,
+            'mod_id'                       : mod_id,
+            'license'                      : license,
+            'description'                  : project.description,
+            'neoforge_loader_version_range': libs.versions.neoforgeRange.get(),
+            'credits'                      : credits,
+            'java_version'                 : libs.versions.java.get(),
+            'forge_kotlin_version_range'   : libs.versions.forgeKotlinRange.get(),
+    ]
+
+    var jsonExpandProps = expandProps.collectEntries {
+        key, value -> [(key): value instanceof String ? value.replace("\n", "\\\\n") : value]
+    }
+
+    filesMatching(['META-INF/mods.toml', 'META-INF/neoforge.mods.toml']) {
+        expand expandProps
+    }
+
+    filesMatching(['pack.mcmeta', 'fabric.mod.json', '*.mixins.json']) {
+        expand jsonExpandProps
+    }
+
+    inputs.properties(expandProps)
+}
