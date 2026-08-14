@@ -4,10 +4,17 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.MinecraftCanvas
+import androidx.compose.ui.graphics.MinecraftCanvas.DrawArcCommand
+import androidx.compose.ui.graphics.MinecraftCanvas.DrawCircleCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawCommand
+import androidx.compose.ui.graphics.MinecraftCanvas.DrawLineCommand
+import androidx.compose.ui.graphics.MinecraftCanvas.DrawOvalCommand
+import androidx.compose.ui.graphics.MinecraftCanvas.DrawPathCommand
+import androidx.compose.ui.graphics.MinecraftCanvas.DrawPointsCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawRectCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawRoundRectCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand
+import androidx.compose.ui.graphics.PaintingStyle
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.client.gui.render.TextureSetup
@@ -17,7 +24,9 @@ import net.minecraft.client.renderer.state.gui.GuiRenderState
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState
 import net.minecraft.locale.Language
 import org.joml.Matrix3x2f
+import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /**
  * 把 [MinecraftCanvas] 记录的绘制命令提交到 Minecraft 当前帧的 [GuiRenderState]。
@@ -25,11 +34,12 @@ import kotlin.math.roundToInt
  * 阶段 C:把 [MinecraftCanvas] 记录的绘制命令提交到 Minecraft 当前帧的 [GuiRenderState]。
  * 第一版支持:
  * - 矩形(含圆角为 0 的圆角矩形)→ [BlitRenderState] 纯色四边形;
+ * - 圆/椭圆/弧/线/路径/点/带圆角矩形 → [GeometryTessellator] CPU 三角化,
+ *   经 [GuiTriangleRenderState](自定义 TRIANGLES pipeline)提交;
  * - 文本 → [GuiTextRenderState](阶段 E,MC Font 字形,布局度量同为 MC 字形)。
  * 直接进入当前帧 GUI 渲染;不创建任何额外 RenderTarget/离屏纹理。
  *
  * 尚未支持(后续阶段):
- * - 圆/椭圆/弧/线/路径/点 → 需要三角化;
  * - 图片(drawImageRect)→ 需要把 [androidx.compose.ui.graphics.MinecraftImageBitmap]
  *   的 CPU 像素上传为 GpuTexture。
  *
@@ -37,11 +47,15 @@ import kotlin.math.roundToInt
  */
 internal class MinecraftRenderContext {
 
+    /** 三角化输出缓冲(每帧复用,避免分配) */
+    private val triangleSink = GeometryTessellator.Sink()
+
     /** 把 [canvas] 中的命令逐条提交到 [renderState](GUI 坐标 = 场景 px,密度 1) */
     fun render(canvas: MinecraftCanvas, renderState: GuiRenderState) {
         val windowState = Minecraft.getInstance().gameRenderer.gameRenderState().windowRenderState
         val windowWidth = windowState.width / windowState.guiScale
         val windowHeight = windowState.height / windowState.guiScale
+        val guiScale = windowState.guiScale
 
         for (command in canvas.commands()) {
             // 平台适配点(T.9 兜底):MC 的 enableScissor 对 "宽高 <= 0" 直接抛
@@ -70,7 +84,7 @@ internal class MinecraftRenderContext {
                     )
                 )
                 is DrawRoundRectCommand -> {
-                    // 圆角为 0(或小于 1px)时退化为矩形;带圆角需三角化,后续阶段补齐
+                    // 圆角为 0(或小于 1px)时退化为矩形;带圆角走三角化
                     if (command.radiusX <= 1f && command.radiusY <= 1f) {
                         renderState.addBlitToCurrentLayer(
                             blit(
@@ -79,12 +93,105 @@ internal class MinecraftRenderContext {
                                 command.paint.color, command.paint.alpha,
                             )
                         )
+                    } else {
+                        addTriangles(renderState, command, scissor, guiScale) { sink ->
+                            GeometryTessellator.roundRect(
+                                command.left, command.top, command.right, command.bottom,
+                                command.radiusX, command.radiusY,
+                                fill = command.paint.style == PaintingStyle.Fill,
+                                strokeWidth = command.paint.strokeWidth,
+                                sink = sink,
+                            )
+                        }
                     }
                 }
+                is DrawOvalCommand -> addTriangles(renderState, command, scissor, guiScale) { sink ->
+                    GeometryTessellator.oval(
+                        command.left, command.top, command.right, command.bottom,
+                        fill = command.paint.style == PaintingStyle.Fill,
+                        strokeWidth = command.paint.strokeWidth,
+                        sink = sink,
+                    )
+                }
+                is DrawCircleCommand -> addTriangles(renderState, command, scissor, guiScale) { sink ->
+                    GeometryTessellator.circle(
+                        command.centerX, command.centerY, command.radius,
+                        fill = command.paint.style == PaintingStyle.Fill,
+                        strokeWidth = command.paint.strokeWidth,
+                        sink = sink,
+                    )
+                }
+                is DrawArcCommand -> addTriangles(renderState, command, scissor, guiScale) { sink ->
+                    GeometryTessellator.arc(
+                        command.left, command.top, command.right, command.bottom,
+                        command.startAngle, command.sweepAngle, command.useCenter,
+                        fill = command.paint.style == PaintingStyle.Fill,
+                        strokeWidth = command.paint.strokeWidth,
+                        sink = sink,
+                    )
+                }
+                is DrawLineCommand -> addTriangles(renderState, command, scissor, guiScale) { sink ->
+                    GeometryTessellator.line(
+                        command.p1x, command.p1y, command.p2x, command.p2y,
+                        command.paint.strokeWidth,
+                        sink = sink,
+                    )
+                }
+                is DrawPathCommand -> addTriangles(renderState, command, scissor, guiScale) { sink ->
+                    GeometryTessellator.path(
+                        command.segments,
+                        fill = command.paint.style == PaintingStyle.Fill,
+                        strokeWidth = command.paint.strokeWidth,
+                        sink = sink,
+                    )
+                }
+                is DrawPointsCommand -> addTriangles(renderState, command, scissor, guiScale) { sink ->
+                    GeometryTessellator.points(
+                        command.pointMode, command.points,
+                        command.paint.strokeWidth,
+                        sink = sink,
+                    )
+                }
                 is DrawTextCommand -> renderState.addText(text(command, scissor))
-                else -> Unit // 圆/椭圆/弧/线/路径/点/图片:后续阶段
+                is MinecraftCanvas.DrawImageRectCommand -> Unit // 图片:后续阶段(像素上传为 GpuTexture)
             }
         }
+    }
+
+    /**
+     * 三角化一条几何命令并作为 [GuiTriangleRenderState] 提交。
+     * 空几何(三角化结果无顶点)自动跳过;pipeline 首次使用时懒编译。
+     * coverage 的屏幕像素距离按「矩阵最大轴缩放 × guiScale」换算。
+     */
+    private fun addTriangles(
+        renderState: GuiRenderState,
+        command: DrawCommand,
+        scissor: Rect?,
+        guiScale: Int,
+        tessellate: (GeometryTessellator.Sink) -> Unit,
+    ) {
+        val paint = command.paint ?: return
+        triangleSink.aaScale = matrixScale(command.matrix) * guiScale
+        triangleSink.clear()
+        tessellate(triangleSink)
+        if (triangleSink.vertexCount < 3) return
+        MinecraftGuiTriangles.ensureCompiled()
+        renderState.addGuiElement(
+            GuiTriangleRenderState(
+                pose = command.matrix.toMatrix3x2f(),
+                colorArgb = paint.color.toArgb(paint.alpha),
+                scissor = scissor?.toScreenRectangle(),
+                vertices = triangleSink.toArray(),
+                coverage = triangleSink.toCoverageArray(),
+            )
+        )
+    }
+
+    /** 命令矩阵(列主序 4x4)2D 部分的最大轴缩放 */
+    private fun matrixScale(m: FloatArray): Float {
+        val scaleX = sqrt(m[0] * m[0] + m[1] * m[1])
+        val scaleY = sqrt(m[4] * m[4] + m[5] * m[5])
+        return max(scaleX, scaleY)
     }
 
     /**

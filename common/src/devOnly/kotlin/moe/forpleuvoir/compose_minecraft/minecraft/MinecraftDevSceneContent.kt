@@ -52,6 +52,12 @@ fun MinecraftDevSceneContent() {
                 subtitle = "固定高度全宽列表,滚轮方向/速度/裁剪验证",
                 onClick = { ComposeScreen.open { ScrollTestDevScene() } },
             )
+
+            DevMenuButton(
+                title = "图形绘制测试 (Geometry)",
+                subtitle = "圆/椭圆/弧/圆角矩形/线/Path/点,填充与描边",
+                onClick = { ComposeScreen.open { GeometryDevScene() } },
+            )
         }
     }
 }
