@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /** The data class which holds the set of parameters of the text layout computation. */
 class TextLayoutInput
@@ -41,7 +42,7 @@ private constructor(
     val text: AnnotatedString,
 
     /** The text layout used for computing this text layout. */
-    val style: TextStyle,
+    val style: McTextStyle,
 
     /**
      * A list of [Placeholder]s inserted into text layout that reserves space to embed icons or
@@ -109,7 +110,7 @@ private constructor(
     @Suppress("DEPRECATION")
     constructor(
         text: AnnotatedString,
-        style: TextStyle,
+        style: McTextStyle,
         placeholders: List<AnnotatedString.Range<Placeholder>>,
         maxLines: Int,
         softWrap: Boolean,
@@ -134,7 +135,7 @@ private constructor(
 
     constructor(
         text: AnnotatedString,
-        style: TextStyle,
+        style: McTextStyle,
         placeholders: List<AnnotatedString.Range<Placeholder>>,
         maxLines: Int,
         softWrap: Boolean,
@@ -173,7 +174,7 @@ private constructor(
     // no use case for calling this method directly.
     fun copy(
         text: AnnotatedString = this.text,
-        style: TextStyle = this.style,
+        style: McTextStyle = this.style,
         placeholders: List<AnnotatedString.Range<Placeholder>> = this.placeholders,
         maxLines: Int = this.maxLines,
         softWrap: Boolean = this.softWrap,

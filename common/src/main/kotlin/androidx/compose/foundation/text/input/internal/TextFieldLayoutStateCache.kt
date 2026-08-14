@@ -39,14 +39,11 @@ import androidx.compose.ui.text.TextLayoutInput
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.intl.Locale
-import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * Performs text layout lazily, on-demand for text fields with snapshot-aware caching.
@@ -104,7 +101,7 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
      */
     fun updateNonMeasureInputs(
         textFieldState: TransformedTextFieldState,
-        textStyle: TextStyle,
+        textStyle: McTextStyle,
         singleLine: Boolean,
         softWrap: Boolean,
         keyboardOptions: KeyboardOptions,
@@ -115,7 +112,8 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
                 textStyle = textStyle,
                 singleLine = singleLine,
                 softWrap = softWrap,
-                isKeyboardTypePhone = keyboardOptions.keyboardType == KeyboardType.Phone,
+                // 平台适配点:isKeyboardTypePhone(键盘类型)不再参与布局方向计算,MC 第一版固定 LTR
+                isKeyboardTypePhone = false,
             )
     }
 
@@ -182,37 +180,12 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
                     // notified.
                     !cachedResult.multiParagraph.intrinsics.hasStaleResolvedFonts
             ) {
-                val isLayoutAffectingSame =
-                    cachedRecord.textStyle?.hasSameLayoutAffectingAttributes(
-                        nonMeasureInputs.textStyle
-                    ) ?: false
-
-                val isDrawAffectingSame =
-                    cachedRecord.textStyle?.hasSameDrawAffectingAttributes(
-                        nonMeasureInputs.textStyle
-                    ) ?: false
+                // 平台适配点:McTextStyle 无布局/绘制属性分离,任何样式变化都走慢路径重排
+                val isStyleSame = cachedRecord.textStyle == nonMeasureInputs.textStyle
 
                 // Fast path: None of the inputs changed.
-                if (isLayoutAffectingSame && isDrawAffectingSame) {
+                if (isStyleSame) {
                     return cachedResult
-                }
-                // Slightly slower than fast path: Layout did not change but TextLayoutInput did
-                if (isLayoutAffectingSame) {
-                    return cachedResult.copy(
-                        layoutInput =
-                            TextLayoutInput(
-                                cachedResult.layoutInput.text,
-                                nonMeasureInputs.textStyle,
-                                cachedResult.layoutInput.placeholders,
-                                cachedResult.layoutInput.maxLines,
-                                cachedResult.layoutInput.softWrap,
-                                cachedResult.layoutInput.overflow,
-                                cachedResult.layoutInput.density,
-                                cachedResult.layoutInput.layoutDirection,
-                                cachedResult.layoutInput.fontFamilyResolver,
-                                cachedResult.layoutInput.constraints,
-                            )
-                    )
                 }
             }
 
@@ -288,15 +261,9 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
 
         val textMeasurer = obtainTextMeasurer(measureInputs)
 
-        val finalTextStyle =
-            if (nonMeasureInputs.isKeyboardTypePhone) {
-                val textStyle = nonMeasureInputs.textStyle
-                val currentLocale = textStyle.localeList?.let { it[0] } ?: Locale.current
-                val textDirection = resolveTextDirectionForKeyboardTypePhone(currentLocale)
-                nonMeasureInputs.textStyle.merge(TextStyle(textDirection = textDirection))
-            } else {
-                nonMeasureInputs.textStyle
-            }
+        // 平台适配点:键盘类型驱动的文本方向合并(textStyle.merge(TextStyle(textDirection=...)))
+        // 随 TextStyle 移除;MC 第一版固定 LTR,直接使用传入样式
+        val finalTextStyle = nonMeasureInputs.textStyle
 
         return textMeasurer.measure(
             text =
@@ -353,7 +320,7 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
         // layout when selection changes. Composition should invalidate the layout because it
         // adds an underline span.
         var composition: TextRange? = null
-        var textStyle: TextStyle? = null
+        var textStyle: McTextStyle? = null
         var singleLine: Boolean = false
         var softWrap: Boolean = false
         var densityValue: Float = Float.NaN
@@ -410,7 +377,7 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
     // region Input holders
     private class NonMeasureInputs(
         val textFieldState: TransformedTextFieldState,
-        val textStyle: TextStyle,
+        val textStyle: McTextStyle,
         val singleLine: Boolean,
         val softWrap: Boolean,
         val isKeyboardTypePhone: Boolean,
@@ -502,14 +469,6 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
     }
     // endregion
 }
-
-/**
- * Returns the directionality of [locale]'s number system.
- *
- * We need to use the digit direction of the [locale] while deciding TextDirection if KeyboardType
- * is configured as [KeyboardType.Phone].
- */
-internal fun resolveTextDirectionForKeyboardTypePhone(locale: Locale): TextDirection = TextDirection.Content
 
 /**
  * Efficiently concatenates two nullable lists. Semantically an empty list is equivalent to a null

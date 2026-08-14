@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import kotlin.math.ceil
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 internal const val DefaultMaxLines = Int.MAX_VALUE
 @JvmDefaultWithCompatibility
@@ -117,7 +118,7 @@ interface Paragraph {
  */
 fun Paragraph(
     text: String,
-    style: TextStyle,
+    style: McTextStyle,
     spanStyles: List<AnnotatedString.Range<SpanStyle>> = listOf(),
     placeholders: List<AnnotatedString.Range<Placeholder>> = listOf(),
     maxLines: Int = DefaultMaxLines,
@@ -146,7 +147,7 @@ fun Paragraph(
  * [androidx.compose.ui.text.style.TextDirection.Content] is used as the default value.
  *
  * @param text the text to be laid out
- * @param style the [TextStyle] to be applied to the whole text
+ * @param style the [McTextStyle] to be applied to the whole text
  * @param width how wide the text is allowed to be
  * @param density density of the device
  * @param fontFamilyResolver [FontFamily.Resolver] to be used to load the font given in [SpanStyle]s
@@ -168,7 +169,7 @@ fun Paragraph(
 )
 fun Paragraph(
     text: String,
-    style: TextStyle,
+    style: McTextStyle,
     width: Float,
     density: Density,
     fontFamilyResolver: FontFamily.Resolver,
@@ -197,7 +198,7 @@ fun Paragraph(
  * [androidx.compose.ui.text.style.TextDirection.Content] is used as the default value.
  *
  * @param text the text to be laid out
- * @param style the [TextStyle] to be applied to the whole text
+ * @param style the [McTextStyle] to be applied to the whole text
  * @param constraints how wide and tall the text is allowed to be. [Constraints.maxWidth] will
  *   define the width of the Paragraph. [Constraints.maxHeight] helps defining the number of lines
  *   that fit with ellipsis is true. Minimum components of the [Constraints] object are no-op.
@@ -216,7 +217,7 @@ fun Paragraph(
 )
 fun Paragraph(
     text: String,
-    style: TextStyle,
+    style: McTextStyle,
     constraints: Constraints,
     density: Density,
     fontFamilyResolver: FontFamily.Resolver,
@@ -245,7 +246,7 @@ fun Paragraph(
  * [androidx.compose.ui.text.style.TextDirection.Content] is used as the default value.
  *
  * @param text the text to be laid out
- * @param style the [TextStyle] to be applied to the whole text
+ * @param style the [McTextStyle] to be applied to the whole text
  * @param constraints how wide and tall the text is allowed to be. [Constraints.maxWidth] will
  *   define the width of the Paragraph. [Constraints.maxHeight] helps defining the number of lines
  *   that fit with ellipsis is true. Minimum components of the [Constraints] object are no-op.
@@ -260,7 +261,7 @@ fun Paragraph(
  */
 fun Paragraph(
     text: String,
-    style: TextStyle,
+    style: McTextStyle,
     constraints: Constraints,
     density: Density,
     fontFamilyResolver: FontFamily.Resolver,

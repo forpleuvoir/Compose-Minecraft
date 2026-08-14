@@ -25,18 +25,20 @@ import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * Modifier element for any Text with [AnnotatedString] or [onTextLayout] parameters
  *
  * This is slower than [TextAnnotatedStringElement]
+ *
+ * 平台适配点:TextStyle → McTextStyle。
  */
 internal class TextAnnotatedStringElement(
     private val text: AnnotatedString,
-    private val style: TextStyle,
+    private val style: McTextStyle,
     private val fontFamilyResolver: FontFamily.Resolver,
     private val onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     private val overflow: TextOverflow = TextOverflow.Clip,

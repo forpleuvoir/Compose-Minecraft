@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,7 +53,6 @@ import androidx.compose.ui.platform.TextToolbar
 import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Density
@@ -61,6 +60,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.consumeAsFlow
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * BasicSecureTextField is specifically designed for password entry fields and is a preconfigured
@@ -125,7 +125,7 @@ fun BasicSecureTextField(
     enabled: Boolean = true,
     readOnly: Boolean = false,
     inputTransformation: InputTransformation? = null,
-    textStyle: TextStyle = TextStyle.Default,
+    textStyle: McTextStyle = McTextStyle.Default,
     keyboardOptions: KeyboardOptions = KeyboardOptions.SecureTextField,
     onKeyboardAction: KeyboardActionHandler? = null,
     onTextLayout: (Density.(getResult: () -> TextLayoutResult?) -> Unit)? = null,
@@ -350,7 +350,7 @@ fun BasicSecureTextField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     inputTransformation: InputTransformation? = null,
-    textStyle: TextStyle = TextStyle.Default,
+    textStyle: McTextStyle = McTextStyle.Default,
     keyboardOptions: KeyboardOptions = KeyboardOptions.SecureTextField,
     onKeyboardAction: KeyboardActionHandler? = null,
     onTextLayout: (Density.(getResult: () -> TextLayoutResult?) -> Unit)? = null,
@@ -392,7 +392,7 @@ fun BasicSecureTextField(
     enabled: Boolean = true,
     readOnly: Boolean = false,
     inputTransformation: InputTransformation? = null,
-    textStyle: TextStyle = TextStyle.Default,
+    textStyle: McTextStyle = McTextStyle.Default,
     keyboardOptions: KeyboardOptions = KeyboardOptions.SecureTextField,
     onKeyboardAction: KeyboardActionHandler? = null,
     onTextLayout: (Density.(getResult: () -> TextLayoutResult?) -> Unit)? = null,

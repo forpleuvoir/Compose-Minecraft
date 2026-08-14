@@ -53,15 +53,14 @@ import androidx.compose.ui.semantics.text
 import androidx.compose.ui.semantics.textSubstitution
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Constraints.Companion.fitPrioritizingWidth
 import androidx.compose.ui.util.fastRoundToInt
 import androidx.compose.ui.util.trace
 import kotlin.jvm.JvmName
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * Node that implements Text for [String].
@@ -73,7 +72,7 @@ import kotlin.jvm.JvmName
 @OptIn(ExperimentalFoundationApi::class)
 internal class TextStringSimpleNode(
     private var text: String,
-    private var style: TextStyle,
+    private var style: McTextStyle,
     private var fontFamilyResolver: FontFamily.Resolver,
     private var overflow: TextOverflow = TextOverflow.Clip,
     private var softWrap: Boolean = true,
@@ -112,7 +111,7 @@ internal class TextStringSimpleNode(
             return _layoutCache!!
         }
 
-    private var resolvedInheritedStyle: TextStyle? = null
+    private var resolvedInheritedStyle: McTextStyle? = null
 
     /**
      * Get the layout cache for the current state of the node during layout.
@@ -169,13 +168,14 @@ internal class TextStringSimpleNode(
         return textSubstitution?.takeIf { it.isShowingSubstitution }?.layoutCache ?: layoutCache
     }
 
-    fun updateDraw(color: ColorProducer?, style: TextStyle): Boolean {
+    fun updateDraw(color: ColorProducer?, style: McTextStyle): Boolean {
         var changed = false
         if (color != this.overrideColor) {
             changed = true
         }
         overrideColor = color
-        changed = changed || !style.hasSameDrawAffectingAttributes(this.style)
+        // 平台适配点:McTextStyle 无布局/绘制属性分离,整样式参与比较
+        changed = changed || style != this.style
         return changed
     }
 
@@ -189,7 +189,7 @@ internal class TextStringSimpleNode(
 
     /** Element has layout related params to update */
     fun updateLayoutRelatedArgs(
-        style: TextStyle,
+        style: McTextStyle,
         minLines: Int,
         maxLines: Int,
         softWrap: Boolean,
@@ -198,7 +198,8 @@ internal class TextStringSimpleNode(
     ): Boolean {
         var changed: Boolean
 
-        changed = !this.style.hasSameLayoutAffectingAttributes(style)
+        // 平台适配点:McTextStyle 无布局/绘制属性分离,整样式参与比较
+        changed = this.style != style
         this.style = style
 
         if (this.minLines != minLines) {
@@ -331,7 +332,8 @@ internal class TextStringSimpleNode(
                     layoutCache
                         .slowCreateTextLayoutResultOrNull(
                             style =
-                                style.merge(color = overrideColor?.invoke() ?: Color.Unspecified)
+                                // 平台适配点:TextStyle.merge → McTextStyle.copy
+                                style.copy(color = overrideColor?.invoke() ?: style.color)
                         )
                         ?.also { textLayoutResult.add(it) }
                 layout != null
@@ -468,43 +470,16 @@ internal class TextStringSimpleNode(
                 canvas.clipRect(left = 0f, top = 0f, right = width, bottom = height)
             }
             try {
-                val style =
+                val drawStyle =
                     if (ComposeFoundationFlags.isInheritedTextStyleEnabled) {
                         resolveInheritedStyle(StylePhase.Draw)
                         resolvedInheritedStyle ?: style
                     } else style
-                val textDecoration = style.textDecoration ?: TextDecoration.None
-                val shadow = style.shadow ?: Shadow.None
-                val drawStyle = style.drawStyle ?: Fill
-                val brush = style.brush
-                if (brush != null) {
-                    val alpha = style.alpha
-                    localParagraph.paint(
-                        canvas = canvas,
-                        brush = brush,
-                        alpha = alpha,
-                        shadow = shadow,
-                        drawStyle = drawStyle,
-                        textDecoration = textDecoration,
-                    )
-                } else {
-                    val overrideColorVal = overrideColor?.invoke() ?: Color.Unspecified
-                    val color =
-                        if (overrideColorVal.isSpecified) {
-                            overrideColorVal
-                        } else if (style.color.isSpecified) {
-                            style.color
-                        } else {
-                            Color.Black
-                        }
-                    localParagraph.paint(
-                        canvas = canvas,
-                        color = color,
-                        shadow = shadow,
-                        drawStyle = drawStyle,
-                        textDecoration = textDecoration,
-                    )
-                }
+                // 平台适配点:McTextStyle 无 brush/shadow/textDecoration 分离,
+                // 颜色与装饰全部由 McTextStyle 承载
+                val overrideColorVal = overrideColor?.invoke() ?: Color.Unspecified
+                val color = if (overrideColorVal.isSpecified) overrideColorVal else drawStyle.color
+                localParagraph.paint(canvas = canvas, color = color)
             } finally {
                 if (willClip) {
                     canvas.restore()

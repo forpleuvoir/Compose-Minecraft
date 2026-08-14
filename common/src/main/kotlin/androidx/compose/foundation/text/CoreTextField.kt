@@ -36,14 +36,9 @@ import androidx.compose.foundation.text.input.internal.createLegacyPlatformTextI
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.OffsetProvider
 import androidx.compose.foundation.text.selection.SelectedTextType
-import androidx.compose.foundation.text.selection.SelectionHandleAnchor
-import androidx.compose.foundation.text.selection.SelectionHandleInfo
-import androidx.compose.foundation.text.selection.SelectionHandleInfoKey
 import androidx.compose.foundation.text.selection.SimpleLayout
-import androidx.compose.foundation.text.selection.TextFieldSelectionHandle
 import androidx.compose.foundation.text.selection.TextFieldSelectionManager
 import androidx.compose.foundation.text.selection.addBasicTextFieldTextContextMenuComponents
-import androidx.compose.foundation.text.selection.isSelectionHandleInVisibleBound
 import androidx.compose.foundation.text.selection.rememberPlatformSelectionBehaviors
 import androidx.compose.foundation.text.selection.textFieldMagnifier
 import androidx.compose.runtime.Composable
@@ -99,7 +94,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.EditProcessor
 import androidx.compose.ui.text.input.ImeAction
@@ -111,6 +105,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TextInputService
 import androidx.compose.ui.text.input.TextInputSession
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpSize
@@ -121,6 +116,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * Base composable that enables users to edit text via hardware or software keyboard.
@@ -191,7 +187,7 @@ internal fun CoreTextField(
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
     modifier: Modifier = Modifier,
-    textStyle: TextStyle = TextStyle.Default,
+    textStyle: McTextStyle = McTextStyle.Default,
     visualTransformation: VisualTransformation = VisualTransformation.None,
     onTextLayout: (TextLayoutResult) -> Unit = {},
     interactionSource: MutableInteractionSource? = null,
@@ -305,8 +301,9 @@ internal fun CoreTextField(
     manager.enabled = enabled
     @OptIn(ExperimentalFoundationApi::class)
     if (ComposeFoundationFlags.isSmartSelectionEnabled) {
+        // 平台适配点:McTextStyle 无 localeList,智能选区使用系统当前 LocaleList
         manager.platformSelectionBehaviors =
-            rememberPlatformSelectionBehaviors(SelectedTextType.EditableText, textStyle.localeList)
+            rememberPlatformSelectionBehaviors(SelectedTextType.EditableText, LocaleList.current)
     }
 
     rememberClipboardEventsHandler(
@@ -401,20 +398,13 @@ internal fun CoreTextField(
             state.layoutCoordinates = it
             state.layoutResult?.innerTextFieldCoordinates = it
             if (enabled) {
+                // 平台适配点(T.8):触摸选区手柄已移除,仅保留浮动工具条的显示/隐藏逻辑
                 if (state.handleState == HandleState.Selection) {
                     if (state.showFloatingToolbar && windowInfo.isWindowFocused) {
                         manager.showSelectionToolbar()
                     } else {
                         manager.hideSelectionToolbar()
                     }
-                    state.showSelectionHandleStart =
-                        manager.isSelectionHandleInVisibleBound(isStartHandle = true)
-                    state.showSelectionHandleEnd =
-                        manager.isSelectionHandleInVisibleBound(isStartHandle = false)
-                    state.showCursorHandle = value.selection.collapsed
-                } else if (state.handleState == HandleState.Cursor) {
-                    state.showCursorHandle =
-                        manager.isSelectionHandleInVisibleBound(isStartHandle = true)
                 }
                 notifyFocusedRect(state, value, offsetMapping)
                 state.layoutResult?.let { layoutResult ->
@@ -645,12 +635,6 @@ internal fun CoreTextField(
                             state.layoutCoordinates!!.isAttached &&
                             showHandleAndMagnifier,
                 )
-
-                if (
-                    state.handleState == HandleState.Cursor && !readOnly && showHandleAndMagnifier
-                ) {
-                    TextFieldCursorHandle(manager = manager)
-                }
             }
         }
     }
@@ -893,7 +877,7 @@ internal class LegacyTextFieldState(
     fun update(
         untransformedText: AnnotatedString,
         visualText: AnnotatedString,
-        textStyle: TextStyle,
+        textStyle: McTextStyle,
         softWrap: Boolean,
         density: Density,
         fontFamilyResolver: FontFamily.Resolver,
@@ -1017,6 +1001,7 @@ internal suspend fun BringIntoViewRequester.bringSelectionEndIntoView(
 private fun SelectionToolbarAndHandles(manager: TextFieldSelectionManager, show: Boolean) {
     with(manager) {
         if (show) {
+            // 平台适配点(T.8):触摸选区手柄已移除,此处仅维护浮动工具条状态。
             // Check whether text layout result became stale. A stale text layout might be
             // completely unrelated to current TextFieldValue, causing offset errors.
             state
@@ -1024,27 +1009,6 @@ private fun SelectionToolbarAndHandles(manager: TextFieldSelectionManager, show:
                 ?.value
                 ?.takeIf { !(state?.isLayoutResultStale ?: true) }
                 ?.let {
-                    if (!value.selection.collapsed) {
-                        val startOffset = offsetMapping.originalToTransformed(value.selection.start)
-                        val endOffset = offsetMapping.originalToTransformed(value.selection.end)
-                        val startDirection = it.getBidiRunDirection(startOffset)
-                        val endDirection = it.getBidiRunDirection(max(endOffset - 1, 0))
-                        if (manager.state?.showSelectionHandleStart == true) {
-                            TextFieldSelectionHandle(
-                                isStartHandle = true,
-                                direction = startDirection,
-                                manager = manager,
-                            )
-                        }
-                        if (manager.state?.showSelectionHandleEnd == true) {
-                            TextFieldSelectionHandle(
-                                isStartHandle = false,
-                                direction = endDirection,
-                                manager = manager,
-                            )
-                        }
-                    }
-
                     state?.let { textFieldState ->
                         // If in selection mode (when the floating toolbar is shown) a new symbol
                         // from the keyboard is entered, text field should enter the editing mode
@@ -1057,39 +1021,6 @@ private fun SelectionToolbarAndHandles(manager: TextFieldSelectionManager, show:
                     }
                 }
         } else hideSelectionToolbar()
-    }
-}
-
-@Composable
-internal fun TextFieldCursorHandle(manager: TextFieldSelectionManager) {
-    if (manager.state?.showCursorHandle == true && manager.transformedText?.isNotEmpty() == true) {
-        val observer = remember(manager) { manager.cursorDragObserver() }
-        val position = manager.getCursorPosition(LocalDensity.current)
-        CursorHandle(
-            offsetProvider = { position },
-            modifier =
-                Modifier.pointerInput(observer) {
-                        coroutineScope {
-                            // UNDISPATCHED because this runs upon first pointer event and
-                            // without it the event would pass before the handler is ready
-                            launch(start = CoroutineStart.UNDISPATCHED) {
-                                detectDownAndDragGesturesWithObserver(observer)
-                            }
-                            launch(start = CoroutineStart.UNDISPATCHED) {
-                                detectTapGestures { manager.showSelectionToolbar() }
-                            }
-                        }
-                    }
-                    .semantics {
-                        this[SelectionHandleInfoKey] =
-                            SelectionHandleInfo(
-                                handle = Handle.Cursor,
-                                position = position,
-                                anchor = SelectionHandleAnchor.Middle,
-                                visible = true,
-                            )
-                    },
-        )
     }
 }
 

@@ -22,6 +22,7 @@ import androidx.compose.ui.text.internal.checkPrecondition
 import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.ResolvedTextDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextIndent
@@ -531,4 +532,25 @@ private fun ParagraphStyle.mergePlatformStyle(
     if (platformStyle == null) return other
     if (other == null) return platformStyle
     return platformStyle.merge(other)
+}
+
+/**
+ * 平台适配点:原定义于 TextStyle.kt(已移除),ParagraphStyle 仍需按布局方向解析文本方向。
+ */
+internal fun resolveTextDirection(
+    direction: LayoutDirection,
+    textDirection: TextDirection?
+): TextDirection {
+    return when (textDirection ?: TextDirection.Content) {
+        TextDirection.Ltr -> TextDirection.Ltr
+        TextDirection.Rtl -> TextDirection.Rtl
+        TextDirection.Content ->
+            when (direction) {
+                LayoutDirection.Ltr -> TextDirection.Ltr
+                LayoutDirection.Rtl -> TextDirection.Rtl
+            }
+        TextDirection.ContentOrLtr -> TextDirection.ContentOrLtr
+        TextDirection.ContentOrRtl -> TextDirection.ContentOrRtl
+        else -> error("Invalid TextDirection.")
+    }
 }

@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.text.platform.ActualParagraphIntrinsics
 import androidx.compose.ui.unit.Density
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /** Calculates and presents the intrinsic width and height of text. */
 interface ParagraphIntrinsics {
@@ -69,7 +70,7 @@ interface ParagraphIntrinsics {
 )
 fun ParagraphIntrinsics(
     text: String,
-    style: TextStyle,
+    style: McTextStyle,
     spanStyles: List<AnnotatedString.Range<SpanStyle>> = listOf(),
     placeholders: List<AnnotatedString.Range<Placeholder>> = listOf(),
     density: Density,
@@ -92,7 +93,7 @@ fun ParagraphIntrinsics(
 )
 fun ParagraphIntrinsics(
     text: String,
-    style: TextStyle,
+    style: McTextStyle,
     spanStyles: List<AnnotatedString.Range<SpanStyle>> = listOf(),
     placeholders: List<AnnotatedString.Range<Placeholder>> = listOf(),
     density: Density,
@@ -117,7 +118,7 @@ fun ParagraphIntrinsics(
  */
 fun ParagraphIntrinsics(
     text: String,
-    style: TextStyle,
+    style: McTextStyle,
     annotations: List<AnnotatedString.Range<out AnnotatedString.Annotation>>,
     density: Density,
     fontFamilyResolver: FontFamily.Resolver,

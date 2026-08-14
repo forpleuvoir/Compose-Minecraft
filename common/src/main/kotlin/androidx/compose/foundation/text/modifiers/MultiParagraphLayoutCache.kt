@@ -26,9 +26,7 @@ import androidx.compose.ui.text.MultiParagraphIntrinsics
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextLayoutInput
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.resolveDefaults
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -39,6 +37,7 @@ import androidx.compose.ui.unit.constrain
 import androidx.compose.ui.unit.isUnspecified
 import androidx.compose.ui.unit.sp
 import kotlin.math.min
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * Performs text layout using [MultiParagraph].
@@ -50,7 +49,7 @@ import kotlin.math.min
  */
 internal class MultiParagraphLayoutCache(
     private var text: AnnotatedString,
-    style: TextStyle,
+    style: McTextStyle,
     private var fontFamilyResolver: FontFamily.Resolver,
     private var overflow: TextOverflow = TextOverflow.Clip,
     private var softWrap: Boolean = true,
@@ -92,10 +91,11 @@ internal class MultiParagraphLayoutCache(
     /**
      * The style used for layout. Marks style-affected cache properties dirty if the new style's
      * layout-affecting attributes are different.
+     * 平台适配点:McTextStyle 无布局/绘制属性分离,整样式参与比较。
      */
-    private var style: TextStyle = style
+    private var style: McTextStyle = style
         set(value) {
-            val newStyleHasSameLayoutAffectingAttrs = value.hasSameLayoutAffectingAttributes(field)
+            val newStyleHasSameLayoutAffectingAttrs = value == field
             field = value
             if (!newStyleHasSameLayoutAffectingAttrs) {
                 markStyleAffectedDirty()
@@ -199,33 +199,10 @@ internal class MultiParagraphLayoutCache(
             return true
         }
         if (autoSize != null) {
-            intrinsicsLayoutDirection = layoutDirection
-            val fontSizeBeforeLayout = style.fontSize
-            // Here's where we perform auto size layout
-            val optimalFontSize =
-                with(autoSize!!) {
-                    with(fontSizeSearchScope) {
-                        var autoSizeFontSize = getFontSize(constraints, text)
-                        if (autoSizeFontSize.isEm) {
-                            autoSizeFontSize = fontSizeBeforeLayout * autoSizeFontSize
-                        }
-                        autoSizeFontSize
-                    }
-                }
-            val autoSizeLayoutCache = fontSizeSearchScope.lastLayoutResult
-            // After auto size layout, check if we have a cached result with the same font size.
-            // If we do, we can populate the layoutCache and return early
-            if (
-                autoSizeLayoutCache != null &&
-                    optimalFontSize == autoSizeLayoutCache.layoutInput.style.fontSize &&
-                    autoSizeLayoutCache.layoutInput.overflow == overflow
-            ) {
-                layoutCache = autoSizeLayoutCache
-                return true
-            }
-            // If our cache doesn't match the layout input, we need to update the style to mark the
-            // relevant caches dirty and perform another layout pass
-            style = style.copy(fontSize = optimalFontSize)
+            // 平台适配点:TextAutoSize 依赖 fontSize 多档排版,与 MC 固定 9px 字形冲突,第一版不支持
+            throw UnsupportedOperationException(
+                "TextAutoSize 在 Minecraft 平台第一版不支持(MC 字号固定 9px)"
+            )
         }
 
         val multiParagraph = layoutText(finalConstraints, layoutDirection)
@@ -302,7 +279,7 @@ internal class MultiParagraphLayoutCache(
     /** Call when any parameters change, invalidation is a result of calling this method. */
     fun update(
         text: AnnotatedString,
-        style: TextStyle,
+        style: McTextStyle,
         fontFamilyResolver: FontFamily.Resolver,
         overflow: TextOverflow,
         softWrap: Boolean,
@@ -340,7 +317,8 @@ internal class MultiParagraphLayoutCache(
                 intrinsicsLayoutDirection = layoutDirection
                 MultiParagraphIntrinsics(
                     annotatedString = text,
-                    style = resolveDefaults(style, layoutDirection),
+                    // 平台适配点:resolveDefaults 随 TextStyle 移除,McTextStyle 无缺省解析
+                    style = style,
                     density = density!!,
                     fontFamilyResolver = fontFamilyResolver,
                     placeholders = placeholders.orEmpty(),
@@ -457,42 +435,12 @@ internal class MultiParagraphLayoutCache(
             text: AnnotatedString,
             fontSize: TextUnit,
         ): TextLayoutResult {
-            val styleBeforeLayout = style
-            // If the cache is populated with a SP [TextUnit] and [performLayout]'s requested
-            // fontSize is in EM, we want to scale the EM value to the SP value.
-            val scaledFontSize =
-                if (fontSize.isEm) {
-                    style.fontSize * fontSize
-                } else fontSize
-            if (scaledFontSize != style.fontSize) {
-                style = style.copy(fontSize = scaledFontSize)
-            }
-
-            val layoutConstraints =
-                if (minLines > 1) useMinLinesConstrainer(constraints, intrinsicsLayoutDirection!!)
-                else constraints
-
-            val multiParagraph = layoutText(layoutConstraints, intrinsicsLayoutDirection!!)
-            val layoutResult =
-                textLayoutResult(intrinsicsLayoutDirection!!, layoutConstraints, multiParagraph)
-            lastLayoutResult = layoutResult
-            style = styleBeforeLayout
-            return layoutResult
+            // 平台适配点:TextAutoSize 第一版不支持(MC 字号固定 9px),入口已在 layoutWithConstraints 拦截
+            throw UnsupportedOperationException("TextAutoSize 在 Minecraft 平台第一版不支持")
         }
 
         override fun TextUnit.toPx(): Float {
-            if (isEm) {
-                check(!style.fontSize.isEm) {
-                    "InternalAutoSize -> toPx(): Cannot convert Em to Px when style.fontSize is Em\n" +
-                        "Declare the composable's style.fontSize with Sp units instead."
-                }
-                check(style.fontSize != TextUnit.Unspecified) {
-                    "InternalAutoSize -> toPx(): Cannot convert Em to Px when style.fontSize is " +
-                        "not set. Please specify a font size."
-                }
-                return style.fontSize.toPx() * value
-            }
-            return toDp().toPx()
+            throw UnsupportedOperationException("TextAutoSize 在 Minecraft 平台第一版不支持")
         }
     }
 

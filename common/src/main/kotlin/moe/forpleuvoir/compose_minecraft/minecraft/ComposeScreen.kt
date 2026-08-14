@@ -14,6 +14,7 @@ import com.mojang.blaze3d.platform.InputConstants
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
+import net.minecraft.client.input.CharacterEvent
 import net.minecraft.client.input.KeyEvent as MCKeyEvent
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.network.chat.Component
@@ -24,11 +25,12 @@ import net.minecraft.network.chat.Component
  * 全部走原版屏幕机制,不依赖任何 loader 事件或 mixin 帧钩子。
  *
  * - 渲染:[extractRenderState] 每帧被调用,把场景绘制命令提交进当前帧 GuiRenderState;
- * - 输入:鼠标(点击/释放/移动/拖拽/滚轮)与键盘(按下/释放)从原版 Screen
- *   转发到 Compose 场景(阶段 F);场景坐标 = GUI 单位(密度 1),无需换算;
+ * - 输入:鼠标(点击/释放/移动/拖拽/滚轮)、键盘(按下/释放)与字符(charTyped,含中文
+ *   输入法上屏)从原版 Screen 转发到 Compose 场景(阶段 F + 文本输入 I.1);
+ *   场景坐标 = GUI 单位(密度 1),无需换算;
  * - 生命周期:[removed] 时关闭场景(任何被替换/关闭路径都会触发)。
  *
- * 尚未支持:文本输入(TextField/IME)、双击、Popup/Dialog 焦点层级。
+ * 尚未支持:双击、Popup/Dialog 焦点层级、IME preedit 组合态提示(候选窗口由系统输入法负责)。
  */
 class ComposeScreen(
     content: @Composable () -> Unit,
@@ -99,23 +101,53 @@ class ComposeScreen(
     }
 
     override fun mouseScrolled(x: Double, y: Double, scrollX: Double, scrollY: Double): Boolean {
-        val consumed = composeScene.sendPointerEvent(
-            eventType = PointerEventType.Scroll,
-            position = Offset(x.toFloat(), y.toFloat()),
-            type = PointerType.Mouse,
-            // MC scrollY 正值=向上滚;Compose Scroll 的 scrollDelta 与滚动方向一致(参考 ibuki 的取反)
-            scrollDelta = Offset(scrollX.toFloat(), -scrollY.toFloat()),
-        )
+        val consumed =
+            composeScene.sendPointerEvent(
+                eventType = PointerEventType.Scroll,
+                position = Offset(x.toFloat(), y.toFloat()),
+                type = PointerType.Mouse,
+                // 平台适配点:GLFW 滚轮一格 = ±1.0;MC 列表语义一格 = 3 行,
+                // 换算为像素(3 × 行高 9 = 27),否则一格只滚 1px 几乎不可见。
+                // 方向:MC scrollY 正值 = 向上滚;Compose scrollDelta.y 正值 = 向上滚手势
+                // (内容向下移动),两者同号,不需要取反。
+                scrollDelta =
+                    Offset(
+                        scrollX.toFloat() * MC_SCROLL_NOTCH_PX,
+                        scrollY.toFloat() * MC_SCROLL_NOTCH_PX,
+                    ),
+            )
         return consumed.anyMovementConsumed || super.mouseScrolled(x, y, scrollX, scrollY)
     }
 
     // ── 键盘输入(阶段 F)──────────────────────────────────────
 
     override fun keyPressed(event: MCKeyEvent): Boolean =
-        composeScene.sendKeyEvent(event.toCompose(KeyEventType.KeyDown)) || super.keyPressed(event)
+        composeScene.sendKeyEvent(event.toCompose(KeyEventType.KeyDown)) ||
+            super.keyPressed(event)
 
     override fun keyReleased(event: MCKeyEvent): Boolean =
         composeScene.sendKeyEvent(event.toCompose(KeyEventType.KeyUp)) || super.keyReleased(event)
+
+    /**
+     * 文本输入(计划 I.1):MC 字符上屏(含中文输入法上屏)→ Compose typed KeyEvent。
+     *
+     * MC 的 charTyped 在字符上屏时被调用;Compose 侧字符输入走 [ComposeKeyEvent] 的
+     * codePoint 字段(KeyEvent.isTypedEvent → TextFieldKeyEventHandler 插入文本),
+     * 因此这里把 [CharacterEvent.codepoint] 直接构造成 typed 事件转发,无需 TextInputService。
+     * 转发前先经 [LocalCharFilter](默认全放行,由业务方覆盖)。
+     */
+    @OptIn(InternalComposeUiApi::class)
+    override fun charTyped(event: CharacterEvent): Boolean {
+        if (!composeScene.isCharAccepted(event.codepoint)) {
+            return false
+        }
+        val typedEvent = ComposeKeyEvent(
+            key = Key.Unknown,
+            type = KeyEventType.KeyDown,
+            codePoint = event.codepoint,
+        )
+        return composeScene.sendKeyEvent(typedEvent)
+    }
 
     // ── 生命周期 ─────────────────────────────────────────────
 
@@ -147,6 +179,9 @@ private fun Int.toPointerKeyboardModifiers(): PointerKeyboardModifiers = Pointer
     isAltPressed = (this and InputConstants.MOD_ALT) != 0,
     isShiftPressed = (this and InputConstants.MOD_SHIFT) != 0,
 )
+
+/** GLFW 滚轮一格(±1.0)对应的滚动像素(MC 列表语义:一格 = 3 行 × 行高 9) */
+private const val MC_SCROLL_NOTCH_PX = 27f
 
 /** MC KeyEvent → Compose [ComposeKeyEvent](GLFW 键码 → 我们自己的 Compose [Key] 常量) */
 @OptIn(InternalComposeUiApi::class)

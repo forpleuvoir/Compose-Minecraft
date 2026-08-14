@@ -197,7 +197,7 @@ internal class GraphicsLayerOwnerLayer(
      * Triggers redrawing of Compose content during the next frame.
      */
     private fun triggerRepaint() {
-        layerManager.invalidate()
+        invalidate()
     }
 
     private fun updateOutline() {
@@ -262,10 +262,17 @@ internal class GraphicsLayerOwnerLayer(
 
     /**
      * Marks content as dirty and triggers redrawing.
+     *
+     * 平台适配点:本平台图层为"命令烘焙"模型 —— [GraphicsLayer.record] 把子树绘制命令
+     * 拍平进本图层的录制;每帧 [GraphicsLayer.draw] 只回放该录制。因此子图层内容变化时,
+     * **父图层必须连锁重新录制**,否则父图层的旧录制会一直回放旧内容(表现为点击等
+     * 状态变化不刷新画面,直到 resize 等外部失效)。Skia 原版此处调用
+     * `invalidateParentLayer()`,移植时遗漏,已补回。
      */
     override fun invalidate() {
         if (isDestroyed) return
         isDirty = true
+        invalidateParentLayer?.invoke()
         layerManager.invalidate()
     }
 

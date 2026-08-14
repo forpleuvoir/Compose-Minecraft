@@ -26,12 +26,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * Manages text layout for TextField including layout coordinates of decoration box and inner text
@@ -97,7 +97,7 @@ internal class TextLayoutState {
      */
     fun updateNonMeasureInputs(
         textFieldState: TransformedTextFieldState,
-        textStyle: TextStyle,
+        textStyle: McTextStyle,
         singleLine: Boolean,
         softWrap: Boolean,
         keyboardOptions: KeyboardOptions,

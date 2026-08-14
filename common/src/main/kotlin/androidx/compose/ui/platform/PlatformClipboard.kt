@@ -17,34 +17,52 @@
 package androidx.compose.ui.platform
 
 import androidx.compose.ui.text.AnnotatedString
+import net.minecraft.client.Minecraft
 
 /**
- * Minecraft 平台第一版剪贴板:仅进程内内存实现,不访问系统剪贴板。
- * 后续阶段接入 Minecraft 屏幕/系统剪贴板。
+ * Minecraft 平台剪贴板(文本输入计划 I.2):
+ * 经 MC `KeyboardHandler.getClipboard()/setClipboard()` 访问系统剪贴板
+ * (MC 内部封装 GLFW 剪贴板,不直接依赖 LWJGL,也不引入 AWT/Skiko/Desktop)。
+ *
+ * 注意:MC 剪贴板调用需在主线程;Compose 场景协程为 Dispatchers.Unconfined,
+ * 复制/粘贴调用链保持在主线程。
  */
 internal object MinecraftClipboard {
-    var text: AnnotatedString? = null
+    fun readText(): String? =
+        runCatching {
+            Minecraft.getInstance().keyboardHandler.getClipboard().ifEmpty { null }
+        }.getOrNull()
+
+    fun writeText(text: String) {
+        // KeyboardHandler.setClipboard 仅写入非空文本(空串由 MC 侧忽略)
+        if (text.isNotEmpty()) {
+            runCatching { Minecraft.getInstance().keyboardHandler.setClipboard(text) }
+        }
+    }
 }
 
 @Suppress("DEPRECATION")
 internal fun createPlatformClipboardManager(): ClipboardManager = object : ClipboardManager {
     override fun setText(annotatedString: AnnotatedString) {
-        MinecraftClipboard.text = annotatedString
+        MinecraftClipboard.writeText(annotatedString.text)
     }
 
-    override fun getText(): AnnotatedString? = MinecraftClipboard.text
+    override fun getText(): AnnotatedString? =
+        MinecraftClipboard.readText()?.let { AnnotatedString(it) }
 }
 
 internal fun createPlatformClipboard(): Clipboard = object : Clipboard {
     override suspend fun getClipEntry(): ClipEntry? =
-        MinecraftClipboard.text?.let { ClipEntry(it.text) }
+        MinecraftClipboard.readText()?.let { ClipEntry(it) }
 
     override suspend fun setClipEntry(clipEntry: ClipEntry?) {
-        MinecraftClipboard.text = clipEntry?.text?.let { AnnotatedString(it) }
+        if (clipEntry != null) {
+            MinecraftClipboard.writeText(clipEntry.text.orEmpty())
+        }
     }
 
     override val nativeClipboard: NativeClipboard
         get() = throw UnsupportedOperationException(
-            "Minecraft 平台第一版不提供原生剪贴板"
+            "Minecraft 平台不提供 NativeClipboard(仅纯文本,经 MC KeyboardHandler)"
         )
 }

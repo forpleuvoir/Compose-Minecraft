@@ -56,20 +56,19 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextLayoutInput
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Constraints.Companion.fitPrioritizingWidth
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.util.fastRoundToInt
 import androidx.compose.ui.util.trace
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /** Node that implements Text for [AnnotatedString] or [onTextLayout] parameters. */
 internal class TextAnnotatedStringNode(
     private var text: AnnotatedString,
-    private var style: TextStyle,
+    private var style: McTextStyle,
     private var fontFamilyResolver: FontFamily.Resolver,
     private var onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     private var overflow: TextOverflow = TextOverflow.Clip,
@@ -127,13 +126,14 @@ internal class TextAnnotatedStringNode(
     }
 
     /** Element has draw parameters to update */
-    fun updateDraw(color: ColorProducer?, style: TextStyle): Boolean {
+    fun updateDraw(color: ColorProducer?, style: McTextStyle): Boolean {
         var changed = false
         if (color != this.overrideColor) {
             changed = true
         }
         overrideColor = color
-        changed = changed || !style.hasSameDrawAffectingAttributes(this.style)
+        // 平台适配点:McTextStyle 无布局/绘制属性分离,整样式参与比较
+        changed = changed || style != this.style
         return changed
     }
 
@@ -154,7 +154,7 @@ internal class TextAnnotatedStringNode(
 
     /** Element has layout parameters to update */
     fun updateLayoutRelatedArgs(
-        style: TextStyle,
+        style: McTextStyle,
         placeholders: List<AnnotatedString.Range<Placeholder>>?,
         minLines: Int,
         maxLines: Int,
@@ -165,7 +165,8 @@ internal class TextAnnotatedStringNode(
     ): Boolean {
         var changed: Boolean
 
-        changed = !this.style.hasSameLayoutAffectingAttributes(style)
+        // 平台适配点:McTextStyle 无布局/绘制属性分离,整样式参与比较
+        changed = this.style != style
         this.style = style
 
         if (this.placeholders != placeholders) {
@@ -353,8 +354,9 @@ internal class TextAnnotatedStringNode(
                                 TextLayoutInput(
                                     text = inputLayout.layoutInput.text,
                                     style =
-                                        this@TextAnnotatedStringNode.style.merge(
-                                            color = overrideColor?.invoke() ?: Color.Unspecified
+                                        // 平台适配点:TextStyle.merge → McTextStyle.copy
+                                        this@TextAnnotatedStringNode.style.copy(
+                                            color = overrideColor?.invoke() ?: style.color
                                         ),
                                     placeholders = inputLayout.layoutInput.placeholders,
                                     maxLines = inputLayout.layoutInput.maxLines,
@@ -539,38 +541,10 @@ internal class TextAnnotatedStringNode(
                 canvas.clipRect(bounds)
             }
             try {
-                val textDecoration = style.textDecoration ?: TextDecoration.None
-                val shadow = style.shadow ?: Shadow.None
-                val drawStyle = style.drawStyle ?: Fill
-                val brush = style.brush
-                if (brush != null) {
-                    val alpha = style.alpha
-                    localParagraph.paint(
-                        canvas = canvas,
-                        brush = brush,
-                        alpha = alpha,
-                        shadow = shadow,
-                        drawStyle = drawStyle,
-                        decoration = textDecoration,
-                    )
-                } else {
-                    val overrideColorVal = overrideColor?.invoke() ?: Color.Unspecified
-                    val color =
-                        if (overrideColorVal.isSpecified) {
-                            overrideColorVal
-                        } else if (style.color.isSpecified) {
-                            style.color
-                        } else {
-                            Color.Black
-                        }
-                    localParagraph.paint(
-                        canvas = canvas,
-                        color = color,
-                        shadow = shadow,
-                        drawStyle = drawStyle,
-                        decoration = textDecoration,
-                    )
-                }
+                // 平台适配点:McTextStyle 无 brush/shadow/textDecoration 分离,装饰由样式承载
+                val overrideColorVal = overrideColor?.invoke() ?: Color.Unspecified
+                val color = if (overrideColorVal.isSpecified) overrideColorVal else style.color
+                localParagraph.paint(canvas = canvas, color = color)
             } finally {
                 if (willClip) {
                     canvas.restore()

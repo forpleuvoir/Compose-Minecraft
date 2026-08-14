@@ -21,12 +21,12 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * Returns true if the this TextLayoutResult can be reused for given parameters.
@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.LayoutDirection
  */
 internal fun TextLayoutResult.canReuse(
     text: AnnotatedString,
-    style: TextStyle,
+    style: McTextStyle,
     placeholders: List<AnnotatedString.Range<Placeholder>>,
     maxLines: Int,
     softWrap: Boolean,
@@ -65,7 +65,8 @@ internal fun TextLayoutResult.canReuse(
     }
     if (
         !(layoutInput.text == text &&
-            layoutInput.style.hasSameLayoutAffectingAttributes(style) &&
+            // 平台适配点:McTextStyle 无布局/绘制属性分离,整样式参与比较
+            layoutInput.style == style &&
             layoutInput.placeholders == placeholders &&
             layoutInput.maxLines == maxLines &&
             layoutInput.softWrap == softWrap &&

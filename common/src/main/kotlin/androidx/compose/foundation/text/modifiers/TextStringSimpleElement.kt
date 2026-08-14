@@ -20,18 +20,20 @@ import androidx.compose.foundation.text.DefaultMinLines
 import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.platform.InspectorInfo
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * Modifier element for String based text
  *
  * This is faster than [TextAnnotatedStringElement]
+ *
+ * 平台适配点:TextStyle → McTextStyle。
  */
 internal class TextStringSimpleElement(
     private val text: String,
-    private val style: TextStyle,
+    private val style: McTextStyle,
     private val fontFamilyResolver: FontFamily.Resolver,
     private val overflow: TextOverflow = TextOverflow.Clip,
     private val softWrap: Boolean = true,

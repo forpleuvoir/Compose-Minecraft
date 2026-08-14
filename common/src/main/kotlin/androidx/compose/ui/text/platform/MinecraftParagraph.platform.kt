@@ -31,48 +31,41 @@ import androidx.compose.ui.text.Paragraph
 import androidx.compose.ui.text.ParagraphIntrinsics
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.StrongDirectionType
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.firstStrongDirectionType
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.intl.Locale
-import androidx.compose.ui.text.intl.LocaleList
-import androidx.compose.ui.text.intl.isRtl
 import androidx.compose.ui.text.style.ResolvedTextDirection
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.takeOrElse
 import kotlin.math.ceil
+import kotlin.math.roundToInt
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.Font as MinecraftFont
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Minecraft 平台文本后端(第一版)
+// Minecraft 平台文本后端(文本系统 MC 化,T.2 + T.5 + T.6)
 //
-// 设计说明:
-// - 不依赖 Skia/ICU 排版。第一版采用等宽布局模型:字符宽 = 字号 * 0.5,
-//   行高 = 字号 * 1.2,按空格贪心换行。
-// - paint() 通过 MinecraftCanvas.recordTextDraw 记录文本绘制命令,
-//   后续阶段用 MinecraftRenderContext 由 Minecraft 字体渲染器回放。
-// - 该模型保证 Text/TextField 等文本组件的布局与测量语义可用,
-//   精确排版在后续阶段替换为 Minecraft 字形度量。
+// 平台适配点(与官方 Paragraph.skiko.kt 的差异):
+// - 样式类型为 [McTextStyle](MC Style 能力字段 1:1),TextStyle 已完全移除;
+// - 度量统一用 MC [MinecraftFont]:行高 = Font.lineHeight(9),字号忽略;
+// - 光标/命中/词界位置用**前缀精确宽度** Font.width(前缀)(T.5,同 EditBox.getScreenX);
+// - 命中测试用 Font.plainSubstrByWidth(同 EditBox.findClickedPositionInText);
+// - 水平滚动用 MC EditBox 的 displayPos 模型:截断绘制 + displayPos 跟随(T.6);
+// - 富文本(AnnotatedString 多 SpanStyle)第一版不做,只支持统一 McTextStyle。
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** 一行文本的布局结果 */
 internal class MinecraftTextLine(val start: Int, val end: Int, val width: Float)
 
 /**
- * Minecraft Font 度量布局模型(阶段 E,方案 A)。
+ * Minecraft Font 度量布局模型。
  *
  * 布局与渲染统一使用 Minecraft 字形度量:
- * - 行宽 = [Font.width](该行文本)(GUI 像素,场景密度 1f 下即场景像素);
- * - 行高 = [Font.lineHeight](9);
- * - 字号第一版忽略(统一 MC 原生 9px GUI 文本),fontSizePx 不再参与度量。
+ * - 行宽 = [MinecraftFont.width](该行文本)(GUI 像素,场景密度 1f 下即场景像素);
+ * - 行高 = [MinecraftFont.lineHeight](9);
+ * - 字号第一版忽略(统一 MC 原生 9px GUI 文本)。
  */
 internal class MinecraftTextLayout(
     val text: String,
@@ -124,9 +117,23 @@ internal class MinecraftTextLayout(
         maxW
     }
 
-    /** 行平均字符宽(光标/命中测试用近似;逐字符精确度量后续阶段) */
-    fun avgCharWidth(line: MinecraftTextLine): Float =
-        if (line.end > line.start) line.width / (line.end - line.start) else 0f
+    /**
+     * 前缀精确宽度(T.5):文本 [from, to) 的 MC 字形宽度。
+     * 替换第一版的 avgCharWidth 近似,与 MC EditBox.getScreenX 同源。
+     */
+    fun prefixWidth(from: Int, to: Int): Float {
+        if (to <= from) return 0f
+        return font.width(text.substring(from, to.coerceAtMost(text.length))).toFloat()
+    }
+
+    /**
+     * 前缀截断(T.6):返回 [from] 起、宽度不超过 [maxWidth] 的最长前缀子串。
+     * 与 MC EditBox 的 `font.plainSubstrByWidth(...)` 同源。
+     */
+    fun substrByWidth(from: Int, maxWidth: Int): String {
+        if (from >= text.length) return ""
+        return font.plainSubstrByWidth(text.substring(from), maxWidth.coerceAtLeast(0))
+    }
 
     private fun computeLines(): List<MinecraftTextLine> {
         val result = ArrayList<MinecraftTextLine>()
@@ -181,18 +188,19 @@ internal class MinecraftTextLayout(
 }
 
 /**
- * Minecraft 平台 ParagraphIntrinsics 实现。 */
+ * Minecraft 平台 ParagraphIntrinsics 实现。
+ * 平台适配点(T.2):样式参数 TextStyle → [McTextStyle];
+ * 排版方向固定 LTR(MC 文本第一版不支持 BiDi),fontSize/字号被忽略。
+ */
 internal class MinecraftParagraphIntrinsics(
     val text: String,
-    private val style: TextStyle,
+    internal val style: McTextStyle,
     private val annotations: List<AnnotatedString.Range<out AnnotatedString.Annotation>>,
     private val placeholders: List<AnnotatedString.Range<Placeholder>>,
     private val density: Density,
     private val fontFamilyResolver: FontFamily.Resolver,
 ) : ParagraphIntrinsics {
-    val textDirection = resolveTextDirection(text, style.textDirection, style.localeList)
-
-    val fontSizePx: Float = with(density) { style.fontSize.takeOrElse { 14.sp }.toPx() }
+    val textDirection: ResolvedTextDirection = ResolvedTextDirection.Ltr
 
     private val layout = MinecraftTextLayout(text, Float.POSITIVE_INFINITY)
 
@@ -202,7 +210,9 @@ internal class MinecraftParagraphIntrinsics(
 }
 
 /**
- * Minecraft 平台 Paragraph 实现。 */
+ * Minecraft 平台 Paragraph 实现。
+ * 平台适配点(T.5/T.6):精确前缀度量 + MC EditBox 风格 displayPos 水平滚动。
+ */
 internal class MinecraftParagraph(
     private val intrinsics: MinecraftParagraphIntrinsics,
     private val maxLines: Int,
@@ -218,6 +228,49 @@ internal class MinecraftParagraph(
 
     private val visibleLineCount: Int =
         if (maxLines != DefaultMaxLines) minOf(layout.lines.size, maxLines) else layout.lines.size
+
+    /**
+     * 平台适配点(T.6):MC EditBox 风格的水平滚动 —— 文本左端被截断的字符数。
+     * 由 TextField 绘制/命中路径驱动(对应 MC EditBox.displayPos);普通文本组件恒为 0。
+     */
+    internal var displayPos: Int = 0
+        set(value) {
+            field = value.coerceIn(0, intrinsics.text.length)
+        }
+
+    /**
+     * 平台适配点(T.6):可见区域宽度(TextField 视口宽度,GUI 像素)。
+     * <= 0 表示未启用截断(普通文本组件,行宽以布局约束为准)。
+     */
+    internal var visibleWidth: Float = -1f
+
+    /**
+     * 平台适配点(T.6):MC EditBox.scrollTo 同源的 displayPos 更新。
+     * 保证 [cursorOffset] 始终位于可见区域内;光标越右则左端截断越多。
+     */
+    internal fun updateDisplayPosFor(cursorOffset: Int, viewportWidth: Float) {
+        val innerWidth = viewportWidth.roundToInt().coerceAtLeast(0)
+        if (innerWidth <= 0) {
+            displayPos = 0
+            return
+        }
+        val text = intrinsics.text
+        var pos = minOf(displayPos, text.length)
+        val displayed = font.plainSubstrByWidth(text.substring(pos), innerWidth)
+        val lastPos = displayed.length + pos
+        if (cursorOffset == pos) {
+            pos -= font.plainSubstrByWidth(text, innerWidth, true).length
+        }
+        if (cursorOffset > lastPos) {
+            pos += cursorOffset - lastPos
+        } else if (cursorOffset <= pos) {
+            pos -= pos - cursorOffset
+        }
+        displayPos = pos
+    }
+
+    private val font: MinecraftFont
+        get() = Minecraft.getInstance().font
 
     override val width: Float get() = layout.width
 
@@ -253,12 +306,20 @@ internal class MinecraftParagraph(
         return layout.lines.size - 1
     }
 
+    /** 行的绘制起点(T.6:首行受 displayPos 截断影响) */
+    private fun lineDrawStart(lineIndex: Int, line: MinecraftTextLine): Int {
+        if (lineIndex != 0) return line.start
+        return (line.start + displayPos).coerceAtMost(line.end)
+    }
+
     override fun getPathForRange(start: Int, end: Int): Path = Path()
 
     override fun getCursorRect(offset: Int): Rect {
         val lineIndex = lineForOffset(offset)
         val line = lineAt(lineIndex)
-        val x = (offset - line.start).coerceIn(0, line.end - line.start) * layout.avgCharWidth(line)
+        val start = lineDrawStart(lineIndex, line)
+        // T.5:前缀精确宽度(EditBox.getScreenX 同源)
+        val x = layout.prefixWidth(start, offset.coerceIn(start, line.end))
         val top = lineIndex * layout.lineHeight
         return Rect(x, top, x, top + layout.lineHeight)
     }
@@ -288,8 +349,10 @@ internal class MinecraftParagraph(
     override fun getLineForOffset(offset: Int): Int = lineForOffset(offset)
 
     override fun getHorizontalPosition(offset: Int, usePrimaryDirection: Boolean): Float {
-        val line = lineAt(lineForOffset(offset))
-        return (offset - line.start).coerceIn(0, line.end - line.start) * layout.avgCharWidth(line)
+        val lineIndex = lineForOffset(offset)
+        val line = lineAt(lineIndex)
+        val start = lineDrawStart(lineIndex, line)
+        return layout.prefixWidth(start, offset.coerceIn(start, line.end))
     }
 
     override fun getParagraphDirection(offset: Int): ResolvedTextDirection = intrinsics.textDirection
@@ -302,9 +365,14 @@ internal class MinecraftParagraph(
     override fun getOffsetForPosition(position: Offset): Int {
         val lineIndex = getLineForVerticalPosition(position.y)
         val line = lineAt(lineIndex)
-        val avg = layout.avgCharWidth(line)
-        val rel = if (avg > 0f) (position.x / avg).toInt() else 0
-        return line.start + rel.coerceIn(0, line.end - line.start)
+        val start = lineDrawStart(lineIndex, line)
+        // T.5/T.6:前缀宽度定位(EditBox.findClickedPositionInText 同源)
+        val rel = font
+            .plainSubstrByWidth(
+                intrinsics.text.substring(start, line.end),
+                position.x.roundToInt().coerceAtLeast(0),
+            ).length
+        return (start + rel).coerceIn(line.start, line.end)
     }
 
     override fun getRangeForRect(
@@ -334,7 +402,22 @@ internal class MinecraftParagraph(
         }
     }
 
-    override fun getWordBoundary(offset: Int): TextRange = TextRange(offset, offset)
+    override fun getWordBoundary(offset: Int): TextRange {
+        val text = intrinsics.text
+        if (offset < 0 || offset >= text.length) {
+            return TextRange(offset.coerceIn(0, text.length))
+        }
+        val c = text[offset]
+        if (!c.isWordChar()) {
+            // 非单词字符(空格/标点):只包含该字符本身
+            return TextRange(offset, (offset + 1).coerceAtMost(text.length))
+        }
+        var start = offset
+        while (start > 0 && text[start - 1].isWordChar()) start--
+        var end = offset
+        while (end < text.length && text[end].isWordChar()) end++
+        return TextRange(start, end)
+    }
 
     override fun paint(
         canvas: Canvas,
@@ -361,7 +444,8 @@ internal class MinecraftParagraph(
         drawStyle: DrawStyle?,
         blendMode: BlendMode,
     ) {
-        val color = (brush as? SolidColor)?.value ?: Color.Black
+        // 平台适配点:Brush 只支持纯色(SolidColor),渐变第一版不支持
+        val color = (brush as? SolidColor)?.value ?: Color.White
         paint(canvas, color, alpha)
     }
 
@@ -370,25 +454,41 @@ internal class MinecraftParagraph(
             ?: throw UnsupportedOperationException(
                 "MinecraftParagraph.paint 仅支持 MinecraftCanvas,实际: ${canvas::class.simpleName}"
             )
+        // T.1/T.2:记录完整 MC 样式快照;paint 传入的 color 覆盖样式色
+        // (shadow/textDecoration 等 Compose 绘制参数已被 McTextStyle 能力取代,第一版忽略)
+        val style = intrinsics.style.copy(
+            color = color.copy(alpha = color.alpha * alpha),
+        )
         val lineCount = visibleLineCount
         for (i in 0 until lineCount) {
             val line = layout.lines[i]
-            if (line.end > line.start) {
-                mc.recordTextDraw(
-                    text = intrinsics.text.substring(line.start, line.end),
-                    x = 0f,
-                    y = i * layout.lineHeight,
-                    color = color.copy(alpha = color.alpha * alpha),
-                    fontSize = intrinsics.fontSizePx,
-                )
+            val start = lineDrawStart(i, line)
+            if (line.end > start) {
+                // T.6:displayPos 截断 + 视口宽度截断(EditBox:plainSubstrByWidth)
+                val drawText =
+                    if (i == 0 && visibleWidth > 0f && visibleWidth.isFinite()) {
+                        layout.substrByWidth(start, visibleWidth.roundToInt())
+                    } else {
+                        intrinsics.text.substring(start, line.end)
+                    }
+                if (drawText.isNotEmpty()) {
+                    mc.recordTextDraw(
+                        text = drawText,
+                        x = 0f,
+                        y = i * layout.lineHeight,
+                        style = style,
+                    )
+                }
             }
         }
     }
 }
 
+private fun Char.isWordChar(): Boolean = isLetterOrDigit() || this == '_'
+
 internal fun ActualParagraph(
     text: String,
-    style: TextStyle,
+    style: McTextStyle,
     annotations: List<AnnotatedString.Range<out AnnotatedString.Annotation>>,
     placeholders: List<AnnotatedString.Range<Placeholder>>,
     maxLines: Int,
@@ -410,7 +510,7 @@ internal fun ActualParagraph(
 
 internal fun ActualParagraph(
     text: String,
-    style: TextStyle,
+    style: McTextStyle,
     annotations: List<AnnotatedString.Range<out AnnotatedString.Annotation>>,
     placeholders: List<AnnotatedString.Range<Placeholder>>,
     maxLines: Int,
@@ -446,7 +546,7 @@ internal fun ActualParagraph(
 
 internal fun ActualParagraphIntrinsics(
     text: String,
-    style: TextStyle,
+    style: McTextStyle,
     annotations: List<AnnotatedString.Range<out AnnotatedString.Annotation>>,
     placeholders: List<AnnotatedString.Range<Placeholder>>,
     density: Density,
@@ -459,36 +559,6 @@ internal fun ActualParagraphIntrinsics(
     density = density,
     fontFamilyResolver = fontFamilyResolver,
 )
-
-internal fun resolveTextDirection(
-    text: String,
-    textDirection: TextDirection? = null,
-    localeList: LocaleList? = null,
-): ResolvedTextDirection {
-    return when (textDirection ?: TextDirection.Content) {
-        TextDirection.Ltr -> ResolvedTextDirection.Ltr
-        TextDirection.Rtl -> ResolvedTextDirection.Rtl
-        TextDirection.Content, TextDirection.Unspecified ->
-            contentBasedTextDirection(text) { localeBasedTextDirection(localeList?.firstOrNull()) }
-        TextDirection.ContentOrLtr -> contentBasedTextDirection(text) { ResolvedTextDirection.Ltr }
-        TextDirection.ContentOrRtl -> contentBasedTextDirection(text) { ResolvedTextDirection.Rtl }
-        else -> error("Invalid TextDirection.")
-    }
-}
-
-private fun contentBasedTextDirection(text: String, fallback: () -> ResolvedTextDirection) =
-    when (text.firstStrongDirectionType()) {
-        StrongDirectionType.Ltr -> ResolvedTextDirection.Ltr
-        StrongDirectionType.Rtl -> ResolvedTextDirection.Rtl
-        else -> fallback()
-    }
-
-private fun localeBasedTextDirection(locale: Locale?) =
-    if ((locale ?: Locale.current).isRtl()) {
-        ResolvedTextDirection.Rtl
-    } else {
-        ResolvedTextDirection.Ltr
-    }
 
 /** 与官方 Paragraph.skiko.kt 一致的 DefaultMaxLines */
 private val DefaultMaxLines = Int.MAX_VALUE

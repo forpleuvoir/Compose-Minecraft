@@ -83,7 +83,6 @@ import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.TextToolbarStatus
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
@@ -99,6 +98,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 private object BasicTextFieldDefaults {
     val CursorBrush = SolidColor(Color.Black)
@@ -191,7 +191,7 @@ fun BasicTextField(
     enabled: Boolean = true,
     readOnly: Boolean = false,
     inputTransformation: InputTransformation? = null,
-    textStyle: TextStyle = TextStyle.Default,
+    textStyle: McTextStyle = McTextStyle.Default,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     onKeyboardAction: KeyboardActionHandler? = null,
     lineLimits: TextFieldLineLimits = TextFieldLineLimits.Default,
@@ -239,7 +239,7 @@ internal fun BasicTextField(
     enabled: Boolean = true,
     readOnly: Boolean = false,
     inputTransformation: InputTransformation? = null,
-    textStyle: TextStyle = TextStyle.Default,
+    textStyle: McTextStyle = McTextStyle.Default,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     onKeyboardAction: KeyboardActionHandler? = null,
     lineLimits: TextFieldLineLimits = TextFieldLineLimits.Default,
@@ -300,7 +300,8 @@ internal fun BasicTextField(
     @OptIn(ExperimentalFoundationApi::class)
     val platformSelectionBehaviors =
         if (ComposeFoundationFlags.isSmartSelectionEnabled) {
-            val resolvedLocaleList = textStyle.localeList ?: LocaleList.current
+            // 平台适配点:McTextStyle 无 localeList,智能选区使用系统当前 LocaleList
+            val resolvedLocaleList = LocaleList.current
             rememberPlatformSelectionBehaviors(SelectedTextType.EditableText, resolvedLocaleList)
         } else {
             null
@@ -518,16 +519,8 @@ internal fun BasicTextField(
                             )
                     )
 
-                    if (
-                        enabled &&
-                            isWindowAndTextFieldFocused &&
-                            textFieldSelectionState.isInTouchMode
-                    ) {
-                        TextFieldSelectionHandles(selectionState = textFieldSelectionState)
-                        if (!readOnly) {
-                            TextFieldCursorHandle(selectionState = textFieldSelectionState)
-                        }
-                    }
+                    // 平台适配点(T.8):触摸选区手柄(TextFieldSelectionHandles/TextFieldCursorHandle)
+                    // 已移除,桌面鼠标场景不需要手柄球
                 }
             }
         }
@@ -563,91 +556,8 @@ private fun Modifier.addContextMenuComponents(
         addBasicTextFieldTextContextMenuComponents(textFieldSelectionState, coroutineScope)
     else this
 
-@Composable
-internal fun TextFieldCursorHandle(selectionState: TextFieldSelectionState) {
-    // Does not recompose if only position of the handle changes.
-    val cursorHandleVisible by
-        remember(selectionState) {
-            derivedStateOf { selectionState.getCursorHandleState(includePosition = false).visible }
-        }
-    if (cursorHandleVisible) {
-        CursorHandle(
-            offsetProvider = {
-                selectionState.getCursorHandleState(includePosition = true).position
-            },
-            modifier =
-                Modifier.pointerInput(selectionState) {
-                    with(selectionState) { cursorHandleGestures() }
-                },
-            minTouchTargetSize = MinTouchTargetSizeForHandles,
-        )
-    }
-}
-
-@Composable
-internal fun TextFieldSelectionHandles(selectionState: TextFieldSelectionState) {
-    // Does not recompose if only position of the handle changes.
-    val startHandleState by
-        remember(selectionState) {
-            derivedStateOf {
-                selectionState.getSelectionHandleState(
-                    isStartHandle = true,
-                    includePosition = false,
-                )
-            }
-        }
-    // Read once here to avoid repeating derived state reads
-    val startHandle = startHandleState
-    if (startHandle.visible) {
-        SelectionHandle(
-            offsetProvider = {
-                selectionState
-                    .getSelectionHandleState(isStartHandle = true, includePosition = true)
-                    .position
-            },
-            isStartHandle = true,
-            direction = startHandle.direction,
-            handlesCrossed = startHandle.handlesCrossed,
-            modifier =
-                Modifier.pointerInput(selectionState) {
-                    with(selectionState) { selectionHandleGestures(true) }
-                },
-            lineHeight = startHandle.lineHeight,
-            minTouchTargetSize = MinTouchTargetSizeForHandles,
-        )
-    }
-
-    // Does not recompose if only position of the handle changes.
-    val endHandleState by
-        remember(selectionState) {
-            derivedStateOf {
-                selectionState.getSelectionHandleState(
-                    isStartHandle = false,
-                    includePosition = false,
-                )
-            }
-        }
-    // Read once here to avoid repeating derived state reads
-    val endHandle = endHandleState
-    if (endHandle.visible) {
-        SelectionHandle(
-            offsetProvider = {
-                selectionState
-                    .getSelectionHandleState(isStartHandle = false, includePosition = true)
-                    .position
-            },
-            isStartHandle = false,
-            direction = endHandle.direction,
-            handlesCrossed = endHandle.handlesCrossed,
-            modifier =
-                Modifier.pointerInput(selectionState) {
-                    with(selectionState) { selectionHandleGestures(false) }
-                },
-            lineHeight = endHandle.lineHeight,
-            minTouchTargetSize = MinTouchTargetSizeForHandles,
-        )
-    }
-}
+// 平台适配点(T.8):TextFieldCursorHandle / TextFieldSelectionHandles 触摸选区手柄已移除,
+// 桌面鼠标场景不需要手柄球。
 
 private val DefaultTextFieldDecorator = TextFieldDecorator { it() }
 
@@ -764,7 +674,7 @@ fun BasicTextField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     readOnly: Boolean = false,
-    textStyle: TextStyle = TextStyle.Default,
+    textStyle: McTextStyle = McTextStyle.Default,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     singleLine: Boolean = false,
@@ -921,7 +831,7 @@ fun BasicTextField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     readOnly: Boolean = false,
-    textStyle: TextStyle = TextStyle.Default,
+    textStyle: McTextStyle = McTextStyle.Default,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     singleLine: Boolean = false,
@@ -966,7 +876,7 @@ fun BasicTextField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     readOnly: Boolean = false,
-    textStyle: TextStyle = TextStyle.Default,
+    textStyle: McTextStyle = McTextStyle.Default,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     singleLine: Boolean = false,
@@ -1006,7 +916,7 @@ fun BasicTextField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     readOnly: Boolean = false,
-    textStyle: TextStyle = TextStyle.Default,
+    textStyle: McTextStyle = McTextStyle.Default,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     singleLine: Boolean = false,

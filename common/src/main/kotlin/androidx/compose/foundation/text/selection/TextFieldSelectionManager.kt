@@ -429,12 +429,7 @@ internal class TextFieldSelectionManager(val undoManager: UndoManager? = null) {
 
                 val collapsed = runningSelection?.collapsed ?: value.selection.collapsed
                 setHandleState(if (collapsed) Cursor else Selection)
-                state?.showSelectionHandleStart =
-                    !collapsed && isSelectionHandleInVisibleBound(isStartHandle = true)
-                state?.showSelectionHandleEnd =
-                    !collapsed && isSelectionHandleInVisibleBound(isStartHandle = false)
-                state?.showCursorHandle =
-                    collapsed && isSelectionHandleInVisibleBound(isStartHandle = true)
+                // 平台适配点(T.8):触摸选区手柄已移除,不再维护 show*Handle 可见状态
 
                 if (isLongPressSelectionOnly) {
                     // Note that even if we called onValueChange when selection is updated,
@@ -1333,15 +1328,7 @@ internal class TextFieldSelectionManager(val undoManager: UndoManager? = null) {
 
         state?.isInTouchMode = isTouchBasedSelection
 
-        // showSelectionHandleStart/End might be set to false when scrolled out of the view.
-        // When the selection is updated, they must also be updated so that handles will be shown
-        // or hidden correctly.
-        state?.showSelectionHandleStart =
-            !newSelection.collapsed && isSelectionHandleInVisibleBound(isStartHandle = true)
-        state?.showSelectionHandleEnd =
-            !newSelection.collapsed && isSelectionHandleInVisibleBound(isStartHandle = false)
-        state?.showCursorHandle =
-            newSelection.collapsed && isSelectionHandleInVisibleBound(isStartHandle = true)
+        // 平台适配点(T.8):触摸选区手柄已移除,不再维护 show*Handle 可见状态
 
         return newSelection
     }
@@ -1358,37 +1345,9 @@ internal class TextFieldSelectionManager(val undoManager: UndoManager? = null) {
     }
 }
 
-@Composable
-internal fun TextFieldSelectionHandle(
-    isStartHandle: Boolean,
-    direction: ResolvedTextDirection,
-    manager: TextFieldSelectionManager,
-) {
-    val observer = remember(isStartHandle, manager) { manager.handleDragObserver(isStartHandle) }
-
-    SelectionHandle(
-        offsetProvider = { manager.getHandlePosition(isStartHandle) },
-        isStartHandle = isStartHandle,
-        direction = direction,
-        handlesCrossed = manager.value.selection.reversed,
-        lineHeight = manager.getHandleLineHeight(isStartHandle),
-        modifier =
-            Modifier.pointerInput(observer) { detectDownAndDragGesturesWithObserver(observer) },
-    )
-}
-
 // TODO: Upstream https://youtrack.jetbrains.com/issue/CMP-5772
-
-/** Whether the selection handle is in the visible bound of the TextField. */
-internal fun TextFieldSelectionManager.isSelectionHandleInVisibleBound(
-    isStartHandle: Boolean
-): Boolean = isSelectionHandleInVisibleBoundDefault(isStartHandle)
-
-internal fun TextFieldSelectionManager.isSelectionHandleInVisibleBoundDefault(
-    isStartHandle: Boolean
-): Boolean =
-    state?.layoutCoordinates?.visibleBounds()?.containsInclusive(getHandlePosition(isStartHandle))
-        ?: false
+// 平台适配点(T.8):TextFieldSelectionHandle / isSelectionHandleInVisibleBound 已随
+// 触摸选区手柄移除删除。
 
 /**
  * Optionally shows a magnifier widget, if the current platform supports it, for the current state

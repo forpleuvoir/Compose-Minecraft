@@ -46,13 +46,12 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * Tracks the index of the animation visual debugging color to be used next for local animation
@@ -231,9 +230,9 @@ internal class LookaheadAnimationVisualDebugHelper() {
                     textMeasurer.measure(
                         text = key.toString(),
                         style =
-                            TextStyle(
+                            // 平台适配点:TextStyle → McTextStyle;fontSize 第一版忽略(MC 固定 9px)
+                            McTextStyle(
                                 color = chosenColor,
-                                fontSize = 18.sp,
                                 background = Color.White.copy(alpha = 0.6f),
                             ),
                     )
@@ -344,9 +343,9 @@ internal class LookaheadAnimationVisualDebugHelper() {
                     textMeasurer.measure(
                         text = key.toString(),
                         style =
-                            TextStyle(
+                            // 平台适配点:TextStyle → McTextStyle;fontSize 第一版忽略(MC 固定 9px)
+                            McTextStyle(
                                 color = chosenColor,
-                                fontSize = 18.sp,
                                 background = Color.White.copy(alpha = 0.6f),
                             ),
                     )
@@ -392,11 +391,11 @@ internal class LookaheadAnimationVisualDebugHelper() {
                 textMeasurer.measure(
                     text = "$key: $emoji matches",
                     style =
-                        TextStyle(
+                        // 平台适配点:TextStyle → McTextStyle;fontWeight Bold 映射为 MC 加粗
+                        McTextStyle(
                             color = Color.White,
-                            fontSize = 22.sp,
                             background = multipleMatchesColor.copy(alpha = 0.8f),
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            bold = true,
                         ),
                 )
 
@@ -435,11 +434,11 @@ internal class LookaheadAnimationVisualDebugHelper() {
                 textMeasurer.measure(
                     text = "$key: 0\uFE0F⃣ matches",
                     style =
-                        TextStyle(
+                        // 平台适配点:TextStyle → McTextStyle;fontWeight Bold 映射为 MC 加粗
+                        McTextStyle(
                             color = Color.White,
-                            fontSize = 22.sp,
                             background = unmatchedColor.copy(alpha = 0.8f),
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            bold = true,
                         ),
                 )
 

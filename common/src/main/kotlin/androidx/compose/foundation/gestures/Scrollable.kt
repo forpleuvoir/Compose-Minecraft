@@ -78,6 +78,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.util.fastAny
+import androidx.compose.ui.util.fastFirstOrNull
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.absoluteValue
@@ -712,10 +713,13 @@ internal interface ScrollConfig {
 
 internal fun CompositionLocalConsumerModifierNode.platformScrollConfig(): ScrollConfig =
     object : ScrollConfig {
+        // 平台适配点:与官方 desktop(DesktopMouseWheelScrollConfig)一致 ——
+        // 直接取事件的 scrollDelta(桥接层已把 GLFW 一格 ±1 换算为 27px)。
+        // 此前返回 Offset.Zero 的占位实现会丢弃所有滚轮增量,导致滚轮完全无响应。
         override fun Density.calculateMouseWheelScroll(
             event: PointerEvent,
             bounds: IntSize,
-        ): Offset = Offset.Zero
+        ): Offset = event.changes.fastFirstOrNull { !it.isConsumed }?.scrollDelta ?: Offset.Zero
     }
 
 // TODO: provide public way to drag by mouse (especially requested for Pager)

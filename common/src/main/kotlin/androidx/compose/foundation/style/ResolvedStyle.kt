@@ -39,7 +39,6 @@ import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.platform.InspectableValue
 import androidx.compose.ui.platform.ValueElement
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontSynthesis
@@ -62,6 +61,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import kotlin.jvm.JvmField
 import kotlin.math.ceil
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * This class is currently the actual object that [Style] lambdas get executed with, so this is the
@@ -385,45 +385,32 @@ internal class ResolvedStyle internal constructor() : StyleScope, InspectableVal
     }
 
     /**
-     * Converts this [ResolvedStyle] to a [TextStyle], using the given [fallback] [TextStyle] to
-     * provide any values which are not set.
+     * 平台适配点:ResolvedStyle → [McTextStyle](TextStyle 已完全替换)。
+     * 只有 MC 能力字段可映射;fontSize/lineHeight/letterSpacing 等排版参数被丢弃
+     * (MC 固定 9px 行高,第一版忽略)。
      */
-    internal fun toTextStyle(fallback: TextStyle): TextStyle {
+    internal fun toMcTextStyle(fallback: McTextStyle): McTextStyle {
         val default = EmptyResolvedStyle
-        return TextStyle(
-                color = contentColor.takeOrElse { fallback.color },
-                fontSize = fontSize.takeOrElse(fallback.fontSize),
-                fontWeight = if (isFontWeightSpecified) fontWeight else fallback.fontWeight,
-                fontStyle = if (fontStyle != default.fontStyle) fontStyle else fallback.fontStyle,
-                fontSynthesis =
-                    if (fontSynthesis != default.fontSynthesis) fontSynthesis
-                    else fallback.fontSynthesis,
-                fontFamily = fontFamily ?: fallback.fontFamily,
-                fontFeatureSettings = fallback.fontFeatureSettings,
-                letterSpacing = letterSpacing.takeOrElse(fallback.letterSpacing),
-                baselineShift =
-                    if (baselineShift.isSpecified) baselineShift else fallback.baselineShift,
-                textGeometricTransform = fallback.textGeometricTransform,
-                localeList = fallback.localeList,
-                background = fallback.background,
-                textDecoration =
-                    if (textDecoration != default.textDecoration) textDecoration
-                    else fallback.textDecoration,
-                shadow = fallback.shadow,
-                drawStyle = fallback.drawStyle,
-                textAlign = if (textAlign != default.textAlign) textAlign else fallback.textAlign,
-                textDirection =
-                    if (textDirection != default.textDirection) textDirection
-                    else fallback.textDirection,
-                lineHeight = lineHeight.takeOrElse(fallback.lineHeight),
-                textIndent = textIndent ?: fallback.textIndent,
-                platformStyle = fallback.platformStyle,
-                lineHeightStyle = fallback.lineHeightStyle,
-                lineBreak = lineBreak.takeOrElse(fallback.lineBreak),
-                hyphens = if (hyphens != default.hyphens) hyphens else fallback.hyphens,
-                textMotion = fallback.textMotion,
-            )
-            .let { if (contentBrush != null) it.copy(brush = contentBrush) else it }
+        return McTextStyle(
+            color = contentColor.takeOrElse { fallback.color },
+            bold =
+                if (isFontWeightSpecified) fontWeight >= FontWeight.Bold else fallback.bold,
+            italic =
+                if (fontStyle != default.fontStyle) fontStyle == FontStyle.Italic
+                else fallback.italic,
+            underlined =
+                if (textDecoration != default.textDecoration)
+                    textDecoration.contains(TextDecoration.Underline)
+                else fallback.underlined,
+            strikethrough =
+                if (textDecoration != default.textDecoration)
+                    textDecoration.contains(TextDecoration.LineThrough)
+                else fallback.strikethrough,
+            obfuscated = fallback.obfuscated,
+            font = fallback.font,
+            shadow = fallback.shadow,
+            background = fallback.background,
+        )
     }
 
     private fun valueElements(): List<ValueElement> =
@@ -934,26 +921,19 @@ internal class ResolvedStyle internal constructor() : StyleScope, InspectableVal
         flags = flags or DrawFlag
     }
 
-    override fun textStyle(value: TextStyle) {
-        // TODO: optimize further
-        val span = value.toSpanStyle()
-        if (span.color.isSpecified) contentColor(span.color)
-        if (span.fontSize.isSpecified) fontSize(span.fontSize)
-        if (span.letterSpacing.isSpecified) letterSpacing(span.letterSpacing)
-        span.brush?.let { contentBrush(it) }
-        span.fontStyle?.let { fontStyle(it) }
-        span.baselineShift?.let { if (it.isSpecified) baselineShift(it) }
-        span.fontWeight?.let { fontWeight(it) }
-        span.textDecoration?.let { textDecoration(it) }
-        span.fontSynthesis?.let { fontSynthesis(it) }
-
-        val p = value.toParagraphStyle()
-        p.textIndent?.let { textIndent(it) }
-        if (p.lineHeight.isSpecified) lineHeight(p.lineHeight)
-        if (p.lineBreak.isSpecified) lineBreak(p.lineBreak)
-        if (p.hyphens.isSpecified) hyphens(p.hyphens)
-        if (p.textDirection.isSpecified) textDirection(p.textDirection)
-        if (p.textAlign.isSpecified) textAlign(p.textAlign)
+    override fun textStyle(value: McTextStyle) {
+        // 平台适配点:McTextStyle 只有 MC 能力字段(颜色/加粗/斜体/下划线/删除线/乱码/字体/阴影/背景)
+        contentColor(value.color)
+        if (value.bold) fontWeight(FontWeight.Bold)
+        if (value.italic) fontStyle(FontStyle.Italic)
+        if (value.underlined || value.strikethrough) {
+            textDecoration(
+                TextDecoration(
+                    (if (value.underlined) TextDecoration.Underline.mask else 0) or
+                        (if (value.strikethrough) TextDecoration.LineThrough.mask else 0)
+                )
+            )
+        }
     }
 
     internal val fontStyle: FontStyle

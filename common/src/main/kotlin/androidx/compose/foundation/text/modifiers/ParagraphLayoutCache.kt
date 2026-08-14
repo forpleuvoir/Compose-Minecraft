@@ -26,9 +26,7 @@ import androidx.compose.ui.text.Paragraph
 import androidx.compose.ui.text.ParagraphIntrinsics
 import androidx.compose.ui.text.TextLayoutInput
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.resolveDefaults
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -37,6 +35,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.constrain
 import kotlin.jvm.JvmInline
 import kotlin.math.min
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * Performs text layout using [Paragraph].
@@ -48,7 +47,7 @@ import kotlin.math.min
  */
 internal class ParagraphLayoutCache(
     private var text: String,
-    private var style: TextStyle,
+    private var style: McTextStyle,
     private var fontFamilyResolver: FontFamily.Resolver,
     private var overflow: TextOverflow = TextOverflow.Clip,
     private var softWrap: Boolean = true,
@@ -200,7 +199,7 @@ internal class ParagraphLayoutCache(
     private fun useMinLinesConstrainer(
         constraints: Constraints,
         layoutDirection: LayoutDirection,
-        style: TextStyle = this.style,
+        style: McTextStyle = this.style,
     ): Constraints {
         val localMin =
             MinLinesConstrainer.from(
@@ -240,7 +239,7 @@ internal class ParagraphLayoutCache(
     /** Call when any parameters change, invalidation is a result of calling this method. */
     fun update(
         text: String,
-        style: TextStyle,
+        style: McTextStyle,
         fontFamilyResolver: FontFamily.Resolver,
         overflow: TextOverflow,
         softWrap: Boolean,
@@ -274,7 +273,8 @@ internal class ParagraphLayoutCache(
                 intrinsicsLayoutDirection = layoutDirection
                 ParagraphIntrinsics(
                     text = text,
-                    style = resolveDefaults(style, layoutDirection),
+                    // 平台适配点:resolveDefaults 随 TextStyle 移除,McTextStyle 无缺省解析
+                    style = style,
                     annotations = listOf(),
                     density = density!!,
                     fontFamilyResolver = fontFamilyResolver,
@@ -363,7 +363,7 @@ internal class ParagraphLayoutCache(
      *
      * Exposed for semantics GetTextLayoutResult
      */
-    fun slowCreateTextLayoutResultOrNull(style: TextStyle): TextLayoutResult? {
+    fun slowCreateTextLayoutResultOrNull(style: McTextStyle): TextLayoutResult? {
         // make sure we're in a valid place
         val localLayoutDirection = intrinsicsLayoutDirection ?: return null
         val localDensity = density ?: return null

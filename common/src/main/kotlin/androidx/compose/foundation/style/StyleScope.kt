@@ -25,7 +25,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.shadow.Shadow
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontSynthesis
@@ -41,6 +40,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.TextUnit
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * A [StyleScope] is the receiver scope of a [Style] lambda. It allows defining the properties of a
@@ -1084,19 +1084,19 @@ sealed interface StyleScope : CompositionLocalAccessorScope, Density {
     fun animate(toSpec: AnimationSpec<Float>, fromSpec: AnimationSpec<Float>, value: Style)
 
     /**
-     * Applies a complete [TextStyle] object to the component. This is a convenient way to set
+     * Applies a complete [McTextStyle] object to the component. This is a convenient way to set
      * multiple text-related properties at once. Text properties are inherited by child text
      * components unless overridden.
      *
      * This property is inherited.
      *
-     * @param value The [TextStyle] to apply.
+     * @param value The [McTextStyle] to apply.
      * @see contentColor
      * @see fontFamily
      * @see fontSize
-     * @see androidx.compose.ui.text.TextStyle
+     * @see McTextStyle
      */
-    fun textStyle(value: TextStyle)
+    fun textStyle(value: McTextStyle)
 
     /**
      * Sets the preferred content color, primarily affecting text color. This property is inherited

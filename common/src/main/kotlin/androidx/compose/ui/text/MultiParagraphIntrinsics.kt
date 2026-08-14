@@ -25,12 +25,13 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastFilteredMap
 import androidx.compose.ui.util.fastMaxBy
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * Calculates and provides the intrinsic width and height of text that contains [ParagraphStyle].
  *
  * @param annotatedString the text to be laid out
- * @param style the [TextStyle] to be applied to the whole text
+ * @param style the [McTextStyle] to be applied to the whole text
  * @param placeholders a list of [Placeholder]s that specify ranges of text which will be skipped
  *   during layout and replaced with [Placeholder]. It's required that the range of each
  *   [Placeholder] doesn't cross paragraph boundary, otherwise [IllegalArgumentException] is thrown.
@@ -43,7 +44,7 @@ import androidx.compose.ui.util.fastMaxBy
  */
 class MultiParagraphIntrinsics(
     val annotatedString: AnnotatedString,
-    style: TextStyle,
+    style: McTextStyle,
     val placeholders: List<AnnotatedString.Range<Placeholder>>,
     density: Density,
     fontFamilyResolver: FontFamily.Resolver,
@@ -60,7 +61,7 @@ class MultiParagraphIntrinsics(
     )
     constructor(
         annotatedString: AnnotatedString,
-        style: TextStyle,
+        style: McTextStyle,
         placeholders: List<AnnotatedString.Range<Placeholder>>,
         density: Density,
         resourceLoader: Font.ResourceLoader,
@@ -93,7 +94,9 @@ class MultiParagraphIntrinsics(
     internal val infoList: List<ParagraphIntrinsicInfo>
 
     init {
-        val paragraphStyle = style.toParagraphStyle()
+        // 平台适配点:McTextStyle 无段落级样式(textAlign/textDirection 等),统一用默认 ParagraphStyle;
+        // 第一版不做富文本,ParagraphStyle 段级差异不参与布局
+        val paragraphStyle = ParagraphStyle()
         infoList =
             annotatedString.mapEachParagraphStyle(paragraphStyle) {
                 annotatedString,
@@ -105,7 +108,7 @@ class MultiParagraphIntrinsics(
                     intrinsics =
                         ParagraphIntrinsics(
                             text = annotatedString.text,
-                            style = style.merge(currentParagraphStyle),
+                            style = style,
                             annotations = annotatedString.annotations ?: emptyList(),
                             placeholders =
                                 placeholders.getLocalPlaceholders(

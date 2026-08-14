@@ -69,7 +69,6 @@ import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.node.traverseAncestors
 import androidx.compose.ui.node.updateLayerBlock
 import androidx.compose.ui.platform.InspectorInfo
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.constrainHeight
@@ -79,6 +78,7 @@ import androidx.compose.ui.util.fastCoerceAtLeast
 import androidx.compose.ui.util.fastCoerceIn
 import androidx.compose.ui.util.fastRoundToInt
 import kotlin.math.max
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -737,8 +737,8 @@ internal class StyleOuterNode(styleState: StyleState?, style: Style) :
      * invalidated. Instead, we just mark the node as invalidated, and whenever we recalculate the
      * style, we use the same ResolvedStyle that we had cached before.
      */
-    override fun computeInheritedTextStyle(phase: StylePhase, fallback: TextStyle): TextStyle =
-        resolveInheritedStyle(phase.toFlags())?.toTextStyle(fallback) ?: fallback
+    override fun computeInheritedTextStyle(phase: StylePhase, fallback: McTextStyle): McTextStyle =
+        resolveInheritedStyle(phase.toFlags())?.toMcTextStyle(fallback) ?: fallback
 
     internal var ancestorNodes: MutableObjectList<StyleOuterNode>? = null
 

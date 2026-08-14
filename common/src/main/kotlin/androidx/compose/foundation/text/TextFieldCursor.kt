@@ -24,7 +24,9 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.isUnspecified
 import androidx.compose.ui.platform.LocalCursorBlinkEnabled
@@ -69,28 +71,20 @@ internal fun Modifier.cursor(
                         val cursorRect =
                             state.layoutResult?.value?.getCursorRect(transformedOffset)
                                 ?: Rect(0f, 0f, 0f, 0f)
-                        val cursorWidth = floor(DefaultCursorThickness.toPx()).coerceAtLeast(1f)
-                        val cursorX =
-                            (cursorRect.left + cursorWidth / 2)
-                                // Do not use coerceIn because it is not guaranteed that the minimum
-                                // value is
-                                // smaller than the maximum value.
-                                .coerceAtMost(size.width - cursorWidth / 2)
-                                .coerceAtLeast(cursorWidth / 2)
-                                .let {
-                                    // When cursor width is odd, draw it in the middle of a pixel,
-                                    // to avoid blurring due to antialiasing.
-                                    if (cursorWidth.toInt() % 2 == 1) {
-                                        floor(it) + 0.5f // round to nearest n+0.5
-                                    } else round(it)
-                                }
-
-                        drawLine(
-                            brush = cursorBrush,
-                            start = Offset(cursorX, cursorRect.top),
-                            end = Offset(cursorX, cursorRect.bottom),
+                        // 平台适配点(T.7):MC EditBox 风格竖条光标 —— 1px 宽,
+                        // y = 行顶 - 1 到 行底 + 1(TextCursorUtils.extractInsertCursor 同源);
+                        // 颜色 = cursorBrush 纯色,未指定时退回布局样式色(同 EditBox 光标取文本色)
+                        val cursorColor =
+                            (cursorBrush as? SolidColor)
+                                ?.value
+                                ?.takeUnless { it.isUnspecified }
+                                ?: state.layoutResult?.value?.layoutInput?.style?.color
+                                ?: Color.Black
+                        drawRect(
+                            color = cursorColor,
+                            topLeft = Offset(cursorRect.left - 1f, cursorRect.top - 1f),
+                            size = Size(1f, (cursorRect.bottom - cursorRect.top) + 2f),
                             alpha = cursorAlphaValue,
-                            strokeWidth = cursorWidth,
                         )
                     }
                 }

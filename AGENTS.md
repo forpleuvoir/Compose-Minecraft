@@ -71,11 +71,15 @@ gradlew buildAllModJar
 
 1. **架构决策必须询问用户**,不要自行决定架构/设计方向;
 2. **不引入** Skia/Skiko/Desktop/Material 依赖或代码;
-3. 渲染只消费 MC 的 `GuiRenderState`(`extractRenderState` 每帧驱动),不做离屏渲染;
-4. 输入键码映射使用 MC 的 `InputConstants` 抽象(不直接绑定 GLFW/LWJGL);
-5. Compose 的 `Key` 编码即 AWT VK 值(库源码契约),桥接层不要引用 AWT 类型;
-6. 修改 `androidx/compose/**` 移植源码时保持与官方语义一致,标注平台适配点;
-7. 焦点相关:`onFocusChanged` 必须放在焦点目标(`focusable`/`clickable`)**之前**;
+3. **平台只提供基础能力,不做风格化**:定位类似 compose-ui/foundation 的
+   Basic 层级,类似 Compose Material 的主题系统/默认组件外观不考虑;
+   文本组件的 `McTextStyle` 是 MC `Style` 的基础封装,`McText`/`McTextField`
+   无默认外观,UI 长什么样由业务方决定;
+4. 渲染只消费 MC 的 `GuiRenderState`(`extractRenderState` 每帧驱动),不做离屏渲染;
+5. 输入键码映射使用 MC 的 `InputConstants` 抽象(不直接绑定 GLFW/LWJGL);
+6. Compose 的 `Key` 编码即 AWT VK 值(库源码契约),桥接层不要引用 AWT 类型;
+7. 修改 `androidx/compose/**` 移植源码时保持与官方语义一致,标注平台适配点;
+8. 焦点相关:`onFocusChanged` 必须放在焦点目标(`focusable`/`clickable`)**之前**;
    `clickable` 自带焦点目标,不要与 `focusable` 叠加(会造成 Tab 循环);
    `onKeyEvent` 不要无条件消费导航键(Tab/方向键),否则焦点导航失效。
 

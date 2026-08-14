@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.modulate
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.util.fastRoundToInt
 import kotlin.math.ceil
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 object TextPainter {
 
@@ -61,43 +62,14 @@ object TextPainter {
             canvas.clipRect(bounds)
         }
 
-        /* inline resolveSpanStyleDefaults to avoid an allocation in draw */
-        val style = textLayoutResult.layoutInput.style.spanStyle
-        val textDecoration = style.textDecoration ?: TextDecoration.None
-        val shadow = style.shadow ?: Shadow.None
-        val drawStyle = style.drawStyle ?: Fill
+        // 平台适配点:TextStyle 已替换为 McTextStyle —— 无 brush/textDecoration/shadow/drawStyle,
+        // 颜色与装饰全部由 McTextStyle 承载(经 Paragraph.paint → DrawTextCommand → GuiTextRenderState)
+        val color = textLayoutResult.layoutInput.style.color
         try {
-            val brush = style.brush
-            if (brush != null) {
-                val alpha =
-                    if (style.textForegroundStyle !== Unspecified) {
-                        style.textForegroundStyle.alpha
-                    } else {
-                        1.0f
-                    }
-                textLayoutResult.multiParagraph.paint(
-                    canvas = canvas,
-                    brush = brush,
-                    alpha = alpha,
-                    shadow = shadow,
-                    decoration = textDecoration,
-                    drawStyle = drawStyle,
-                )
-            } else {
-                val color =
-                    if (style.textForegroundStyle !== Unspecified) {
-                        style.textForegroundStyle.color
-                    } else {
-                        Color.Black
-                    }
-                textLayoutResult.multiParagraph.paint(
-                    canvas = canvas,
-                    color = color,
-                    shadow = shadow,
-                    decoration = textDecoration,
-                    drawStyle = drawStyle,
-                )
-            }
+            textLayoutResult.multiParagraph.paint(
+                canvas = canvas,
+                color = color,
+            )
         } finally {
             if (needClipping) {
                 canvas.restore()
@@ -144,7 +116,7 @@ fun DrawScope.drawText(
     textMeasurer: TextMeasurer,
     text: AnnotatedString,
     topLeft: Offset = Offset.Zero,
-    style: TextStyle = TextStyle.Default,
+    style: McTextStyle = McTextStyle.Default,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
     maxLines: Int = Int.MAX_VALUE,
@@ -209,7 +181,7 @@ fun DrawScope.drawText(
     textMeasurer: TextMeasurer,
     text: String,
     topLeft: Offset = Offset.Zero,
-    style: TextStyle = TextStyle.Default,
+    style: McTextStyle = McTextStyle.Default,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
     maxLines: Int = Int.MAX_VALUE,
@@ -264,37 +236,20 @@ fun DrawScope.drawText(
     drawStyle: DrawStyle? = null,
     blendMode: BlendMode = DrawScope.DefaultBlendMode,
 ) {
-    val newShadow = shadow ?: textLayoutResult.layoutInput.style.shadow
-    val newTextDecoration = textDecoration ?: textLayoutResult.layoutInput.style.textDecoration
-    val newDrawStyle = drawStyle ?: textLayoutResult.layoutInput.style.drawStyle
-
     withTransform({
         translate(topLeft.x, topLeft.y)
         clip(textLayoutResult)
     }) {
-        // if text layout was created using brush, and [color] is unspecified, we should treat this
-        // like drawText(brush) call
-        val brush = textLayoutResult.layoutInput.style.brush
-        if (brush != null && color.isUnspecified) {
-            textLayoutResult.multiParagraph.paint(
-                drawContext.canvas,
-                brush,
-                if (!alpha.isNaN()) alpha else textLayoutResult.layoutInput.style.alpha,
-                newShadow,
-                newTextDecoration,
-                newDrawStyle,
-                blendMode,
-            )
-        } else {
-            textLayoutResult.multiParagraph.paint(
-                drawContext.canvas,
-                color.takeOrElse { textLayoutResult.layoutInput.style.color }.modulate(alpha),
-                newShadow,
-                newTextDecoration,
-                newDrawStyle,
-                blendMode,
-            )
-        }
+        // 平台适配点:McTextStyle 无 brush/shadow/textDecoration/drawStyle 分离;
+        // 这些参数保留 API 签名,但由平台 Paragraph 忽略(装饰走 McTextStyle)
+        textLayoutResult.multiParagraph.paint(
+            drawContext.canvas,
+            color.takeOrElse { textLayoutResult.layoutInput.style.color }.modulate(alpha),
+            shadow,
+            textDecoration,
+            drawStyle,
+            blendMode,
+        )
     }
 }
 
@@ -324,21 +279,18 @@ fun DrawScope.drawText(
     drawStyle: DrawStyle? = null,
     blendMode: BlendMode = DrawScope.DefaultBlendMode,
 ) {
-    val newShadow = shadow ?: textLayoutResult.layoutInput.style.shadow
-    val newTextDecoration = textDecoration ?: textLayoutResult.layoutInput.style.textDecoration
-    val newDrawStyle = drawStyle ?: textLayoutResult.layoutInput.style.drawStyle
-
     withTransform({
         translate(topLeft.x, topLeft.y)
         clip(textLayoutResult)
     }) {
+        // 平台适配点:Brush 由平台 Paragraph 按 SolidColor 解析(渐变第一版不支持)
         textLayoutResult.multiParagraph.paint(
             drawContext.canvas,
             brush,
-            if (!alpha.isNaN()) alpha else textLayoutResult.layoutInput.style.alpha,
-            newShadow,
-            newTextDecoration,
-            newDrawStyle,
+            if (!alpha.isNaN()) alpha else 1f,
+            shadow,
+            textDecoration,
+            drawStyle,
             blendMode,
         )
     }

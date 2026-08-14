@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright 2024 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,7 +30,9 @@ import androidx.compose.foundation.text.input.internal.selection.textFieldMagnif
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.PlatformSelectionBehaviors
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -60,6 +62,7 @@ import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextPainter
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.platform.MinecraftParagraph
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
@@ -311,6 +314,10 @@ internal class TextFieldCoreModifierNode(
         val value = textFieldState.visualText
         val textLayoutResult = textLayoutState.layoutResult ?: return
 
+        // 平台适配点(T.6):每帧按光标位置更新 MC EditBox 风格的水平滚动(displayPos)。
+        // 必须先于文本/光标/选区绘制执行,保证三者使用同一 displayPos。
+        updateDisplayPos(textLayoutResult, value.selection)
+
         value.highlight?.let { drawHighlight(it, textLayoutResult) }
         if (value.selection.collapsed) {
             drawText(textLayoutResult)
@@ -331,6 +338,20 @@ internal class TextFieldCoreModifierNode(
         }
 
         with(textFieldMagnifierNode) { draw() }
+    }
+
+    /**
+     * 平台适配点(T.6):把 MC EditBox 的 displayPos 水平滚动驱动到平台 Paragraph。
+     * 视口宽度取本节点尺寸(horizontal 模式下本节点即可见容器)。
+     */
+    private fun DrawScope.updateDisplayPos(textLayoutResult: TextLayoutResult, selection: TextRange) {
+        val paragraph =
+            textLayoutResult.multiParagraph.paragraphInfoList
+                .firstOrNull()
+                ?.paragraph as? MinecraftParagraph
+                ?: return
+        paragraph.visibleWidth = size.width
+        paragraph.updateDisplayPosFor(selection.start, size.width)
     }
 
     private fun MeasureScope.measureVerticalScroll(
@@ -366,16 +387,12 @@ internal class TextFieldCoreModifierNode(
         val width = min(placeable.width, constraints.maxWidth)
 
         return layout(width, placeable.height) {
-            // we may need to update the scroll state to bring the cursor back into view before
-            // layout is updated.
-            updateScrollState(
-                containerSize = width,
-                textLayoutSize = placeable.width,
-                currSelection = textFieldState.visualText.selection,
-                layoutDirection = layoutDirection,
-            )
-
-            placeable.placeRelative(-scrollState.value, 0)
+            // 平台适配点(T.6):水平滚动改用 MC EditBox 的 displayPos 模型
+            // (MinecraftParagraph.displayPos,由 draw 每帧按光标位置更新);
+            // ScrollState 仅登记视口/内容尺寸,不再做位移与滚动
+            scrollState.viewportSize = width
+            scrollState.maxValue = (placeable.width - width).coerceAtLeast(0)
+            placeable.placeRelative(0, 0)
         }
     }
 
@@ -532,14 +549,10 @@ internal class TextFieldCoreModifierNode(
         if (type == TextHighlightType.HandwritingDeletePreview) {
             // The handwriting delete gesture preview highlight should be the same color as the
             // text at 20% opacity.
-            val brush = textLayoutResult.layoutInput.style.brush
-            if (brush != null) {
-                drawPath(highlightPath, brush = brush, alpha = 0.2f)
-            } else {
-                val textColor = textLayoutResult.layoutInput.style.color.takeOrElse { Color.Black }
-                val highlightBackgroundColor = textColor.copy(alpha = textColor.alpha * 0.2f)
-                drawPath(highlightPath, color = highlightBackgroundColor)
-            }
+            // 平台适配点:McTextStyle 无 brush,颜色直接取自样式
+            val textColor = textLayoutResult.layoutInput.style.color
+            val highlightBackgroundColor = textColor.copy(alpha = textColor.alpha * 0.2f)
+            drawPath(highlightPath, color = highlightBackgroundColor)
         } else {
             // The handwriting select gesture preview highlight should be the same color as the
             // regular select highlight.
@@ -669,7 +682,37 @@ internal fun TextFieldCoreModifierNode.drawSelectionHighlight(
     scope: DrawScope,
     selection: TextRange,
     textLayoutResult: TextLayoutResult,
-) = drawDefaultSelectionHighlight(scope, selection, textLayoutResult)
+) {
+    // 平台适配点(T.7):MC EditBox 风格选区 —— 前缀宽度之间的矩形高亮
+    // (EditBox: textX+width(前缀) 到 highlightX 的矩形),颜色沿用 LocalTextSelectionColors。
+    // 不使用 getPathForRange:本平台 Canvas 第一版不渲染 Path 命令。
+    val start = selection.min
+    val end = selection.max
+    if (start == end) return
+    val selectionBackgroundColor = currentValueOf(LocalTextSelectionColors).backgroundColor
+    val firstLine = textLayoutResult.getLineForOffset(start)
+    val lastLine = textLayoutResult.getLineForOffset((end - 1).coerceAtLeast(0))
+    with(scope) {
+        for (line in firstLine..lastLine) {
+            val lineStart = maxOf(start, textLayoutResult.getLineStart(line))
+            val lineEnd = minOf(end, textLayoutResult.getLineEnd(line))
+            if (lineStart >= lineEnd) continue
+            val left = textLayoutResult.getCursorRect(lineStart).left
+            val right = textLayoutResult.getCursorRect(lineEnd).left
+            val lineHeight =
+                textLayoutResult.getLineBottom(line) - textLayoutResult.getLineTop(line)
+            drawRect(
+                color = selectionBackgroundColor,
+                topLeft = Offset(left, textLayoutResult.getLineTop(line) - 1f),
+                size =
+                    Size(
+                        (right - left).coerceAtLeast(0f),
+                        lineHeight + 2f,
+                    ),
+            )
+        }
+    }
+}
 
 internal fun TextFieldCoreModifierNode.drawDefaultSelectionHighlight(
     scope: DrawScope,
@@ -704,7 +747,26 @@ internal fun TextFieldCoreModifierNode.drawCursor(
     showCursor: Boolean,
     cursorAnimation: CursorAnimationState?,
     textFieldSelectionState: TextFieldSelectionState,
-) = Unit
+) {
+    // 平台适配点(T.7):MC EditBox 风格竖条光标。
+    // - 1px 竖条,x = 光标前缀宽度 - 1,y = 行顶 - 1 到 行底 + 1
+    //   (对应 MC TextCursorUtils.extractInsertCursor 的 fill(x, y-1, x+1, y+lineHeight));
+    // - 颜色 = cursorBrush 纯色(BasicTextField 默认即文本色,同 EditBox 光标颜色);
+    // - 闪烁沿用 CursorAnimationState,周期调为 MC 的 300ms(TextCursorUtils)。
+    val cursorAlphaValue = cursorAnimation?.cursorAlpha ?: 0f
+    if (cursorAlphaValue == 0f || !showCursor) return
+    val color = (brush as? SolidColor)?.value ?: return
+    val cursorRect = textFieldSelectionState.getCursorRect()
+
+    with(scope) {
+        drawRect(
+            color = color,
+            topLeft = Offset(cursorRect.left - 1f, cursorRect.top - 1f),
+            size = Size(1f, cursorRect.height + 2f),
+            alpha = cursorAlphaValue,
+        )
+    }
+}
 
 internal fun TextFieldCoreModifierNode.drawDefaultCursor(
     scope: DrawScope,

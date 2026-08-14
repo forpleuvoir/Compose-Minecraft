@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright 2020 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -48,7 +48,6 @@ import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
@@ -59,6 +58,7 @@ import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastMapIndexedNotNull
 import androidx.compose.ui.util.fastRoundToInt
 import kotlin.math.floor
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * Basic element that displays text and provides semantics / accessibility information. Typically
@@ -89,10 +89,10 @@ import kotlin.math.floor
  * @sample androidx.compose.foundation.samples.TextAutoSizeBasicTextSample
  */
 @Composable
-fun BasicText(
+internal fun BasicText(
     text: String,
     modifier: Modifier = Modifier,
-    style: TextStyle = TextStyle.Default,
+    style: McTextStyle = McTextStyle.Default,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -186,10 +186,10 @@ fun BasicText(
  * @sample androidx.compose.foundation.samples.TextAutoSizeBasicTextSample
  */
 @Composable
-fun BasicText(
+internal fun BasicText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
-    style: TextStyle = TextStyle.Default,
+    style: McTextStyle = McTextStyle.Default,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -305,10 +305,10 @@ fun BasicText(
  */
 @Deprecated("Maintained for binary compatibility", level = DeprecationLevel.HIDDEN)
 @Composable
-fun BasicText(
+internal fun BasicText(
     text: String,
     modifier: Modifier = Modifier,
-    style: TextStyle = TextStyle.Default,
+    style: McTextStyle = McTextStyle.Default,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -346,10 +346,10 @@ fun BasicText(
  */
 @Deprecated("Maintained for binary compatibility", level = DeprecationLevel.HIDDEN)
 @Composable
-fun BasicText(
+internal fun BasicText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
-    style: TextStyle = TextStyle.Default,
+    style: McTextStyle = McTextStyle.Default,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -374,10 +374,10 @@ fun BasicText(
 
 @Deprecated("Maintained for binary compatibility", level = DeprecationLevel.HIDDEN)
 @Composable
-fun BasicText(
+internal fun BasicText(
     text: String,
     modifier: Modifier = Modifier,
-    style: TextStyle = TextStyle.Default,
+    style: McTextStyle = McTextStyle.Default,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -397,10 +397,10 @@ fun BasicText(
 
 @Deprecated("Maintained for binary compatibility", level = DeprecationLevel.HIDDEN)
 @Composable
-fun BasicText(
+internal fun BasicText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
-    style: TextStyle = TextStyle.Default,
+    style: McTextStyle = McTextStyle.Default,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -422,10 +422,10 @@ fun BasicText(
 
 @Deprecated("Maintained for binary compat", level = DeprecationLevel.HIDDEN)
 @Composable
-fun BasicText(
+internal fun BasicText(
     text: String,
     modifier: Modifier = Modifier,
-    style: TextStyle = TextStyle.Default,
+    style: McTextStyle = McTextStyle.Default,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -435,10 +435,10 @@ fun BasicText(
 
 @Deprecated("Maintained for binary compat", level = DeprecationLevel.HIDDEN)
 @Composable
-fun BasicText(
+internal fun BasicText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
-    style: TextStyle = TextStyle.Default,
+    style: McTextStyle = McTextStyle.Default,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -573,7 +573,7 @@ private fun measureWithTextRangeMeasureConstraints(
 
 private fun Modifier.textModifier(
     text: AnnotatedString,
-    style: TextStyle,
+    style: McTextStyle,
     onTextLayout: ((TextLayoutResult) -> Unit)?,
     overflow: TextOverflow,
     softWrap: Boolean,
@@ -634,7 +634,7 @@ private fun LayoutWithLinksAndInlineContent(
     onTextLayout: ((TextLayoutResult) -> Unit)?,
     hasInlineContent: Boolean,
     inlineContent: Map<String, InlineTextContent> = mapOf(),
-    style: TextStyle,
+    style: McTextStyle,
     overflow: TextOverflow,
     softWrap: Boolean,
     maxLines: Int,
@@ -730,7 +730,7 @@ private fun LayoutWithLinksAndInlineContent(
 @NonRestartableComposable
 internal fun BackgroundTextMeasurement(
     text: String,
-    style: TextStyle,
+    style: McTextStyle,
     fontFamilyResolver: FontFamily.Resolver,
 ) {
     // Minecraft 平台第一版不预热文字测量
@@ -744,7 +744,7 @@ internal fun BackgroundTextMeasurement(
 @NonRestartableComposable
 internal fun BackgroundTextMeasurement(
     text: AnnotatedString,
-    style: TextStyle,
+    style: McTextStyle,
     fontFamilyResolver: FontFamily.Resolver,
     placeholders: List<AnnotatedString.Range<Placeholder>>?,
 ) {

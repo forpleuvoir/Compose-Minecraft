@@ -15,6 +15,7 @@ import androidx.compose.ui.scene.ComposeScene
 import androidx.compose.ui.scene.PointerEventResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.state.gui.GuiRenderState
@@ -40,6 +41,12 @@ class MinecraftComposeScene(
 
     private val renderContext = MinecraftRenderContext()
 
+    /**
+     * 当前组合提供的字符过滤器(默认全放行)。由 [setContent] 的组合在每次重组时写入,
+     * 供 charTyped 输入分发使用(文本输入计划 §5,LocalCharFilter)。
+     */
+    private val charFilter = AtomicReference<(Int) -> Boolean>({ true })
+
     private val scene: ComposeScene = CanvasLayersComposeScene(
         density = Density(1f),
         size = IntSize(width.coerceAtLeast(1), height.coerceAtLeast(1)),
@@ -51,7 +58,17 @@ class MinecraftComposeScene(
     )
 
     /** 设置场景内容(同 [ComposeScene.setContent]) */
-    fun setContent(content: @Composable () -> Unit) = scene.setContent(content)
+    fun setContent(content: @Composable () -> Unit) {
+        scene.setContent {
+            // 读取 LocalCharFilter(业务方可经 CompositionLocalProvider 覆盖),
+            // 写入场景侧引用供输入分发使用
+            charFilter.set(LocalCharFilter.current)
+            content()
+        }
+    }
+
+    /** 判断 codepoint 是否允许进入场景(文本输入计划 §5:过滤器位于输入分发链上) */
+    fun isCharAccepted(codePoint: Int): Boolean = charFilter.get().invoke(codePoint)
 
     /**
      * 转发指针事件到场景(阶段 F)。坐标 = GUI 单位(密度 1,与场景尺寸一致),

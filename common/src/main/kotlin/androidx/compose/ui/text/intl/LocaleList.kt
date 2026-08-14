@@ -18,13 +18,11 @@ package androidx.compose.ui.text.intl
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.util.fastMap
 
 /**
  * Defines a list of [Locale] objects.
  *
- * @see TextStyle
  * @see SpanStyle
  */
 @Immutable

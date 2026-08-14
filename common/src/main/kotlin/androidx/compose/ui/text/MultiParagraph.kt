@@ -41,6 +41,7 @@ import androidx.compose.ui.util.fastFlatMap
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastJoinToString
 import androidx.compose.ui.util.fastMap
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * Lays out and renders multiple paragraphs at once. Unlike [Paragraph], supports multiple
@@ -124,7 +125,7 @@ class MultiParagraph(
      * [MultiParagraph] can handle a text what has multiple paragraph styles.
      *
      * @param annotatedString the text to be laid out
-     * @param style the [TextStyle] to be applied to the whole text
+     * @param style the [McTextStyle] to be applied to the whole text
      * @param placeholders a list of [Placeholder]s that specify ranges of text which will be
      *   skipped during layout and replaced with [Placeholder]. It's required that the range of each
      *   [Placeholder] doesn't cross paragraph boundary, otherwise [IllegalArgumentException] is
@@ -149,7 +150,7 @@ class MultiParagraph(
     )
     constructor(
         annotatedString: AnnotatedString,
-        style: TextStyle,
+        style: McTextStyle,
         placeholders: List<AnnotatedString.Range<Placeholder>> = listOf(),
         maxLines: Int = Int.MAX_VALUE,
         ellipsis: Boolean = false,
@@ -175,7 +176,7 @@ class MultiParagraph(
      * [MultiParagraph] can handle a text what has multiple paragraph styles.
      *
      * @param annotatedString the text to be laid out
-     * @param style the [TextStyle] to be applied to the whole text
+     * @param style the [McTextStyle] to be applied to the whole text
      * @param width how wide the text is allowed to be
      * @param density density of the device
      * @param fontFamilyResolver to be used to load the font given in [SpanStyle]s
@@ -200,7 +201,7 @@ class MultiParagraph(
     )
     constructor(
         annotatedString: AnnotatedString,
-        style: TextStyle,
+        style: McTextStyle,
         width: Float,
         density: Density,
         fontFamilyResolver: FontFamily.Resolver,
@@ -226,7 +227,7 @@ class MultiParagraph(
      * [MultiParagraph] can handle a text what has multiple paragraph styles.
      *
      * @param annotatedString the text to be laid out
-     * @param style the [TextStyle] to be applied to the whole text
+     * @param style the [McTextStyle] to be applied to the whole text
      * @param constraints how wide and tall the text is allowed to be. [Constraints.maxWidth] will
      *   define the width of the MultiParagraph. [Constraints.maxHeight] helps defining the number
      *   of lines that fit with ellipsis is true. Minimum components of the [Constraints] object are
@@ -249,7 +250,7 @@ class MultiParagraph(
     )
     constructor(
         annotatedString: AnnotatedString,
-        style: TextStyle,
+        style: McTextStyle,
         constraints: Constraints,
         density: Density,
         fontFamilyResolver: FontFamily.Resolver,
@@ -275,7 +276,7 @@ class MultiParagraph(
      * [MultiParagraph] can handle a text what has multiple paragraph styles.
      *
      * @param annotatedString the text to be laid out
-     * @param style the [TextStyle] to be applied to the whole text
+     * @param style the [McTextStyle] to be applied to the whole text
      * @param constraints how wide and tall the text is allowed to be. [Constraints.maxWidth] will
      *   define the width of the MultiParagraph. [Constraints.maxHeight] helps defining the number
      *   of lines that fit with ellipsis is true. Minimum components of the [Constraints] object are
@@ -295,7 +296,7 @@ class MultiParagraph(
      */
     constructor(
         annotatedString: AnnotatedString,
-        style: TextStyle,
+        style: McTextStyle,
         constraints: Constraints,
         density: Density,
         fontFamilyResolver: FontFamily.Resolver,

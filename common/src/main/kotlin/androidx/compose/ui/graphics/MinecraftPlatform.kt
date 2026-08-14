@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Minecraft Compose UI Graphics 平台实现(第一版)
@@ -672,15 +673,14 @@ internal class MinecraftCanvas internal constructor(
         val dstHeight: Int,
     ) : DrawCommand
 
-    /** 文本绘制命令(由 [MinecraftParagraph] 记录) */
+    /** 文本绘制命令(由 [MinecraftParagraph] 记录)。平台适配点(T.1):携带 MC 样式快照 */
     class DrawTextCommand(
         override val matrix: FloatArray,
         override val clip: Rect?,
         val text: String,
         val x: Float,
         val y: Float,
-        val color: Color,
-        val fontSize: Float,
+        val style: McTextStyle,
     ) : DrawCommand {
         override val paint: PaintSnapshot? = null
     }
@@ -700,8 +700,7 @@ internal class MinecraftCanvas internal constructor(
         text: String,
         x: Float,
         y: Float,
-        color: Color,
-        fontSize: Float,
+        style: McTextStyle,
     ) {
         drawCommands.add(
             DrawTextCommand(
@@ -710,8 +709,7 @@ internal class MinecraftCanvas internal constructor(
                 text = text,
                 x = x,
                 y = y,
-                color = color,
-                fontSize = fontSize,
+                style = style,
             )
         )
     }
@@ -726,8 +724,15 @@ internal class MinecraftCanvas internal constructor(
     internal fun replayFrom(source: MinecraftCanvas, alphaMultiplier: Float = 1f) {
         for (command in source.commands()) {
             save()
+            // 平台适配点(T.9 修复):命令 clip 处于**录制画布的根空间**(录制画布
+            // 以单位矩阵起始),回放时须经目标画布的**基矩阵**(concat 之前)换算到
+            // 目标根空间;按 concat 后的矩阵换算会叠加命令自身矩阵造成双重变换。
+            val base = Matrix(currentMatrix.values.copyOf())
             concat(Matrix(command.matrix.copyOf()))
-            command.clip?.let { clipRect(it.left, it.top, it.right, it.bottom) }
+            command.clip?.let { clip ->
+                val rootClip = base.map(clip)
+                clipStack.addLast(currentClip?.let { it.intersect(rootClip) } ?: rootClip)
+            }
             val snapshot = command.paint
             if (snapshot != null) {
                 val paint = MinecraftPaint(
@@ -775,7 +780,7 @@ internal class MinecraftCanvas internal constructor(
                     is DrawTextCommand -> Unit // 文本在 else 分支处理
                 }
             } else if (command is DrawTextCommand) {
-                recordTextDraw(command.text, command.x, command.y, command.color, command.fontSize)
+                recordTextDraw(command.text, command.x, command.y, command.style)
             }
             restore()
         }
@@ -877,8 +882,11 @@ internal class MinecraftCanvas internal constructor(
         if (clipOp == ClipOp.Difference) {
             throw UnsupportedOperationException("clipRect(Difference) 第一版不支持")
         }
-        val rect = Rect(left, top, right, bottom)
-        clipStack.addLast(currentClip?.let { it.intersect(rect) } ?: rect)
+        // 平台适配点(T.9 修复):裁剪一律换算到**屏幕空间**再入栈。
+        // 不同矩阵状态下的局部矩形不能直接相交(会得到退化矩形,如 336x0,
+        // 导致 MC enableScissor 崩溃);统一换算为屏幕空间后相交才有效。
+        val screen = Matrix(currentMatrix.values.copyOf()).map(Rect(left, top, right, bottom))
+        clipStack.addLast(currentClip?.let { it.intersect(screen) } ?: screen)
     }
 
     override fun clipPath(path: Path, clipOp: ClipOp) {

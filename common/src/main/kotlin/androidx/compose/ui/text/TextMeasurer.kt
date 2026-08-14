@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.constrain
 import kotlin.math.ceil
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * Use cases that converge to this number;
@@ -140,7 +141,7 @@ class TextMeasurer(
     @Stable
     fun measure(
         text: AnnotatedString,
-        style: TextStyle = TextStyle.Default,
+        style: McTextStyle = McTextStyle.Default,
         overflow: TextOverflow = TextOverflow.Clip,
         softWrap: Boolean = true,
         maxLines: Int = Int.MAX_VALUE,
@@ -233,7 +234,7 @@ class TextMeasurer(
     @Stable
     fun measure(
         text: String,
-        style: TextStyle = TextStyle.Default,
+        style: McTextStyle = McTextStyle.Default,
         overflow: TextOverflow = TextOverflow.Clip,
         softWrap: Boolean = true,
         maxLines: Int = Int.MAX_VALUE,
@@ -270,7 +271,8 @@ class TextMeasurer(
                 val nonNullIntrinsics =
                     MultiParagraphIntrinsics(
                         annotatedString = text,
-                        style = resolveDefaults(style, layoutDirection),
+                        // 平台适配点:TextStyle 的 resolveDefaults 已随 TextStyle 移除,McTextStyle 无缺省解析
+                        style = style,
                         density = density,
                         fontFamilyResolver = fontFamilyResolver,
                         placeholders = placeholders,
@@ -413,7 +415,8 @@ internal class CacheTextLayoutInput(val textLayoutInput: TextLayoutInput) {
     override fun hashCode(): Int =
         with(textLayoutInput) {
             var result = text.hashCode()
-            result = 31 * result + style.hashCodeLayoutAffectingAttributes()
+            // 平台适配点:McTextStyle 无布局/绘制分离的缓存键,整样式参与哈希
+            result = 31 * result + style.hashCode()
             result = 31 * result + placeholders.hashCode()
             result = 31 * result + maxLines
             result = 31 * result + softWrap.hashCode()
@@ -431,7 +434,8 @@ internal class CacheTextLayoutInput(val textLayoutInput: TextLayoutInput) {
 
         with(textLayoutInput) {
             if (text != other.textLayoutInput.text) return false
-            if (!style.hasSameLayoutAffectingAttributes(other.textLayoutInput.style)) return false
+            // 平台适配点:McTextStyle 任何字段变化都要求重新布局(布局/绘制不做分离缓存)
+            if (style != other.textLayoutInput.style) return false
             if (placeholders != other.textLayoutInput.placeholders) return false
             if (maxLines != other.textLayoutInput.maxLines) return false
             if (softWrap != other.textLayoutInput.softWrap) return false

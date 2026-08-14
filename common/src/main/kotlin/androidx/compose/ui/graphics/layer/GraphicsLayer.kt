@@ -424,11 +424,14 @@ class GraphicsLayer internal constructor() {
         canvas.scale(scaleX, scaleY)
         canvas.rotate(rotationZ)
         if (clip) {
+            // 平台适配点(T.9 修复):translate 之后画布已处于图层局部坐标系,
+            // 裁剪矩形必须是局部 (0, 0, size);此前误用 topLeft 绝对坐标,
+            // 导致 clipToBounds 图层(如 BasicTextField 文本/光标)整体被裁剪消失。
             canvas.clipRect(
-                topLeft.x.toFloat(),
-                topLeft.y.toFloat(),
-                (topLeft.x + size.width).toFloat(),
-                (topLeft.y + size.height).toFloat(),
+                0f,
+                0f,
+                size.width.toFloat(),
+                size.height.toFloat(),
             )
         }
         canvas.replayFrom(recording, alphaMultiplier = alpha)

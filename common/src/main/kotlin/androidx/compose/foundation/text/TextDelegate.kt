@@ -28,9 +28,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutInput
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextPainter
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.resolveDefaults
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
@@ -40,6 +38,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.constrain
 import androidx.compose.ui.util.fastRoundToInt
 import kotlin.math.ceil
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * An object that paints text onto a [Canvas].
@@ -75,7 +74,7 @@ import kotlin.math.ceil
 @Stable
 internal class TextDelegate(
     val text: AnnotatedString,
-    val style: TextStyle,
+    val style: McTextStyle,
     val maxLines: Int = Int.MAX_VALUE,
     val minLines: Int = DefaultMinLines,
     val softWrap: Boolean = true,
@@ -129,7 +128,8 @@ internal class TextDelegate(
                 intrinsicsLayoutDirection = layoutDirection
                 MultiParagraphIntrinsics(
                     annotatedString = text,
-                    style = resolveDefaults(style, layoutDirection),
+                    // 平台适配点:resolveDefaults 随 TextStyle 移除,McTextStyle 无缺省解析
+                    style = style,
                     density = density,
                     fontFamilyResolver = fontFamilyResolver,
                     placeholders = placeholders,
@@ -316,7 +316,7 @@ internal fun Float.ceilToIntPx(): Int = ceil(this).fastRoundToInt()
 internal fun updateTextDelegate(
     current: TextDelegate,
     text: AnnotatedString,
-    style: TextStyle,
+    style: McTextStyle,
     density: Density,
     fontFamilyResolver: FontFamily.Resolver,
     softWrap: Boolean = true,

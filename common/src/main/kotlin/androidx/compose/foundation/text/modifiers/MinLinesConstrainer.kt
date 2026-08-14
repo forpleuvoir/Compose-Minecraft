@@ -17,14 +17,13 @@
 package androidx.compose.foundation.text.modifiers
 
 import androidx.compose.ui.text.Paragraph
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.resolveDefaults
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.util.fastRoundToInt
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 /**
  * Coerce min and max lines into actual constraints.
@@ -37,11 +36,12 @@ import androidx.compose.ui.util.fastRoundToInt
 internal class MinLinesConstrainer
 /*@VisibleForTesting*/ internal constructor(
     val layoutDirection: LayoutDirection,
-    val inputTextStyle: TextStyle,
+    val inputTextStyle: McTextStyle,
     val density: Density,
     val fontFamilyResolver: FontFamily.Resolver,
 ) {
-    private val resolvedStyle = resolveDefaults(inputTextStyle, layoutDirection)
+    // 平台适配点:resolveDefaults 随 TextStyle 移除,McTextStyle 无缺省解析
+    private val resolvedStyle = inputTextStyle
     private var lineHeightCache: Float = Float.NaN
     private var oneLineHeightCache: Float = Float.NaN
 
@@ -54,14 +54,14 @@ internal class MinLinesConstrainer
         fun from(
             minMaxUtil: MinLinesConstrainer?,
             layoutDirection: LayoutDirection,
-            paramStyle: TextStyle,
+            paramStyle: McTextStyle,
             density: Density,
             fontFamilyResolver: FontFamily.Resolver,
         ): MinLinesConstrainer {
             minMaxUtil?.let {
                 if (
                     layoutDirection == it.layoutDirection &&
-                        resolveDefaults(paramStyle, layoutDirection) == it.inputTextStyle &&
+                        paramStyle == it.inputTextStyle &&
                         density.density == it.density.density &&
                         fontFamilyResolver === it.fontFamilyResolver
                 ) {
@@ -71,7 +71,7 @@ internal class MinLinesConstrainer
             last?.let {
                 if (
                     layoutDirection == it.layoutDirection &&
-                        resolveDefaults(paramStyle, layoutDirection) == it.inputTextStyle &&
+                        paramStyle == it.inputTextStyle &&
                         density.density == it.density.density &&
                         fontFamilyResolver === it.fontFamilyResolver
                 ) {
@@ -80,7 +80,7 @@ internal class MinLinesConstrainer
             }
             return MinLinesConstrainer(
                     layoutDirection,
-                    resolveDefaults(paramStyle, layoutDirection),
+                    paramStyle,
                     // other density implementations may hold references to views/activities
                     // which the cache outlives, potentially causing memory leak.
                     Density(density.density, density.fontScale),
