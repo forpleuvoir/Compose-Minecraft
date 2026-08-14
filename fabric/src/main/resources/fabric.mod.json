@@ -16,6 +16,12 @@
         "adapter": "kotlin",
         "value": "moe.forpleuvoir.compose_minecraft.FabricMod"
       }
+    ],
+    "client": [
+      {
+        "adapter": "kotlin",
+        "value": "moe.forpleuvoir.compose_minecraft.FabricModClient"
+      }
     ]
   },
   "depends": {

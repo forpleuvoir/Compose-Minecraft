@@ -3,6 +3,18 @@ plugins {
     alias(libs.plugins.neoforgedModDev).apply(false)
 }
 
+// 所有 Jar(含发布 Jar)携带 LICENSE / NOTICE(Apache 2.0 第 4 条要求)
+subprojects {
+    tasks.withType<Jar>().configureEach {
+        from(rootProject.file("LICENSE")) {
+            into("META-INF")
+        }
+        from(rootProject.file("NOTICE")) {
+            into("META-INF")
+        }
+    }
+}
+
 tasks {
     register<Copy>("buildAllModJar") {
         description = "构建 fabric + neoforge 的模组 Jar"

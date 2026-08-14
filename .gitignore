@@ -6,3 +6,4 @@ modJar/
 .kotlin/
 out/
 *.iml
+.tmp-scene/

@@ -2,6 +2,19 @@
 java = "25"
 #kotlin
 kotlin = "2.4.0"
+#compose (固定 tag v1.11.0 = f796d9898491b390baa11a516590ed949521c6de)
+compose = "1.11.0"
+#androidx 侧 runtime 实现版本
+#(org.jetbrains.compose 坐标在 JVM 目标上解析出的 xxx-desktop 变体为空壳,
+# 实际实现在 androidx.compose.* 组;"-desktop" 仅为 CMP 对 JVM 目标的命名,非桌面平台)
+composeAndroidx = "1.11.1"
+androidxAnnotation = "1.9.1"
+androidxCollection = "1.5.0"
+kotlinxCoroutines = "1.9.0"
+atomicfu = "0.28.0"
+lifecycle = "2.9.6"
+savedstate = "1.4.0"
+navigationevent = "1.0.1"
 
 #minecraft
 minecraft = "26.2"
@@ -35,6 +48,27 @@ modMenu = { group = "com.terraformersmc", name = "modmenu", version.ref = "modMe
 
 #NeoForge
 forgeKotlin = { group = "thedarkcolour", name = "kotlinforforge-neoforge", version.ref = "forgeKotlin" }
+
+#Compose(平台 Mod 依赖官方 Runtime/基础模块;UI commonMain 源码在仓库内自编译)
+#坐标均为 KMP metadata 模块,JVM 目标解析时选中 xxx-desktop 变体:
+#"-desktop" 是 Compose Multiplatform 对 JVM 目标的官方 artifact 命名,
+#解析出的 JAR 是纯 JVM 字节码,不含 Skia/桌面 UI;带 Skia 的 ui-graphics/ui-desktop 不在此列。
+composeRuntime = { group = "org.jetbrains.compose.runtime", name = "runtime", version.ref = "compose" }
+composeRuntimeSaveable = { group = "org.jetbrains.compose.runtime", name = "runtime-saveable", version.ref = "compose" }
+composeRuntimeRetain = { group = "androidx.compose.runtime", name = "runtime-retain", version.ref = "composeAndroidx" }
+composeUiUnit = { group = "org.jetbrains.compose.ui", name = "ui-unit", version.ref = "compose" }
+composeUiGeometry = { group = "org.jetbrains.compose.ui", name = "ui-geometry", version.ref = "compose" }
+composeUiUtil = { group = "org.jetbrains.compose.ui", name = "ui-util", version.ref = "compose" }
+androidxAnnotation = { group = "androidx.annotation", name = "annotation", version.ref = "androidxAnnotation" }
+androidxCollection = { group = "androidx.collection", name = "collection", version.ref = "androidxCollection" }
+kotlinxCoroutinesCore = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+atomicfu = { group = "org.jetbrains.kotlinx", name = "atomicfu", version.ref = "atomicfu" }
+lifecycleRuntimeCompose = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle" }
+lifecycleViewmodel = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-viewmodel", version.ref = "lifecycle" }
+lifecycleViewmodelSavedstate = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-viewmodel-savedstate", version.ref = "lifecycle" }
+savedstateCompose = { group = "androidx.savedstate", name = "savedstate-compose", version.ref = "savedstate" }
+# scene 移植(PlatformArchitectureComponentsOwner 等)依赖的导航事件库(纯 JVM,无 Skia)
+navigationevent = { group = "androidx.navigationevent", name = "navigationevent", version.ref = "navigationevent" }
 
 [plugins]
 fabricLoom = { id = "net.fabricmc.fabric-loom", version.ref = "fabricLoom" }

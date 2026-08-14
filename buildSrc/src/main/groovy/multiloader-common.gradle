@@ -1,6 +1,7 @@
 plugins {
     id 'java-library'
     id "org.jetbrains.kotlin.jvm"
+    id "org.jetbrains.kotlin.plugin.compose"
 }
 
 base {
@@ -17,7 +18,27 @@ kotlin {
     compilerOptions {
         freeCompilerArgs.add('-jvm-default=enable')
         freeCompilerArgs.add('-Xcollection-literals')
+        // Compose UI commonMain 源码(仓库内)使用 expect/actual;JVM 单平台内提供全部 actual,
+        // 故启用 -Xexpect-actual-classes 保持现有 JVM 工程结构,不 KMP 化。
+        freeCompilerArgs.add('-Xexpect-actual-classes')
+        // 与官方 Compose 构建一致:模块级 opt-in,使仓库内源码无需逐文件 @OptIn
+        freeCompilerArgs.add('-opt-in=androidx.compose.ui.InternalComposeUiApi')
+        freeCompilerArgs.add('-opt-in=androidx.compose.ui.ExperimentalComposeUiApi')
+        freeCompilerArgs.add('-opt-in=androidx.compose.ui.text.InternalTextApi')
+        freeCompilerArgs.add('-opt-in=androidx.compose.ui.text.ExperimentalTextApi')
+        freeCompilerArgs.add('-opt-in=androidx.compose.foundation.ExperimentalFoundationApi')
+        freeCompilerArgs.add('-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi')
+        freeCompilerArgs.add('-opt-in=androidx.compose.animation.ExperimentalAnimationApi')
+        freeCompilerArgs.add('-opt-in=androidx.compose.animation.core.ExperimentalAnimationSpecApi')
+        freeCompilerArgs.add('-opt-in=androidx.compose.runtime.ExperimentalComposeApi')
     }
+}
+
+// Java 源码可引用 Kotlin 类(mixin 等):先编译 Kotlin,再把 Kotlin 类加入 javac 类路径。
+// Kotlin 编译直接读取 Java 源码,不依赖 javac 产物,因此不存在循环依赖。
+tasks.named('compileJava', JavaCompile) {
+    dependsOn 'compileKotlin'
+    classpath += files(project.layout.buildDirectory.dir('classes/kotlin/main'))
 }
 
 repositories {

@@ -1,0 +1,45 @@
+Compose Minecraft Platform Mod
+===============================
+Copyright 2026 forpleuvoir (moe.forpleuvoir)
+
+本 Mod 以 Apache License 2.0 授权发布,详见 LICENSE 文件。
+This mod is licensed under the Apache License 2.0, see the LICENSE file.
+
+本项目由以下部分组成:
+
+1. 本项目自有代码(桥接层与 Minecraft 平台实现)
+-----------------------------------------------------------------
+   moe.forpleuvoir.compose_minecraft.minecraft 包及其它非
+   androidx.compose 前缀的源码、构建脚本与文档。
+   Copyright 2026 forpleuvoir,Apache License 2.0。
+
+2. 内嵌的 Compose Multiplatform UI 运行时源码
+-----------------------------------------------------------------
+   common/src/main/kotlin/androidx/compose/** 目录下的源码是从
+   Compose Multiplatform(https://github.com/JetBrains/compose-multiplatform)
+   与 AndroidX Compose(https://cs.android.com/androidx/platform/frameworks/support)
+   移植的运行时源码,由 JetBrains s.r.o. / The Android Open Source Project
+   按 Apache License 2.0 授权;各源码文件头部保留原始版权声明。
+   移植过程中仅做了 expect/actual 剥离与 Minecraft 平台适配,
+   未改变其许可条款。
+
+3. 随发布 JAR 内嵌的第三方依赖(二进制)
+-----------------------------------------------------------------
+   以下库以二进制形式内嵌于 Fabric/NeoForge 发布 JAR 中,
+   均按各自开源许可授权(主要为 Apache License 2.0):
+
+   - androidx.compose.runtime / runtime-saveable / runtime-retain
+   - androidx.compose.ui:* (unit/geometry/util)
+   - androidx.annotation、androidx.collection
+   - androidx.lifecycle (runtime-compose / viewmodel / viewmodel-savedstate)
+   - androidx.savedstate、androidx.navigationevent
+   - org.jetbrains.kotlinx:atomicfu
+   - kotlinx.coroutines 由 Kotlin for Forge / Fabric Kotlin 运行时提供,
+     不随本 Mod 内嵌
+
+4. 运行时由宿主环境提供、本 Mod 不包含的组件
+-----------------------------------------------------------------
+   - Minecraft(版权归 Mojang / Microsoft):本 Mod 仅调用其公开 API,
+     不包含任何 Minecraft 代码与资源;
+   - Kotlin 标准库 / Kotlin for Forge / Fabric Kotlin / Fabric API:
+     由各自 Loader 环境提供。

@@ -29,6 +29,9 @@ dependencies {
 tasks.named('compileJava', JavaCompile) {
     dependsOn(configurations.commonJava)
     source(configurations.commonJava)
+    // Java 源码可引用 Kotlin 类(mixin 等):先编译 Kotlin,再把 Kotlin 类加入 javac 类路径
+    dependsOn 'compileKotlin'
+    classpath += files(project.layout.buildDirectory.dir('classes/kotlin/main'))
 }
 
 tasks.named('compileKotlin') {
