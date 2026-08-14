@@ -134,6 +134,7 @@ internal class MinecraftRenderContext {
                     GeometryTessellator.line(
                         command.p1x, command.p1y, command.p2x, command.p2y,
                         command.paint.strokeWidth,
+                        command.paint.strokeCap,
                         sink = sink,
                     )
                 }
@@ -142,6 +143,7 @@ internal class MinecraftRenderContext {
                         command.segments,
                         fill = command.paint.style == PaintingStyle.Fill,
                         strokeWidth = command.paint.strokeWidth,
+                        cap = command.paint.strokeCap,
                         sink = sink,
                     )
                 }
@@ -149,6 +151,7 @@ internal class MinecraftRenderContext {
                     GeometryTessellator.points(
                         command.pointMode, command.points,
                         command.paint.strokeWidth,
+                        command.paint.strokeCap,
                         sink = sink,
                     )
                 }

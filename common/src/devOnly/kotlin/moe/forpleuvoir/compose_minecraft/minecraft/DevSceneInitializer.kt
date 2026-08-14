@@ -24,7 +24,7 @@ class DevSceneInitializer : MinecraftInitializer {
         thread(name = "Compose-Minecraft-DevScene", isDaemon = true) {
             while (true) {
                 val mc = runCatching { Minecraft.getInstance() }.getOrNull()
-                if (mc != null && mc.isGameLoadFinished() && mc.gui.screen() is TitleScreen) {
+                if (mc != null && mc.isGameLoadFinished && mc.gui.screen() is TitleScreen) {
                     LOGGER.info("[dev] Title screen reached, opening ComposeScreen")
                     // 只向主线程提交一次;绝不能在主线程任务里递归 execute——
                     // BlockableEventLoop.runAllTasks 会执行到队列空,任务内再入队会造成死循环卡死游戏。

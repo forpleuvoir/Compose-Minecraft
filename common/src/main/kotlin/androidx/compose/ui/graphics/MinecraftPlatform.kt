@@ -564,6 +564,7 @@ internal class MinecraftCanvas internal constructor(
         val alpha: Float,
         val style: PaintingStyle,
         val strokeWidth: Float,
+        val strokeCap: StrokeCap,
     )
 
     /** 绘制命令基类 */
@@ -789,7 +790,7 @@ internal class MinecraftCanvas internal constructor(
     private fun snapshot(): FloatArray = currentMatrix.values.copyOf()
 
     private fun Paint.snapshot(): PaintSnapshot =
-        PaintSnapshot(color = color, alpha = alpha, style = style, strokeWidth = strokeWidth)
+        PaintSnapshot(color = color, alpha = alpha, style = style, strokeWidth = strokeWidth, strokeCap = strokeCap)
 
     private fun record(command: DrawCommand) {
         drawCommands.add(command)

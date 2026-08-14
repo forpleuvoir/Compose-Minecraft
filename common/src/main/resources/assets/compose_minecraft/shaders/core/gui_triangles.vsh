@@ -4,8 +4,8 @@
 //
 // 与 MC 自带 core/gui 相同的 uniform 布局(DynamicTransforms / Projection),
 // 顶点格式为 POSITION_COLOR_LINE_WIDTH:LineWidth 属性在本平台承载
-// 「到最近轮廓边的屏幕像素距离」(coverage,由 GeometryTessellator 计算),
-// 片元着色器据此做边缘抗锯齿(alpha 渐变)。
+// 「到最近真实轮廓的有符号屏幕像素距离」(coverage,由 GeometryTessellator
+// 计算:外侧负、轮廓 0、内侧正),片元着色器据此做边缘抗锯齿。
 //
 // 保持保守 GLSL 330 语法、不依赖 OpenGL 特有扩展,可被 MC 的
 // OpenGL / Vulkan 两个渲染后端正常编译。

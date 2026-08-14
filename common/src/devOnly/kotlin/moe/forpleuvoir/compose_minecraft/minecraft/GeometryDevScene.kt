@@ -27,8 +27,9 @@ import androidx.compose.ui.unit.dp
  * 图形(几何)绘制验证屏幕:验证 CPU 三角化回放到 GuiRenderState 的
  * 圆/椭圆/弧/圆角矩形/线/Path/点,填充与描边两种样式。
  *
- * 注意:平台 Paint 快照未携带 strokeCap/strokeJoin,描边统一按
- * butt cap + 圆 join 展开(见 GeometryTessellator 类注释)。
+ * 注意:平台 Paint 快照携带 strokeCap(Points 模式的 Round → 圆 / 其他 → 方形,
+ * 线/折线端帽),但未携带 strokeJoin,描边 join 统一按圆 join 展开
+ * (见 GeometryTessellator 类注释)。
  */
 @Composable
 fun GeometryDevScene() {
@@ -190,14 +191,14 @@ fun GeometryDevScene() {
                 drawPath(wave, color = Color(0xFFFFEE58), style = Stroke(width = 5f))
             }
 
-            // ── 点:Points / Lines / Polygon ──
+            // ── 点:Points(Round/Butt) / Lines / Polygon(连续折线)──
             Canvas(
                 Modifier
                     .padding(top = 8.dp)
                     .fillMaxWidth()
-                    .height(120.dp)
+                    .height(190.dp)
             ) {
-                // Points:每点一个方形
+                // Points + Round cap:每个点一个直径为 strokeWidth 的圆
                 drawPoints(
                     pointMode = PointMode.Points,
                     points = listOf(
@@ -205,23 +206,76 @@ fun GeometryDevScene() {
                         Offset(140f, 30f), Offset(180f, 30f),
                     ),
                     color = Color(0xFFE91E63), strokeWidth = 8f,
+                    cap = StrokeCap.Round,
                 )
-                // Lines:两两连线
+                // Points + Butt cap(默认):每个点一个方形
+                drawPoints(
+                    pointMode = PointMode.Points,
+                    points = listOf(
+                        Offset(20f, 30f), Offset(60f, 30f), Offset(100f, 30f),
+                        Offset(140f, 30f), Offset(180f, 30f),
+                    ),
+                    color = Color(0xFFF48FB1), strokeWidth = 4f,
+                    cap = StrokeCap.Butt,
+                )
+                // Lines:两两独立成段(p0→p1, p2→p3),奇数点忽略末点
                 drawPoints(
                     pointMode = PointMode.Lines,
                     points = listOf(
                         Offset(20f, 70f), Offset(120f, 70f),
                         Offset(160f, 70f), Offset(260f, 70f),
+                        Offset(290f, 70f), // 奇数点:应被忽略
                     ),
                     color = Color(0xFF00E5FF), strokeWidth = 4f,
                 )
-                // Polygon:闭合填充
+                // Polygon:连续折线(不填充、不闭合),斜线/尖角 join
                 drawPoints(
                     pointMode = PointMode.Polygon,
                     points = listOf(
                         Offset(20f, 110f), Offset(120f, 110f), Offset(150f, 90f), Offset(100f, 85f),
                     ),
                     color = Color(0xFFFFAB40), strokeWidth = 1f,
+                )
+                // Polygon:不同线宽(2px/6px)验证覆盖度渐变
+                drawPoints(
+                    pointMode = PointMode.Polygon,
+                    points = listOf(
+                        Offset(200f, 120f), Offset(260f, 120f), Offset(300f, 90f), Offset(260f, 80f),
+                    ),
+                    color = Color(0xFFB388FF), strokeWidth = 2f,
+                )
+                drawPoints(
+                    pointMode = PointMode.Polygon,
+                    points = listOf(
+                        Offset(20f, 170f), Offset(120f, 130f), Offset(220f, 170f), Offset(120f, 155f),
+                    ),
+                    color = Color(0xFF80DEEA), strokeWidth = 6f,
+                )
+            }
+
+            // ── 抗锯齿:水平/垂直/斜线,1px/2px/6px ──
+            Canvas(
+                Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth()
+                    .height(130.dp)
+            ) {
+                drawLine(
+                    color = Color(0xFFFFF59D), start = Offset(10f, 20f), end = Offset(300f, 20f),
+                    strokeWidth = 1f,
+                )
+                drawLine(
+                    color = Color(0xFFFFF59D), start = Offset(10f, 45f), end = Offset(300f, 45f),
+                    strokeWidth = 2f,
+                )
+                drawLine(
+                    color = Color(0xFFFFF59D), start = Offset(10f, 80f), end = Offset(300f, 80f),
+                    strokeWidth = 6f,
+                )
+                // 对角线(非像素对齐,验证两侧渐变)
+                drawLine(
+                    color = Color(0xFF4DD0E1), start = Offset(10f, 120f), end = Offset(300f, 10f),
+                    strokeWidth = 1f,
                 )
             }
         }
