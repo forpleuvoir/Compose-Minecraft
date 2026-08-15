@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.input.TextHighlightType
 import androidx.compose.foundation.text.input.internal.selection.TextFieldSelectionState
 import androidx.compose.foundation.text.input.internal.selection.textFieldMagnifierNode
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.LocalTextSelectionRenderer
 import androidx.compose.foundation.text.selection.PlatformSelectionBehaviors
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.geometry.Offset
@@ -38,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toColor
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.isUnspecified
 import androidx.compose.ui.graphics.takeOrElse
@@ -166,9 +168,13 @@ internal class TextFieldCoreModifierNode(
     /**
      * Whether to show cursor at all when TextField has focus. This depends on enabled, read only,
      * and brush at a given time.
+     *
+     * 平台适配点(T.7 修复):焦点直接读 [TextFieldSelectionState.isFocused](由装饰器
+     * `onIsFocusedUpdated` 实时写入),不再依赖经 interactionSource 传播的 [isFocused] 字段 ——
+     * 后者在首次聚焦时可能不更新(传播链路断),导致光标不渲染。
      */
     private val showCursor: Boolean
-        get() = writeable && (isFocused || isDragHovered) && cursorBrush.isSpecified
+        get() = writeable && (textFieldSelectionState.isFocused || isDragHovered) && cursorBrush.isSpecified
 
     /**
      * Observes the [textFieldState] for any changes to content or selection. If a change happens,
@@ -273,6 +279,10 @@ internal class TextFieldCoreModifierNode(
         this.toolbarRequester = toolbarRequester
         this.platformSelectionBehaviors = platformSelectionBehaviors
 
+        // 平台适配点(T.7 修复):焦点以 selectionState 为准(装饰器实时写入),
+        // 与 showCursor 保持一致;字段 isFocused 仅保留给 magnifier 等内部使用。
+        this.isFocused = isFocused || textFieldSelectionState.isFocused
+
         textFieldMagnifierNode.update(
             textFieldState = textFieldState,
             textFieldSelectionState = textFieldSelectionState,
@@ -314,9 +324,17 @@ internal class TextFieldCoreModifierNode(
         val value = textFieldState.visualText
         val textLayoutResult = textLayoutState.layoutResult ?: return
 
-        // 平台适配点(T.6):每帧按光标位置更新 MC EditBox 风格的水平滚动(displayPos)。
-        // 必须先于文本/光标/选区绘制执行,保证三者使用同一 displayPos。
-        updateDisplayPos(textLayoutResult, value.selection)
+        // 平台适配点(T.7 修复):惰性同步光标动画状态 —— 焦点到(selectionState)但动画未启动
+        // 时补启动(updateNode 未触发的场景,如首次聚焦 interactionSource 传播断链);
+        // 失焦时停止动画,避免光标残留。
+        if (showCursor && cursorAnimation == null) {
+            startCursorJob()
+        } else if (!showCursor && cursorAnimation != null) {
+            changeObserverJob?.cancel()
+            changeObserverJob = null
+            cursorAnimation?.cancelAndHide()
+            cursorAnimation = null
+        }
 
         value.highlight?.let { drawHighlight(it, textLayoutResult) }
         if (value.selection.collapsed) {
@@ -338,20 +356,6 @@ internal class TextFieldCoreModifierNode(
         }
 
         with(textFieldMagnifierNode) { draw() }
-    }
-
-    /**
-     * 平台适配点(T.6):把 MC EditBox 的 displayPos 水平滚动驱动到平台 Paragraph。
-     * 视口宽度取本节点尺寸(horizontal 模式下本节点即可见容器)。
-     */
-    private fun DrawScope.updateDisplayPos(textLayoutResult: TextLayoutResult, selection: TextRange) {
-        val paragraph =
-            textLayoutResult.multiParagraph.paragraphInfoList
-                .firstOrNull()
-                ?.paragraph as? MinecraftParagraph
-                ?: return
-        paragraph.visibleWidth = size.width
-        paragraph.updateDisplayPosFor(selection.start, size.width)
     }
 
     private fun MeasureScope.measureVerticalScroll(
@@ -387,12 +391,18 @@ internal class TextFieldCoreModifierNode(
         val width = min(placeable.width, constraints.maxWidth)
 
         return layout(width, placeable.height) {
-            // 平台适配点(T.6):水平滚动改用 MC EditBox 的 displayPos 模型
-            // (MinecraftParagraph.displayPos,由 draw 每帧按光标位置更新);
-            // ScrollState 仅登记视口/内容尺寸,不再做位移与滚动
-            scrollState.viewportSize = width
-            scrollState.maxValue = (placeable.width - width).coerceAtLeast(0)
-            placeable.placeRelative(0, 0)
+            // 平台适配点(T.6 修复):水平滚动恢复原版 ScrollState 模型
+            // (updateScrollState + placeRelative 位移),移除自研 displayPos 截断 ——
+            // 原 displayPos 模型把单行 EditBox 的水平截断套用在多行文本上,
+            // 导致光标在第二行时第一行被错误水平顶走。
+            updateScrollState(
+                containerSize = width,
+                textLayoutSize = placeable.width,
+                currSelection = textFieldState.visualText.selection,
+                layoutDirection = layoutDirection,
+            )
+
+            placeable.placeRelative(-scrollState.value, 0)
         }
     }
 
@@ -549,8 +559,8 @@ internal class TextFieldCoreModifierNode(
         if (type == TextHighlightType.HandwritingDeletePreview) {
             // The handwriting delete gesture preview highlight should be the same color as the
             // text at 20% opacity.
-            // 平台适配点:McTextStyle 无 brush,颜色直接取自样式
-            val textColor = textLayoutResult.layoutInput.style.color
+            // 平台适配点:Style 无 brush,颜色直接取自样式
+            val textColor = textLayoutResult.layoutInput.style.color?.toColor() ?: Color.White
             val highlightBackgroundColor = textColor.copy(alpha = textColor.alpha * 0.2f)
             drawPath(highlightPath, color = highlightBackgroundColor)
         } else {
@@ -574,38 +584,27 @@ internal class TextFieldCoreModifierNode(
     private fun startCursorJob() {
         if (cursorAnimation == null) {
             cursorAnimation = CursorAnimationState(currentValueOf(LocalCursorBlinkEnabled))
-            invalidateDraw() // draw did not previously have a read observer on alpha, restart it
         }
+        // 平台适配点(T.7 修复):无论是否新建动画对象都强制重绘 —— 若 draw 在动画启动前
+        // 已执行过(尚未注册 alpha 快照观察),cursorAlpha 从 0→1 的写入不会触发重绘,
+        // 导致首次聚焦时光标不显示;切走再切回时焦点变化触发重绘才显示。
+        invalidateDraw()
         changeObserverJob =
             coroutineScope.launch {
-                // A flag to oscillate the reported isWindowFocused value in snapshotFlow.
-                // Repeatedly returning true/false everytime snapshotFlow is re-evaluated breaks
-                // the assumption that each re-evaluation would also trigger the collector. However,
-                // snapshotFlow carries an implicit `distinctUntilChanged` logic that prevents
-                // the propagation of update events. Instead we introduce a sign that changes each
-                // time snapshotFlow is re-entered. true/false becomes 1/2 or -1/-2.
-                // true = 1 = -1
-                // false = 2 = -2
-                // sign is either 1 or -1
-                var sign = 1
+                // 平台适配点(T.7 修复):首次启动立即显示光标并开始闪烁,不等 snapshotFlow
+                // 首次发射(场景中无文本变化时 snapshotFlow 不触发,导致首次聚焦光标不渲染)。
+                // snapshotFlow 仅负责文本/光标变化时重置闪烁(变化计数递增 → collectLatest
+                // 重启 snapToVisibleAndAnimate,内部取消旧动画重新开始)。
+                var changeCount = 0
                 snapshotFlow {
                         // Read the text state, so the animation restarts when the text or cursor
                         // position change.
                         textFieldState.visualText
-                        // Only animate the cursor when its window is actually focused. This also
-                        // disables the cursor animation when the screen is off.
-                        // TODO: b/335668644, snapshotFlow is invoking this block even after the
-                        // coroutine
-                        // has been cancelled, and currentCoroutineContext().isActive is false
-                        val isWindowFocused =
-                            isAttached && currentValueOf(LocalWindowInfo).isWindowFocused
-
-                        ((if (isWindowFocused) 1 else 2) * sign).also { sign *= -1 }
+                        changeCount++
+                        changeCount
                     }
-                    .collectLatest { isWindowFocused ->
-                        if (isWindowFocused.absoluteValue == 1) {
-                            cursorAnimation?.snapToVisibleAndAnimate()
-                        }
+                    .collectLatest {
+                        cursorAnimation?.snapToVisibleAndAnimate()
                     }
             }
     }
@@ -683,34 +682,14 @@ internal fun TextFieldCoreModifierNode.drawSelectionHighlight(
     selection: TextRange,
     textLayoutResult: TextLayoutResult,
 ) {
-    // 平台适配点(T.7):MC EditBox 风格选区 —— 前缀宽度之间的矩形高亮
-    // (EditBox: textX+width(前缀) 到 highlightX 的矩形),颜色沿用 LocalTextSelectionColors。
-    // 不使用 getPathForRange:本平台 Canvas 第一版不渲染 Path 命令。
-    val start = selection.min
-    val end = selection.max
-    if (start == end) return
-    val selectionBackgroundColor = currentValueOf(LocalTextSelectionColors).backgroundColor
-    val firstLine = textLayoutResult.getLineForOffset(start)
-    val lastLine = textLayoutResult.getLineForOffset((end - 1).coerceAtLeast(0))
-    with(scope) {
-        for (line in firstLine..lastLine) {
-            val lineStart = maxOf(start, textLayoutResult.getLineStart(line))
-            val lineEnd = minOf(end, textLayoutResult.getLineEnd(line))
-            if (lineStart >= lineEnd) continue
-            val left = textLayoutResult.getCursorRect(lineStart).left
-            val right = textLayoutResult.getCursorRect(lineEnd).left
-            val lineHeight =
-                textLayoutResult.getLineBottom(line) - textLayoutResult.getLineTop(line)
-            drawRect(
-                color = selectionBackgroundColor,
-                topLeft = Offset(left, textLayoutResult.getLineTop(line) - 1f),
-                size =
-                    Size(
-                        (right - left).coerceAtLeast(0f),
-                        lineHeight + 2f,
-                    ),
-            )
-        }
+    // 平台适配点(T.11):选区渲染可通过 LocalTextSelectionRenderer 覆盖。
+    // 外部提供渲染器时使用自定义绘制;否则用默认(整体选区 Path 一次绘制,
+    // 与官方 drawDefaultSelectionHighlight 一致)。
+    val customRenderer = currentValueOf(LocalTextSelectionRenderer)
+    if (customRenderer != null) {
+        customRenderer.drawSelection(scope, selection, textLayoutResult)
+    } else {
+        drawDefaultSelectionHighlight(scope, selection, textLayoutResult)
     }
 }
 
@@ -761,7 +740,9 @@ internal fun TextFieldCoreModifierNode.drawCursor(
     with(scope) {
         drawRect(
             color = color,
-            topLeft = Offset(cursorRect.left - 1f, cursorRect.top - 1f),
+            // 平台适配点(T.11 修复):行首(left=0)时光标 x 钳制到 0 ——
+            // 原 left-1 在行首为 -1,落在可视区外被裁剪,行首光标不渲染。
+            topLeft = Offset((cursorRect.left - 1f).coerceAtLeast(0f), cursorRect.top - 1f),
             size = Size(1f, cursorRect.height + 2f),
             alpha = cursorAlphaValue,
         )

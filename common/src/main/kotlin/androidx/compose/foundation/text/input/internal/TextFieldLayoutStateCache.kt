@@ -22,8 +22,6 @@ import androidx.compose.foundation.text.TextDelegate
 import androidx.compose.foundation.text.input.PlacedAnnotation
 import androidx.compose.foundation.text.input.TextFieldCharSequence
 import androidx.compose.foundation.text.input.TextFieldState
-import androidx.compose.foundation.text.input.internal.TextFieldLayoutStateCache.MeasureInputs
-import androidx.compose.foundation.text.input.internal.TextFieldLayoutStateCache.NonMeasureInputs
 import androidx.compose.runtime.SnapshotMutationPolicy
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -35,7 +33,6 @@ import androidx.compose.runtime.snapshots.StateRecord
 import androidx.compose.runtime.snapshots.withCurrent
 import androidx.compose.runtime.snapshots.writable
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextLayoutInput
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextRange
@@ -43,7 +40,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 /**
  * Performs text layout lazily, on-demand for text fields with snapshot-aware caching.
@@ -101,7 +98,7 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
      */
     fun updateNonMeasureInputs(
         textFieldState: TransformedTextFieldState,
-        textStyle: McTextStyle,
+        textStyle: Style,
         singleLine: Boolean,
         softWrap: Boolean,
         keyboardOptions: KeyboardOptions,
@@ -180,7 +177,7 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
                     // notified.
                     !cachedResult.multiParagraph.intrinsics.hasStaleResolvedFonts
             ) {
-                // 平台适配点:McTextStyle 无布局/绘制属性分离,任何样式变化都走慢路径重排
+                // 平台适配点:Style 无布局/绘制属性分离,任何样式变化都走慢路径重排
                 val isStyleSame = cachedRecord.textStyle == nonMeasureInputs.textStyle
 
                 // Fast path: None of the inputs changed.
@@ -320,7 +317,7 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
         // layout when selection changes. Composition should invalidate the layout because it
         // adds an underline span.
         var composition: TextRange? = null
-        var textStyle: McTextStyle? = null
+        var textStyle: Style? = null
         var singleLine: Boolean = false
         var softWrap: Boolean = false
         var densityValue: Float = Float.NaN
@@ -377,7 +374,7 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
     // region Input holders
     private class NonMeasureInputs(
         val textFieldState: TransformedTextFieldState,
-        val textStyle: McTextStyle,
+        val textStyle: Style,
         val singleLine: Boolean,
         val softWrap: Boolean,
         val isKeyboardTypePhone: Boolean,

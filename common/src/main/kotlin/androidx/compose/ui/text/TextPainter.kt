@@ -28,18 +28,16 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.DrawStyle
 import androidx.compose.ui.graphics.drawscope.DrawTransform
-import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.isUnspecified
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextForegroundStyle.Unspecified
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.modulate
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.util.fastRoundToInt
 import kotlin.math.ceil
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toColor
+import net.minecraft.network.chat.Style
 
 object TextPainter {
 
@@ -62,9 +60,9 @@ object TextPainter {
             canvas.clipRect(bounds)
         }
 
-        // 平台适配点:TextStyle 已替换为 McTextStyle —— 无 brush/textDecoration/shadow/drawStyle,
-        // 颜色与装饰全部由 McTextStyle 承载(经 Paragraph.paint → DrawTextCommand → GuiTextRenderState)
-        val color = textLayoutResult.layoutInput.style.color
+        // 平台适配点:TextStyle 已替换为 MC Style —— 无 brush/textDecoration/shadow/drawStyle,
+        // 颜色与装饰全部由 Style 承载(经 Paragraph.paint → DrawTextCommand → GuiTextRenderState)
+        val color = textLayoutResult.layoutInput.style.color?.toColor() ?: Color.White
         try {
             textLayoutResult.multiParagraph.paint(
                 canvas = canvas,
@@ -116,7 +114,7 @@ fun DrawScope.drawText(
     textMeasurer: TextMeasurer,
     text: AnnotatedString,
     topLeft: Offset = Offset.Zero,
-    style: McTextStyle = McTextStyle.Default,
+    style: Style = Style.EMPTY,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
     maxLines: Int = Int.MAX_VALUE,
@@ -181,7 +179,7 @@ fun DrawScope.drawText(
     textMeasurer: TextMeasurer,
     text: String,
     topLeft: Offset = Offset.Zero,
-    style: McTextStyle = McTextStyle.Default,
+    style: Style = Style.EMPTY,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
     maxLines: Int = Int.MAX_VALUE,
@@ -240,11 +238,11 @@ fun DrawScope.drawText(
         translate(topLeft.x, topLeft.y)
         clip(textLayoutResult)
     }) {
-        // 平台适配点:McTextStyle 无 brush/shadow/textDecoration/drawStyle 分离;
-        // 这些参数保留 API 签名,但由平台 Paragraph 忽略(装饰走 McTextStyle)
+        // 平台适配点:Style 无 brush/shadow/textDecoration/drawStyle 分离;
+        // 这些参数保留 API 签名,但由平台 Paragraph 忽略(装饰走 Style)
         textLayoutResult.multiParagraph.paint(
             drawContext.canvas,
-            color.takeOrElse { textLayoutResult.layoutInput.style.color }.modulate(alpha),
+            color.takeOrElse { textLayoutResult.layoutInput.style.color?.toColor() ?: Color.White }.modulate(alpha),
             shadow,
             textDecoration,
             drawStyle,

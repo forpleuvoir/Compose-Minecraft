@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.TextUnit
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style as McStyle
 
 /**
  * A [StyleScope] is the receiver scope of a [Style] lambda. It allows defining the properties of a
@@ -1084,19 +1084,22 @@ sealed interface StyleScope : CompositionLocalAccessorScope, Density {
     fun animate(toSpec: AnimationSpec<Float>, fromSpec: AnimationSpec<Float>, value: Style)
 
     /**
-     * Applies a complete [McTextStyle] object to the component. This is a convenient way to set
+     * Applies a complete MC [McStyle] object to the component. This is a convenient way to set
      * multiple text-related properties at once. Text properties are inherited by child text
      * components unless overridden.
      *
+     * 平台适配点:原 Compose `TextStyle` 已被 MC [McStyle] 完全替换;
+     * 样式字段经 Mixin `StyleAccessor` 桥接读取(见 `StyleExtensions`),不可变。
+     *
      * This property is inherited.
      *
-     * @param value The [McTextStyle] to apply.
+     * @param value The MC [McStyle] to apply.
      * @see contentColor
      * @see fontFamily
      * @see fontSize
-     * @see McTextStyle
+     * @see net.minecraft.network.chat.Style
      */
-    fun textStyle(value: McTextStyle)
+    fun textStyle(value: McStyle)
 
     /**
      * Sets the preferred content color, primarily affecting text color. This property is inherited

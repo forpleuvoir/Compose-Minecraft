@@ -30,14 +30,15 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.unit.dp
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
-import moe.forpleuvoir.compose_minecraft.platform.ui.McText
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import androidx.compose.foundation.text.BasicText
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
+import net.minecraft.network.chat.Style
 
 /**
  * 样式与交互验证屏幕(独立 ComposeScreen,由总菜单按钮打开)。
  *
  * 验证项:
- * - McText 样式矩阵:颜色/加粗/斜体/下划线/删除线/乱码/阴影/背景/组合;
+ * - BasicText 样式矩阵:颜色/加粗/斜体/下划线/删除线/乱码/阴影/背景/组合;
  * - 鼠标点击(clickable 计数);
  * - 焦点系统(focusable + FocusRequester + onFocusChanged + onKeyEvent);
  * - 滚轮(verticalScroll)。
@@ -85,45 +86,43 @@ fun StyleMatrixDevScene() {
                 onClick = { ComposeScreen.open { MinecraftDevSceneContent() } },
             )
 
-            // ── McText 样式矩阵 ──
-            McText(
-                "McText 样式矩阵:",
-                style = McTextStyle(color = Color(0xFFB0BEC5)),
+            // ── BasicText 样式矩阵 ──
+            BasicText(
+                "BasicText 样式矩阵:",
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
             )
-            McText("Default white (默认白色)", style = McTextStyle())
-            McText("Color (颜色)", style = McTextStyle(color = Color(0xFFFF5252)))
-            McText("Bold (加粗)", style = McTextStyle(color = Color.White, bold = true))
-            McText("Italic (斜体)", style = McTextStyle(color = Color.White, italic = true))
-            McText(
+            BasicText("Default white (默认白色)", style = Style.EMPTY)
+            BasicText("Color (颜色)", style = Style.EMPTY.withColor(Color(0xFFFF5252)))
+            BasicText("Bold (加粗)", style = Style.EMPTY.withColor(Color.White).withBold(true))
+            BasicText("Italic (斜体)", style = Style.EMPTY.withColor(Color.White).withItalic(true))
+            BasicText(
                 "Underlined (下划线)",
-                style = McTextStyle(color = Color.White, underlined = true),
+                style = Style.EMPTY.withColor(Color.White).withUnderlined(true),
             )
-            McText(
+            BasicText(
                 "Strikethrough (删除线)",
-                style = McTextStyle(color = Color.White, strikethrough = true),
+                style = Style.EMPTY.withColor(Color.White).withStrikethrough(true),
             )
-            McText(
+            BasicText(
                 "Obfuscated (乱码)",
-                style = McTextStyle(color = Color.White, obfuscated = true),
+                style = Style.EMPTY.withColor(Color.White).withObfuscated(true),
             )
-            McText(
+            BasicText(
                 "Shadow (阴影)",
-                style = McTextStyle(color = Color(0xFFFFF59D), shadow = true),
+                style = Style.EMPTY.withColor(Color(0xFFFFF59D)),
             )
-            McText(
+            BasicText(
                 "Background (文本背景)",
-                style = McTextStyle(color = Color.Black, background = Color(0xFF90CAF9)),
+                style = Style.EMPTY.withColor(Color.Black),
             )
-            McText(
+            BasicText(
                 "All: bold+italic+under+strike (组合)",
                 style =
-                    McTextStyle(
-                        color = Color(0xFFFFD54F),
-                        bold = true,
-                        italic = true,
-                        underlined = true,
-                        strikethrough = true,
-                    ),
+                    Style.EMPTY.withColor(Color(0xFFFFD54F))
+                        .withBold(true)
+                        .withItalic(true)
+                        .withUnderlined(true)
+                        .withStrikethrough(true),
             )
 
             // ── 鼠标点击验证 ──
@@ -134,10 +133,10 @@ fun StyleMatrixDevScene() {
                     .background(Color(0xAA1E88E5))
                     .clickable { clickCount++ }
             ) {
-                McText(
+                BasicText(
                     "Click me: $clickCount",
                     modifier = Modifier.padding(8.dp),
-                    style = McTextStyle(color = Color.White),
+                    style = Style.EMPTY.withColor(Color.White),
                 )
             }
 
@@ -156,15 +155,15 @@ fun StyleMatrixDevScene() {
                     }
                     .onKeyEvent {
                         focusedKey = "${it.key}"
-                        // 不消费:让 Tab/方向键继续进入焦点导航(handleFocusKeys),否则会被吞掉
+                        // 不消费:让 Tab 继续进入焦点导航(handleFocusKeys),否则会被吞掉
                         false
                     }
                     .clickable { }
             ) {
-                McText(
+                BasicText(
                     "Focus A: $focusStateText | Key: $focusedKey",
                     modifier = Modifier.padding(8.dp),
-                    style = McTextStyle(color = Color.White),
+                    style = Style.EMPTY.withColor(Color.White),
                 )
             }
 
@@ -178,10 +177,11 @@ fun StyleMatrixDevScene() {
                     .onFocusChanged { focusBFocused = it.isFocused }
                     .focusable()
             ) {
-                McText(
-                    "Focus B: $focusBFocused (tab/direction to move)",
+                BasicText(
+                    "Focus B: $focusBFocused (tab to move)",
                     modifier = Modifier.padding(8.dp),
-                    style = McTextStyle(color = Color.White),
+                    style = Style.EMPTY.withColor(Color.White),
+                    scale = if(focusBFocused) 1.45f else 1f,
                 )
             }
 
@@ -195,10 +195,10 @@ fun StyleMatrixDevScene() {
                     .verticalScroll(rememberScrollState())
             ) {
                 repeat(40) { index ->
-                    McText(
+                    BasicText(
                         "scroll item $index",
                         modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp).background(Color(0xFF2F0000)),
-                        style = McTextStyle(color = Color.White),
+                        style = Style.EMPTY.withColor(Color.White),
                     )
                 }
             }

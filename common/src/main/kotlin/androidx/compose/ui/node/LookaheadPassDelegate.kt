@@ -693,7 +693,6 @@ internal class LookaheadPassDelegate(
                     } else {
                         intrinsicsUsingParent.requestRelayout(forceRequest)
                     }
-                else -> error("Intrinsics isn't used by the parent")
             }
         }
     }

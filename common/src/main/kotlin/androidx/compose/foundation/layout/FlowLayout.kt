@@ -357,7 +357,7 @@ interface FlowColumnOverflowScope : FlowColumnScope {
 @OptIn(ExperimentalLayoutApi::class)
 internal object FlowRowScopeInstance : RowScope by RowScopeInstance, FlowRowScope {
     override fun Modifier.fillMaxRowHeight(fraction: Float): Modifier {
-        requirePrecondition(fraction >= 0.0f && fraction <= 1.0f) {
+        requirePrecondition(fraction in 0.0f..1.0f) {
             "invalid fraction $fraction; must be >= 0 and <= 1.0"
         }
         return this.then(FillCrossAxisSizeElement(fraction = fraction))
@@ -383,7 +383,7 @@ internal class FlowColumnOverflowScopeImpl(private val state: FlowLayoutOverflow
 @OptIn(ExperimentalLayoutApi::class)
 internal object FlowColumnScopeInstance : ColumnScope by ColumnScopeInstance, FlowColumnScope {
     override fun Modifier.fillMaxColumnWidth(fraction: Float): Modifier {
-        requirePrecondition(fraction >= 0.0f && fraction <= 1.0f) {
+        requirePrecondition(fraction in 0.0f..1.0f) {
             "invalid fraction $fraction; must be >= 0 and <= 1.0"
         }
         return this.then(FillCrossAxisSizeElement(fraction = fraction))
@@ -459,7 +459,6 @@ internal fun rowMeasurementHelper(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun rowMeasurementMultiContentHelper(
     horizontalArrangement: Arrangement.Horizontal,
@@ -1312,7 +1311,7 @@ internal fun MeasureScope.breakDownItems(
         currentLineCrossAxisSize = maxOf(currentLineCrossAxisSize, itemCrossAxisSize)
         leftOver -= itemMainAxisSize
         overflow.itemShown = index + 1
-        measurables.add(measurable!!)
+        measurables.add(measurable)
         placeables[index] = placeableItem
         if (
             (measurable.parentData as? RowColumnParentData)
@@ -1482,7 +1481,7 @@ private fun Iterator<Measurable>.safeNext(info: FlowLineInfo?): Measurable? {
         } else {
             next()
         }
-    } catch (e: IndexOutOfBoundsException) {
+    } catch (_: IndexOutOfBoundsException) {
         null
     }
 }

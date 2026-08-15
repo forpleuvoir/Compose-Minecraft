@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,4 +16,4 @@
 
 package androidx.compose.ui.internal
 
-internal fun getCurrentThreadId(): Long = Thread.currentThread().id
+internal fun getCurrentThreadId(): Long = Thread.currentThread().threadId()

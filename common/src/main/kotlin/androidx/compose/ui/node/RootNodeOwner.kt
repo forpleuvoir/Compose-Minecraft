@@ -337,13 +337,8 @@ internal class RootNodeOwner(
             Key.Tab -> if (keyEvent.isShiftPressed) FocusDirection.Previous else FocusDirection.Next
             Key.DirectionCenter -> FocusDirection.Enter
             Key.Back -> FocusDirection.Exit
-            // 平台补全:方向键焦点导航(CMP 1.11 的 RootNodeOwner 仅处理 Tab/Enter/Back,
-            // Android 上由 FocusOwnerImpl 的 KeyInputModifierNode 处理,此处补上,
-            // 2D focus search 走已移植的 TwoDimensionalFocusSearch)
-            Key.DirectionUp -> FocusDirection.Up
-            Key.DirectionDown -> FocusDirection.Down
-            Key.DirectionLeft -> FocusDirection.Left
-            Key.DirectionRight -> FocusDirection.Right
+            // 方向键不参与焦点导航:方向键保留给文本编辑/滚动等消费
+            // (原 CMP 1.11 的 RootNodeOwner 仅处理 Tab/Enter/Back,与官方一致)
             else -> null
         }
     }

@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.util.fastRoundToInt
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 /**
  * Coerce min and max lines into actual constraints.
@@ -36,11 +36,11 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 internal class MinLinesConstrainer
 /*@VisibleForTesting*/ internal constructor(
     val layoutDirection: LayoutDirection,
-    val inputTextStyle: McTextStyle,
+    val inputTextStyle: Style,
     val density: Density,
     val fontFamilyResolver: FontFamily.Resolver,
 ) {
-    // 平台适配点:resolveDefaults 随 TextStyle 移除,McTextStyle 无缺省解析
+    // 平台适配点:resolveDefaults 随 TextStyle 移除,Style 无缺省解析
     private val resolvedStyle = inputTextStyle
     private var lineHeightCache: Float = Float.NaN
     private var oneLineHeightCache: Float = Float.NaN
@@ -54,7 +54,7 @@ internal class MinLinesConstrainer
         fun from(
             minMaxUtil: MinLinesConstrainer?,
             layoutDirection: LayoutDirection,
-            paramStyle: McTextStyle,
+            paramStyle: Style,
             density: Density,
             fontFamilyResolver: FontFamily.Resolver,
         ): MinLinesConstrainer {

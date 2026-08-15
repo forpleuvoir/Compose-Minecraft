@@ -39,7 +39,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 /**
  * Node for any text that is in a selection container.
@@ -48,7 +48,7 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
  */
 internal class SelectableTextAnnotatedStringNode(
     text: AnnotatedString,
-    style: McTextStyle,
+    style: Style,
     fontFamilyResolver: FontFamily.Resolver,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
@@ -124,7 +124,7 @@ internal class SelectableTextAnnotatedStringNode(
 
     fun update(
         text: AnnotatedString,
-        style: McTextStyle,
+        style: Style,
         placeholders: List<AnnotatedString.Range<Placeholder>>?,
         minLines: Int,
         maxLines: Int,

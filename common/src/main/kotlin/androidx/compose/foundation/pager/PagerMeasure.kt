@@ -41,7 +41,6 @@ import androidx.compose.ui.util.fastMaxBy
 import kotlin.math.abs
 import kotlinx.coroutines.CoroutineScope
 
-@OptIn(ExperimentalFoundationApi::class)
 internal fun LazyLayoutMeasureScope.measurePager(
     pageCount: Int,
     pagerItemProvider: PagerLazyLayoutItemProvider,
@@ -529,7 +528,7 @@ private fun createPagesAfterList(
     pinnedPages.fastForEach { pageIndex ->
         if (pageIndex in (end + 1) until pagesCount) {
             if (list == null) list = mutableListOf()
-            list?.add(getAndMeasure(pageIndex))
+            list.add(getAndMeasure(pageIndex))
         }
     }
 
@@ -554,7 +553,7 @@ private fun createPagesBeforeList(
     pinnedPages.fastForEach { pageIndex ->
         if (pageIndex < start) {
             if (list == null) list = mutableListOf()
-            list?.add(getAndMeasure(pageIndex))
+            list.add(getAndMeasure(pageIndex))
         }
     }
 
@@ -586,7 +585,6 @@ private fun calculateNewCurrentPage(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 private fun LazyLayoutMeasureScope.getAndMeasure(
     index: Int,
     childConstraints: Constraints,
@@ -625,7 +623,6 @@ private fun LazyLayoutMeasureScope.getAndMeasure(
     )
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 private fun LazyLayoutMeasureScope.calculatePagesOffsets(
     pages: List<MeasuredPage>,
     extraPagesBefore: List<MeasuredPage>,

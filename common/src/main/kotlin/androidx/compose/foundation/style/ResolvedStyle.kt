@@ -61,7 +61,15 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import kotlin.jvm.JvmField
 import kotlin.math.ceil
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.boldRaw
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontOriginal
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.italicRaw
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.obfuscatedRaw
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.strikethroughRaw
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toColor
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.underlinedRaw
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
+import net.minecraft.network.chat.Style as McStyle
 
 /**
  * This class is currently the actual object that [Style] lambdas get executed with, so this is the
@@ -385,32 +393,36 @@ internal class ResolvedStyle internal constructor() : StyleScope, InspectableVal
     }
 
     /**
-     * 平台适配点:ResolvedStyle → [McTextStyle](TextStyle 已完全替换)。
+     * 平台适配点:ResolvedStyle → MC [McStyle](TextStyle 已完全替换)。
      * 只有 MC 能力字段可映射;fontSize/lineHeight/letterSpacing 等排版参数被丢弃
      * (MC 固定 9px 行高,第一版忽略)。
+     *
+     * shadow/background 不在 MC [McStyle] 能力内(对齐 MC 原生:文本阴影由渲染层
+     * dropShadow 参数控制,背景由渲染层携带),本转换不产出这两个字段。
      */
-    internal fun toMcTextStyle(fallback: McTextStyle): McTextStyle {
+    internal fun toMcStyle(fallback: McStyle): McStyle {
         val default = EmptyResolvedStyle
-        return McTextStyle(
-            color = contentColor.takeOrElse { fallback.color },
-            bold =
-                if (isFontWeightSpecified) fontWeight >= FontWeight.Bold else fallback.bold,
-            italic =
-                if (fontStyle != default.fontStyle) fontStyle == FontStyle.Italic
-                else fallback.italic,
-            underlined =
-                if (textDecoration != default.textDecoration)
-                    textDecoration.contains(TextDecoration.Underline)
-                else fallback.underlined,
-            strikethrough =
-                if (textDecoration != default.textDecoration)
-                    textDecoration.contains(TextDecoration.LineThrough)
-                else fallback.strikethrough,
-            obfuscated = fallback.obfuscated,
-            font = fallback.font,
-            shadow = fallback.shadow,
-            background = fallback.background,
-        )
+        var style = McStyle.EMPTY
+        style = style.withColor(contentColor.takeOrElse { fallback.color?.toColor() ?: Color.White })
+        if (if (isFontWeightSpecified) fontWeight >= FontWeight.Bold else (fallback.boldRaw == true)) {
+            style = style.withBold(true)
+        }
+        if (if (fontStyle != default.fontStyle) fontStyle == FontStyle.Italic
+            else (fallback.italicRaw == true)
+        ) {
+            style = style.withItalic(true)
+        }
+        val underlined =
+            if (textDecoration != default.textDecoration) textDecoration.contains(TextDecoration.Underline)
+            else (fallback.underlinedRaw == true)
+        val strikethrough =
+            if (textDecoration != default.textDecoration) textDecoration.contains(TextDecoration.LineThrough)
+            else (fallback.strikethroughRaw == true)
+        if (underlined) style = style.withUnderlined(true)
+        if (strikethrough) style = style.withStrikethrough(true)
+        if (fallback.obfuscatedRaw == true) style = style.withObfuscated(true)
+        fallback.fontOriginal?.let { style = style.withFont(it) }
+        return style
     }
 
     private fun valueElements(): List<ValueElement> =
@@ -921,16 +933,20 @@ internal class ResolvedStyle internal constructor() : StyleScope, InspectableVal
         flags = flags or DrawFlag
     }
 
-    override fun textStyle(value: McTextStyle) {
-        // 平台适配点:McTextStyle 只有 MC 能力字段(颜色/加粗/斜体/下划线/删除线/乱码/字体/阴影/背景)
-        contentColor(value.color)
-        if (value.bold) fontWeight(FontWeight.Bold)
-        if (value.italic) fontStyle(FontStyle.Italic)
-        if (value.underlined || value.strikethrough) {
+    override fun textStyle(value: McStyle) {
+        // 平台适配点:MC Style 只有 MC 能力字段(颜色/加粗/斜体/下划线/删除线/乱码/字体)。
+        // shadow/background 不在 MC Style 能力内(对齐 MC 原生),fontSize 等排版参数由布局承担。
+        value.color?.let { contentColor(it.toColor()) }
+        if (value.boldRaw == true) fontWeight(FontWeight.Bold)
+        if (value.italicRaw == true) fontStyle(FontStyle.Italic)
+        val underlined = value.underlinedRaw == true
+        val strikethrough = value.strikethroughRaw == true
+        // obfuscated(MC 乱码)在 Compose 侧无对应字形位,第一版不处理(已知平台限制)
+        if (underlined || strikethrough) {
             textDecoration(
                 TextDecoration(
-                    (if (value.underlined) TextDecoration.Underline.mask else 0) or
-                        (if (value.strikethrough) TextDecoration.LineThrough.mask else 0)
+                    (if (underlined) TextDecoration.Underline.mask else 0) or
+                        (if (strikethrough) TextDecoration.LineThrough.mask else 0)
                 )
             )
         }

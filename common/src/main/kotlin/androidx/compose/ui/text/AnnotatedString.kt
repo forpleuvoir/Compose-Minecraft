@@ -123,12 +123,12 @@ internal constructor(internal val annotations: List<Range<out Annotation>>?, val
                 if (spanStyles == null) {
                     spanStyles = mutableListOf()
                 }
-                spanStyles!!.add(annotation as Range<SpanStyle>)
+                spanStyles.add(annotation as Range<SpanStyle>)
             } else if (annotation.item is ParagraphStyle) {
                 if (paragraphStyles == null) {
                     paragraphStyles = mutableListOf()
                 }
-                paragraphStyles!!.add(annotation as Range<ParagraphStyle>)
+                paragraphStyles.add(annotation as Range<ParagraphStyle>)
             }
         }
         spanStylesOrNull = spanStyles
@@ -678,7 +678,7 @@ internal constructor(internal val annotations: List<Range<out Annotation>>?, val
         @Suppress("SetterReturnsThis", "Deprecation")
         @Deprecated(
             "Use LinkAnnotation API for links instead",
-            ReplaceWith("addLink(, start, end)"),
+            ReplaceWith("addLink(url, start, end)"),
         )
         fun addUrlAnnotation(urlAnnotation: UrlAnnotation, start: Int, end: Int) {
             annotations.add(MutableRange(urlAnnotation, start, end))
@@ -936,7 +936,7 @@ internal constructor(internal val annotations: List<Range<out Annotation>>?, val
         @Suppress("BuilderSetStyle", "Deprecation")
         @Deprecated(
             "Use LinkAnnotation API for links instead",
-            ReplaceWith("pushLink(, start, end)"),
+            ReplaceWith("pushLink(link)"),
         )
         fun pushUrlAnnotation(urlAnnotation: UrlAnnotation): Int {
             MutableRange(item = urlAnnotation, start = text.length).also {
@@ -1494,7 +1494,7 @@ inline fun <R : Any> Builder.withAnnotation(
  * @see AnnotatedString.Builder.pop
  */
 @ExperimentalTextApi
-@Deprecated("Use LinkAnnotation API for links instead", ReplaceWith("withLink(, block)"))
+@Deprecated("Use LinkAnnotation API for links instead", ReplaceWith("withLink(link, block)"))
 @Suppress("Deprecation")
 inline fun <R : Any> Builder.withAnnotation(
     urlAnnotation: UrlAnnotation,

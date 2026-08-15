@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -19,8 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
-import moe.forpleuvoir.compose_minecraft.platform.ui.McText
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import androidx.compose.foundation.text.BasicText
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
+import net.minecraft.network.chat.Style
 
 /**
  * 滚动专项测试页(独立 ComposeScreen,由总菜单按钮打开)。
@@ -46,13 +46,13 @@ fun ScrollTestDevScene() {
                 onClick = { ComposeScreen.open { MinecraftDevSceneContent() } },
             )
 
-            McText(
+            BasicText(
                 "滚动测试(scrollState.value = ${scrollState.value} / max = ${scrollState.maxValue})",
-                style = McTextStyle(color = Color(0xFF80CBC4)),
+                style = Style.EMPTY.withColor(Color(0xFF80CBC4)),
             )
-            McText(
+            BasicText(
                 "滚轮上下滚动,上方数字必须变化;列表 40 行,超出部分被裁剪",
-                style = McTextStyle(color = Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
             )
 
             Column(
@@ -72,19 +72,19 @@ fun ScrollTestDevScene() {
                             .background(if (index % 2 == 0) Color(0xFF37474F) else Color(0xFF2F3E46), shape = RoundedCornerShape(12.dp)),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        McText(
+                        BasicText(
                             "scroll item $index",
                             modifier = Modifier.padding(horizontal = 8.dp),
-                            style = McTextStyle(color = Color.White),
+                            style = Style.EMPTY.withColor(Color.White),
                         )
                     }
                 }
             }
 
-            McText(
+            BasicText(
                 "列表底部标记(滚动到末尾时应可见)",
                 modifier = Modifier.padding(top = 8.dp),
-                style = McTextStyle(color = Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
             )
         }
     }

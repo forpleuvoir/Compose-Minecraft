@@ -21,8 +21,9 @@ import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
-import moe.forpleuvoir.compose_minecraft.platform.ui.McText
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import androidx.compose.foundation.text.BasicText
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
+import net.minecraft.network.chat.Style
 
 /**
  * 图形(几何)绘制验证屏幕:验证 CPU 三角化回放到 GuiRenderState 的
@@ -45,17 +46,17 @@ fun GeometryDevScene() {
                 .verticalScroll(rememberScrollState())
                 .padding(12.dp)
         ) {
-            McText(
+            BasicText(
                 "Geometry Draw Test(图形绘制)",
-                style = McTextStyle(color = Color.White, bold = true),
+                style = Style.EMPTY.withColor(Color.White).withBold(true),
             )
-            McText(
+            BasicText(
                 "填充:圆/椭圆/大扇区(useCenter,披萨缺角)/弧/圆角矩形/Path",
-                style = McTextStyle(color = Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
             )
-            McText(
+            BasicText(
                 "描边:圆/椭圆/弧/圆角矩形/线/Path;点:Points/Lines/Polygon",
-                style = McTextStyle(color = Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
             )
 
             // ── 填充:同心大扇区(useCenter 扇形,像被拿走一块的披萨)──

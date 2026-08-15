@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "moe.forpleuvoir.compose_minecraft.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "mixins": [
+    "StyleAccessor"
+  ]
+}

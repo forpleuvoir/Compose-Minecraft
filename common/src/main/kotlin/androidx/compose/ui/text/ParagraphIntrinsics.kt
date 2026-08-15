@@ -20,8 +20,9 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.text.platform.ActualParagraphIntrinsics
+import androidx.compose.ui.text.platform.StyleSegment
 import androidx.compose.ui.unit.Density
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 /** Calculates and presents the intrinsic width and height of text. */
 interface ParagraphIntrinsics {
@@ -70,11 +71,13 @@ interface ParagraphIntrinsics {
 )
 fun ParagraphIntrinsics(
     text: String,
-    style: McTextStyle,
+    style: Style,
     spanStyles: List<AnnotatedString.Range<SpanStyle>> = listOf(),
     placeholders: List<AnnotatedString.Range<Placeholder>> = listOf(),
     density: Density,
     resourceLoader: Font.ResourceLoader,
+    segments: List<StyleSegment> = emptyList(),
+    scale: Float = 1f,
 ): ParagraphIntrinsics =
     ActualParagraphIntrinsics(
         text = text,
@@ -83,6 +86,8 @@ fun ParagraphIntrinsics(
         placeholders = placeholders,
         density = density,
         fontFamilyResolver = createFontFamilyResolver(resourceLoader),
+        segments = segments,
+        scale = scale,
     )
 
 @Deprecated(
@@ -93,11 +98,13 @@ fun ParagraphIntrinsics(
 )
 fun ParagraphIntrinsics(
     text: String,
-    style: McTextStyle,
+    style: Style,
     spanStyles: List<AnnotatedString.Range<SpanStyle>> = listOf(),
     placeholders: List<AnnotatedString.Range<Placeholder>> = listOf(),
     density: Density,
     fontFamilyResolver: FontFamily.Resolver,
+    segments: List<StyleSegment> = emptyList(),
+    scale: Float = 1f,
 ): ParagraphIntrinsics =
     ActualParagraphIntrinsics(
         text = text,
@@ -106,6 +113,8 @@ fun ParagraphIntrinsics(
         placeholders = placeholders,
         density = density,
         fontFamilyResolver = fontFamilyResolver,
+        segments = segments,
+        scale = scale,
     )
 
 /**
@@ -118,11 +127,13 @@ fun ParagraphIntrinsics(
  */
 fun ParagraphIntrinsics(
     text: String,
-    style: McTextStyle,
+    style: Style,
     annotations: List<AnnotatedString.Range<out AnnotatedString.Annotation>>,
     density: Density,
     fontFamilyResolver: FontFamily.Resolver,
     placeholders: List<AnnotatedString.Range<Placeholder>> = listOf(),
+    segments: List<StyleSegment> = emptyList(),
+    scale: Float = 1f,
 ): ParagraphIntrinsics =
     ActualParagraphIntrinsics(
         text = text,
@@ -131,4 +142,6 @@ fun ParagraphIntrinsics(
         placeholders = placeholders,
         density = density,
         fontFamilyResolver = fontFamilyResolver,
+        segments = segments,
+        scale = scale,
     )

@@ -53,6 +53,9 @@ import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyInputModifierNode
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.SuspendingPointerInputModifierNode

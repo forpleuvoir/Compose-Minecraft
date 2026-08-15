@@ -23,9 +23,7 @@ import androidx.compose.foundation.text.DefaultMinLines
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorProducer
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
-import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.layout.AlignmentLine
@@ -54,13 +52,16 @@ import androidx.compose.ui.semantics.textSubstitution
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.platform.StyleSegment
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Constraints.Companion.fitPrioritizingWidth
 import androidx.compose.ui.util.fastRoundToInt
 import androidx.compose.ui.util.trace
 import kotlin.jvm.JvmName
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toColor
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
+import net.minecraft.network.chat.Style
 
 /**
  * Node that implements Text for [String].
@@ -72,13 +73,17 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 @OptIn(ExperimentalFoundationApi::class)
 internal class TextStringSimpleNode(
     private var text: String,
-    private var style: McTextStyle,
+    private var style: Style,
     private var fontFamilyResolver: FontFamily.Resolver,
     private var overflow: TextOverflow = TextOverflow.Clip,
     private var softWrap: Boolean = true,
     private var maxLines: Int = Int.MAX_VALUE,
     private var minLines: Int = DefaultMinLines,
     private var overrideColor: ColorProducer? = null,
+    /** 平台适配点(T.3):MC Component 展平后的多段样式;空 = 单样式(旧行为)。 */
+    private var segments: List<StyleSegment> = emptyList(),
+    /** 平台适配点(T.10):文本缩放;1f = 原样。 */
+    private var scale: Float = 1f,
 ) : Modifier.Node(), LayoutModifierNode, DrawModifierNode, SemanticsModifierNode {
     override val shouldAutoInvalidate: Boolean
         get() = false
@@ -106,12 +111,14 @@ internal class TextStringSimpleNode(
                         softWrap,
                         maxLines,
                         minLines,
+                        segments = segments,
+                        scale = scale,
                     )
             }
             return _layoutCache!!
         }
 
-    private var resolvedInheritedStyle: McTextStyle? = null
+    private var resolvedInheritedStyle: Style? = null
 
     /**
      * Get the layout cache for the current state of the node during layout.
@@ -134,6 +141,8 @@ internal class TextStringSimpleNode(
                     softWrap = softWrap,
                     maxLines = maxLines,
                     minLines = minLines,
+                    segments = segments,
+                    scale = scale,
                 )
             }
         }
@@ -168,13 +177,13 @@ internal class TextStringSimpleNode(
         return textSubstitution?.takeIf { it.isShowingSubstitution }?.layoutCache ?: layoutCache
     }
 
-    fun updateDraw(color: ColorProducer?, style: McTextStyle): Boolean {
+    fun updateDraw(color: ColorProducer?, style: Style): Boolean {
         var changed = false
         if (color != this.overrideColor) {
             changed = true
         }
         overrideColor = color
-        // 平台适配点:McTextStyle 无布局/绘制属性分离,整样式参与比较
+        // 平台适配点:MC Style 无布局/绘制属性分离,整样式参与比较
         changed = changed || style != this.style
         return changed
     }
@@ -189,18 +198,32 @@ internal class TextStringSimpleNode(
 
     /** Element has layout related params to update */
     fun updateLayoutRelatedArgs(
-        style: McTextStyle,
+        style: Style,
         minLines: Int,
         maxLines: Int,
         softWrap: Boolean,
         fontFamilyResolver: FontFamily.Resolver,
         overflow: TextOverflow,
+        /** 平台适配点(T.3):MC Component 展平后的多段样式;空 = 单样式(旧行为)。 */
+        segments: List<StyleSegment> = emptyList(),
+        /** 平台适配点(T.10):文本缩放;1f = 原样。 */
+        scale: Float = 1f,
     ): Boolean {
         var changed: Boolean
 
-        // 平台适配点:McTextStyle 无布局/绘制属性分离,整样式参与比较
+        // 平台适配点:MC Style 无布局/绘制属性分离,整样式参与比较
         changed = this.style != style
         this.style = style
+
+        if (this.segments != segments) {
+            this.segments = segments
+            changed = true
+        }
+
+        if (this.scale != scale) {
+            this.scale = scale
+            changed = true
+        }
 
         if (this.minLines != minLines) {
             this.minLines = minLines
@@ -246,6 +269,8 @@ internal class TextStringSimpleNode(
                 softWrap = softWrap,
                 maxLines = maxLines,
                 minLines = minLines,
+                segments = segments,
+                scale = scale,
             )
         }
 
@@ -300,6 +325,8 @@ internal class TextStringSimpleNode(
                 softWrap,
                 maxLines,
                 minLines,
+                segments,
+                scale,
             ) ?: return false
         } else {
             val newTextSubstitution = TextSubstitutionValue(text, updatedText)
@@ -312,6 +339,8 @@ internal class TextStringSimpleNode(
                     softWrap,
                     maxLines,
                     minLines,
+                    segments = segments,
+                    scale = scale,
                 )
             substitutionLayoutCache.density = layoutCache.density
             newTextSubstitution.layoutCache = substitutionLayoutCache
@@ -332,8 +361,10 @@ internal class TextStringSimpleNode(
                     layoutCache
                         .slowCreateTextLayoutResultOrNull(
                             style =
-                                // 平台适配点:TextStyle.merge → McTextStyle.copy
-                                style.copy(color = overrideColor?.invoke() ?: style.color)
+                                // 平台适配点:TextStyle.merge → Style.withColor
+                                style.withColor(
+                                    overrideColor?.invoke() ?: style.color?.toColor() ?: Color.White
+                                )
                         )
                         ?.also { textLayoutResult.add(it) }
                 layout != null
@@ -475,10 +506,12 @@ internal class TextStringSimpleNode(
                         resolveInheritedStyle(StylePhase.Draw)
                         resolvedInheritedStyle ?: style
                     } else style
-                // 平台适配点:McTextStyle 无 brush/shadow/textDecoration 分离,
-                // 颜色与装饰全部由 McTextStyle 承载
+                // 平台适配点:MC Style 无 brush/shadow/textDecoration 分离,
+                // 颜色与装饰全部由 MC Style 承载
                 val overrideColorVal = overrideColor?.invoke() ?: Color.Unspecified
-                val color = if (overrideColorVal.isSpecified) overrideColorVal else drawStyle.color
+                val color =
+                    if (overrideColorVal.isSpecified) overrideColorVal
+                    else drawStyle.color?.toColor() ?: Color.White
                 localParagraph.paint(canvas = canvas, color = color)
             } finally {
                 if (willClip) {

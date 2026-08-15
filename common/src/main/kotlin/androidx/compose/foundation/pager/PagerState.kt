@@ -771,7 +771,7 @@ internal constructor(
         }
     }
 
-    private fun tryRunPrefetch(result: PagerMeasureResult) =
+    private fun tryRunPrefetch(result: PagerMeasureResult): Unit =
         Snapshot.withoutReadObservation {
             if (!prefetchingEnabled) return
             if (result.beyondViewportPageCount >= pageCount) return

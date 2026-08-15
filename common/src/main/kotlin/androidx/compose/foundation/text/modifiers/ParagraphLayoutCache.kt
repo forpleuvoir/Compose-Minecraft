@@ -27,6 +27,7 @@ import androidx.compose.ui.text.ParagraphIntrinsics
 import androidx.compose.ui.text.TextLayoutInput
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.platform.StyleSegment
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -35,7 +36,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.constrain
 import kotlin.jvm.JvmInline
 import kotlin.math.min
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 /**
  * Performs text layout using [Paragraph].
@@ -47,12 +48,16 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
  */
 internal class ParagraphLayoutCache(
     private var text: String,
-    private var style: McTextStyle,
+    private var style: Style,
     private var fontFamilyResolver: FontFamily.Resolver,
     private var overflow: TextOverflow = TextOverflow.Clip,
     private var softWrap: Boolean = true,
     private var maxLines: Int = Int.MAX_VALUE,
     private var minLines: Int = DefaultMinLines,
+    /** 平台适配点(T.3):MC Component 展平后的多段样式;空 = 单样式(旧行为)。 */
+    private var segments: List<StyleSegment> = emptyList(),
+    /** 平台适配点(T.10):文本缩放;1f = 原样。 */
+    private var scale: Float = 1f,
 ) {
 
     /**
@@ -199,7 +204,7 @@ internal class ParagraphLayoutCache(
     private fun useMinLinesConstrainer(
         constraints: Constraints,
         layoutDirection: LayoutDirection,
-        style: McTextStyle = this.style,
+        style: Style = this.style,
     ): Constraints {
         val localMin =
             MinLinesConstrainer.from(
@@ -239,12 +244,15 @@ internal class ParagraphLayoutCache(
     /** Call when any parameters change, invalidation is a result of calling this method. */
     fun update(
         text: String,
-        style: McTextStyle,
+        style: Style,
         fontFamilyResolver: FontFamily.Resolver,
         overflow: TextOverflow,
         softWrap: Boolean,
         maxLines: Int,
         minLines: Int,
+        segments: List<StyleSegment> = emptyList(),
+        /** 平台适配点(T.10):文本缩放;1f = 原样。 */
+        scale: Float = 1f,
     ) {
         this.text = text
         this.style = style
@@ -253,6 +261,12 @@ internal class ParagraphLayoutCache(
         this.softWrap = softWrap
         this.maxLines = maxLines
         this.minLines = minLines
+        if (this.segments != segments) {
+            this.segments = segments
+        }
+        if (this.scale != scale) {
+            this.scale = scale
+        }
         recordHistory(LayoutCacheOperation.MarkDirtyNode)
         markDirty()
     }
@@ -273,12 +287,14 @@ internal class ParagraphLayoutCache(
                 intrinsicsLayoutDirection = layoutDirection
                 ParagraphIntrinsics(
                     text = text,
-                    // 平台适配点:resolveDefaults 随 TextStyle 移除,McTextStyle 无缺省解析
+                    // 平台适配点:resolveDefaults 随 TextStyle 移除,Style 无缺省解析
                     style = style,
                     annotations = listOf(),
                     density = density!!,
                     fontFamilyResolver = fontFamilyResolver,
                     placeholders = listOf(),
+                    segments = segments,
+                    scale = scale,
                 )
             } else {
                 localIntrinsics
@@ -363,7 +379,7 @@ internal class ParagraphLayoutCache(
      *
      * Exposed for semantics GetTextLayoutResult
      */
-    fun slowCreateTextLayoutResultOrNull(style: McTextStyle): TextLayoutResult? {
+    fun slowCreateTextLayoutResultOrNull(style: Style): TextLayoutResult? {
         // make sure we're in a valid place
         val localLayoutDirection = intrinsicsLayoutDirection ?: return null
         val localDensity = density ?: return null

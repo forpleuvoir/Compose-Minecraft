@@ -918,7 +918,6 @@ internal class MeasurePassDelegate(private val layoutNodeLayoutDelegate: LayoutN
                     intrinsicsUsingParent.requestRemeasure(forceRequest)
                 LayoutNode.UsageByParent.InLayoutBlock ->
                     intrinsicsUsingParent.requestRelayout(forceRequest)
-                else -> error("Intrinsics isn't used by the parent")
             }
         }
     }

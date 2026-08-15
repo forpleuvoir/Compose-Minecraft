@@ -58,7 +58,7 @@ internal class BoundsAnimation(
         get() {
             var parent: Transition<*> = transition
             while (parent.parentTransition != null) {
-                parent = parent.parentTransition!!
+                parent = parent.parentTransition
             }
             return parent.currentState != parent.targetState
         }

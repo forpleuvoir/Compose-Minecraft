@@ -44,7 +44,15 @@ internal fun Modifier.textFieldPointer(
     focusRequester: FocusRequester,
     readOnly: Boolean,
     offsetMapping: OffsetMapping,
-): Modifier = this
+): Modifier = defaultTextFieldPointer(
+    manager = manager,
+    enabled = enabled,
+    interactionSource = interactionSource,
+    state = state,
+    focusRequester = focusRequester,
+    readOnly = readOnly,
+    offsetMapping = offsetMapping,
+)
 
 internal fun Modifier.defaultTextFieldPointer(
     manager: TextFieldSelectionManager,

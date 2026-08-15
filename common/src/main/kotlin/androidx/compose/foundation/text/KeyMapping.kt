@@ -26,9 +26,9 @@ internal interface KeyMapping {
 
 // each platform can define its own key mapping, on Android its just defaultKeyMapping, but on
 // desktop, the value depends on the current OS
-internal val platformDefaultKeyMapping: KeyMapping = object : KeyMapping {
-    override fun map(event: KeyEvent): KeyCommand? = null
-}
+// 平台适配点:MC 运行在桌面(Windows/Linux/macOS),快捷键统一用 Ctrl 修饰
+// (与 MC 原版文本输入的 Ctrl+C/V/A 语义一致;macOS 的 Cmd 由 MC 输入层映射)。
+internal val platformDefaultKeyMapping: KeyMapping = commonKeyMapping(KeyModifiers.Ctrl)
 
 // It's common for all platforms key mapping
 internal fun commonKeyMapping(systemShortcutModifiers: KeyModifiers): KeyMapping {

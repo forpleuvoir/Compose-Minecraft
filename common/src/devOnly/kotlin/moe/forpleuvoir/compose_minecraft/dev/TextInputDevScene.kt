@@ -3,10 +3,13 @@ package moe.forpleuvoir.compose_minecraft.dev
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
@@ -21,9 +24,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
-import moe.forpleuvoir.compose_minecraft.platform.ui.LocalCharFilter
-import moe.forpleuvoir.compose_minecraft.platform.ui.McText
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalCharFilter
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.verticalScroll
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
+import net.minecraft.network.chat.Style
 
 /**
  * 文本输入测试屏幕(独立 ComposeScreen,由总菜单按钮打开)。
@@ -38,8 +44,8 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
  */
 @Composable
 fun TextInputDevScene() {
-    val textFieldState = remember { TextFieldState() }
-    val filterFieldState = remember { TextFieldState() }
+    val textFieldState = rememberTextFieldState("待到秋来九月八，我花开后百花杀。\n冲天香阵透长安，满城尽带黄金甲。")
+    val filterFieldState = rememberTextFieldState()
     val focusRequester = remember { FocusRequester() }
 
     // 打开即聚焦主输入框
@@ -52,45 +58,48 @@ fun TextInputDevScene() {
             .fillMaxSize()
             .background(Color(0xF0121212))
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
             DevMenuButton(
                 title = "← 返回主菜单",
                 subtitle = "Back to menu",
                 onClick = { ComposeScreen.open { MinecraftDevSceneContent() } },
             )
 
-            McText(
+            BasicText(
                 "文本输入测试",
-                style = McTextStyle(color = Color.White, bold = true),
+                style = Style.EMPTY.withColor(Color.White).withBold(true),
             )
-            McText(
+            BasicText(
                 "直接键入(英文/中文输入法上屏);退格/方向键/Home/End/Delete;\n" +
                         "Shift+方向键选区;Ctrl+C/V/X 剪贴板;输入超出宽度时水平滚动",
-                style = McTextStyle(color = Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
             )
+            Row {
+                BasicTextField(
+                    state = textFieldState,
+                    modifier =
+                        Modifier
+                            .width(220.dp)
+                            .height(160.dp)
+                            .focusRequester(focusRequester)
+                            .background(Color(0xFF263238))
+                            .padding(2.dp)
+                    ,
+                    textStyle = Style.EMPTY.withColor(Color.White),
+                    cursorBrush = SolidColor(Color.White),
+                    lineLimits = TextFieldLineLimits.Default,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                BasicText(
+                    "text = ${textFieldState.text.toString().ifEmpty { "(empty)" }}",
+                    style = Style.EMPTY.withColor(Color(0xFF80CBC4)),
+                )
+            }
 
-            BasicTextField(
-                state = textFieldState,
-                modifier =
-                    Modifier
-                        .padding(top = 8.dp)
-                        .width(220.dp)
-                        .height(20.dp)
-                        .focusRequester(focusRequester)
-                        .background(Color(0xFF263238)),
-                textStyle = McTextStyle(color = Color.White),
-                cursorBrush = SolidColor(Color.White),
-                lineLimits = TextFieldLineLimits.SingleLine,
-            )
-            McText(
-                "text = ${textFieldState.text.toString().ifEmpty { "(empty)" }}",
-                style = McTextStyle(color = Color(0xFF80CBC4)),
-            )
-
-            McText(
+            BasicText(
                 "LocalCharFilter 演示(此框屏蔽节号 §):",
                 modifier = Modifier.padding(top = 8.dp),
-                style = McTextStyle(color = Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
             )
             val charFilter: (Int) -> Boolean = remember { { codepoint -> codepoint != 0x00A7 } }
             CompositionLocalProvider(LocalCharFilter provides charFilter) {
@@ -102,13 +111,13 @@ fun TextInputDevScene() {
                             .width(220.dp)
                             .height(20.dp)
                             .background(Color(0xFF263238)),
-                    textStyle = McTextStyle(color = Color.White),
+                    textStyle = Style.EMPTY.withColor(Color.White),
                     cursorBrush = SolidColor(Color.White),
                 )
             }
-            McText(
+            BasicText(
                 "text = ${filterFieldState.text.toString().ifEmpty { "(empty)" }}",
-                style = McTextStyle(color = Color(0xFF80CBC4)),
+                style = Style.EMPTY.withColor(Color(0xFF80CBC4)),
             )
         }
     }

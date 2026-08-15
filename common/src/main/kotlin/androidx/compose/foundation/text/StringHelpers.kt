@@ -21,22 +21,29 @@ import androidx.compose.ui.text.TextRange
 /** StringBuilder.appendCodePoint is already defined on JVM so it's called appendCodePointX. */
 internal fun StringBuilder.appendCodePointX(codePoint: Int): StringBuilder = appendCodePoint(codePoint)
 
-/** Returns the index of the character break preceding [index]. */
+/**
+ * Returns the index of the character break preceding [index].
+ *
+ * 平台适配点(T.11 修复):恢复**字符级**断点 —— 原实现误写成"找空白/换行断点"
+ * (跳词/跳行语义),导致方向键一次跳一个词、Delete 删到行首。官方 desktop 用
+ * ICU BreakIterator(字符级);此处用 JVM Character 码点边界(正确处理 emoji/surrogate)。
+ */
 internal fun String.findPrecedingBreak(index: Int): Int {
-    if (index == 0) return -1
-    var i = index - 1
-    while (i > 0 && this[i] != '\n' && this[i] != ' ' && this[i] != '\t') i--
-    return i
+    if (index <= 0) return -1
+    return Character.codePointBefore(this, index).let { index - Character.charCount(it) }
 }
 
 /**
  * Returns the index of the character break following [index]. Returns -1 if there are no more
  * breaks before the end of the string.
+ *
+ * 平台适配点(T.11 修复):恢复**字符级**断点(同 [findPrecedingBreak])。
  */
 internal fun String.findFollowingBreak(index: Int): Int {
-    var i = index
-    while (i < length && this[i] != '\n') i++
-    return if (i < length) i else -1
+    if (index >= length) return -1
+    val codePoint = Character.codePointAt(this, index)
+    val next = index + Character.charCount(codePoint)
+    return if (next <= length) next else -1
 }
 
 /**
@@ -45,7 +52,7 @@ internal fun String.findFollowingBreak(index: Int): Int {
  *   there is no code point before [index].
  */
 internal fun String.findCodePointOrEmojiStartBefore(index: Int, ifNotFound: Int): Int =
-    if (index <= 0) ifNotFound else Character.codePointBefore(this, index)?.let { index - Character.charCount(it) } ?: ifNotFound
+    if (index <= 0) ifNotFound else Character.codePointBefore(this, index).let { index - Character.charCount(it) }
 
 internal fun CharSequence.findParagraphStart(startIndex: Int): Int {
     for (index in startIndex downTo 1) {

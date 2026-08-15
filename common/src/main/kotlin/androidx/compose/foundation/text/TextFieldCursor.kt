@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.LocalCursorBlinkEnabled
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toColor
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.floor
@@ -78,7 +79,7 @@ internal fun Modifier.cursor(
                             (cursorBrush as? SolidColor)
                                 ?.value
                                 ?.takeUnless { it.isUnspecified }
-                                ?: state.layoutResult?.value?.layoutInput?.style?.color
+                                ?: state.layoutResult?.value?.layoutInput?.style?.color?.toColor()
                                 ?: Color.Black
                         drawRect(
                             color = cursorColor,

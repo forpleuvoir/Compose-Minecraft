@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.IntSize
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
 import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderContext
-import moe.forpleuvoir.compose_minecraft.platform.ui.LocalCharFilter
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalCharFilter
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.state.gui.GuiRenderState
 

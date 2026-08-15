@@ -54,12 +54,10 @@ import androidx.compose.foundation.text.input.internal.selection.TextToolbarStat
 import androidx.compose.foundation.text.input.internal.selection.addBasicTextFieldTextContextMenuComponents
 import androidx.compose.foundation.text.input.internal.selection.menuItem
 import androidx.compose.foundation.text.selection.SelectedTextType
-import androidx.compose.foundation.text.selection.SelectionHandle
 import androidx.compose.foundation.text.selection.rememberPlatformSelectionBehaviors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,7 +71,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalDensity
@@ -98,7 +95,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 private object BasicTextFieldDefaults {
     val CursorBrush = SolidColor(Color.Black)
@@ -191,7 +188,7 @@ fun BasicTextField(
     enabled: Boolean = true,
     readOnly: Boolean = false,
     inputTransformation: InputTransformation? = null,
-    textStyle: McTextStyle = McTextStyle.Default,
+    textStyle: Style = Style.EMPTY,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     onKeyboardAction: KeyboardActionHandler? = null,
     lineLimits: TextFieldLineLimits = TextFieldLineLimits.Default,
@@ -239,7 +236,7 @@ internal fun BasicTextField(
     enabled: Boolean = true,
     readOnly: Boolean = false,
     inputTransformation: InputTransformation? = null,
-    textStyle: McTextStyle = McTextStyle.Default,
+    textStyle: Style = Style.EMPTY,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     onKeyboardAction: KeyboardActionHandler? = null,
     lineLimits: TextFieldLineLimits = TextFieldLineLimits.Default,
@@ -300,7 +297,7 @@ internal fun BasicTextField(
     @OptIn(ExperimentalFoundationApi::class)
     val platformSelectionBehaviors =
         if (ComposeFoundationFlags.isSmartSelectionEnabled) {
-            // 平台适配点:McTextStyle 无 localeList,智能选区使用系统当前 LocaleList
+            // 平台适配点:Style 无 localeList,智能选区使用系统当前 LocaleList
             val resolvedLocaleList = LocaleList.current
             rememberPlatformSelectionBehaviors(SelectedTextType.EditableText, resolvedLocaleList)
         } else {
@@ -674,7 +671,7 @@ fun BasicTextField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     readOnly: Boolean = false,
-    textStyle: McTextStyle = McTextStyle.Default,
+    textStyle: Style = Style.EMPTY,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     singleLine: Boolean = false,
@@ -831,7 +828,7 @@ fun BasicTextField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     readOnly: Boolean = false,
-    textStyle: McTextStyle = McTextStyle.Default,
+    textStyle: Style = Style.EMPTY,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     singleLine: Boolean = false,
@@ -876,7 +873,7 @@ fun BasicTextField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     readOnly: Boolean = false,
-    textStyle: McTextStyle = McTextStyle.Default,
+    textStyle: Style = Style.EMPTY,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     singleLine: Boolean = false,
@@ -916,7 +913,7 @@ fun BasicTextField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     readOnly: Boolean = false,
-    textStyle: McTextStyle = McTextStyle.Default,
+    textStyle: Style = Style.EMPTY,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     singleLine: Boolean = false,

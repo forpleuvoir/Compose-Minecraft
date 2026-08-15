@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastRoundToInt
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 /**
  * This ModifierNodeElement is only responsible for laying out text and reporting its global
@@ -51,7 +51,7 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 internal class TextFieldTextLayoutModifier(
     private val textLayoutState: TextLayoutState,
     private val textFieldState: TransformedTextFieldState,
-    private val textStyle: McTextStyle,
+    private val textStyle: Style,
     private val singleLine: Boolean,
     private val onTextLayout: (Density.(getResult: () -> TextLayoutResult?) -> Unit)?,
     private val keyboardOptions: KeyboardOptions,
@@ -109,7 +109,7 @@ internal class TextFieldTextLayoutModifier(
 internal class TextFieldTextLayoutModifierNode(
     private var textLayoutState: TextLayoutState,
     textFieldState: TransformedTextFieldState,
-    textStyle: McTextStyle,
+    textStyle: Style,
     private var singleLine: Boolean,
     onTextLayout: (Density.(getResult: () -> TextLayoutResult?) -> Unit)?,
     keyboardOptions: KeyboardOptions,
@@ -140,7 +140,7 @@ internal class TextFieldTextLayoutModifierNode(
     fun updateNode(
         textLayoutState: TextLayoutState,
         textFieldState: TransformedTextFieldState,
-        textStyle: McTextStyle,
+        textStyle: Style,
         singleLine: Boolean,
         onTextLayout: (Density.(getResult: () -> TextLayoutResult?) -> Unit)?,
         keyboardOptions: KeyboardOptions,

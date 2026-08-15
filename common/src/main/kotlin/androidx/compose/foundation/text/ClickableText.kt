@@ -25,7 +25,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 /**
  * A continent version of [BasicText] component to be able to handle click event on the text.
@@ -71,7 +71,7 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 fun ClickableText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
-    style: McTextStyle = McTextStyle.Default,
+    style: Style = Style.EMPTY,
     softWrap: Boolean = true,
     overflow: TextOverflow = TextOverflow.Clip,
     maxLines: Int = Int.MAX_VALUE,

@@ -20,7 +20,7 @@ import androidx.compose.runtime.Immutable
 /**
  * Platform specific configuration for [SpanStyle] on Desktop.
  *
- * 平台适配点:TextStyle 已完全替换为 McTextStyle,原 PlatformTextStyle 外壳与
+ * 平台适配点:TextStyle 已完全替换为 Style,原 PlatformTextStyle 外壳与
  * createPlatformTextStyle 已移除;此处仅保留 SpanStyle/ParagraphStyle 仍引用的
  * 平台参数类型。
  *

@@ -15,30 +15,16 @@
  */
 package androidx.compose.ui.text
 
-import androidx.annotation.IntRange
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Canvas
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.ShaderBrush
-import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.DrawStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.internal.JvmDefaultWithCompatibility
 import androidx.compose.ui.text.platform.ActualParagraph
-import androidx.compose.ui.text.style.ResolvedTextDirection
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import kotlin.math.ceil
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 internal const val DefaultMaxLines = Int.MAX_VALUE
 @JvmDefaultWithCompatibility
@@ -87,13 +73,13 @@ interface Paragraph {
     )
     fun getWordBoundary(offset: Int): TextRange
     fun paint(
-        canvas: androidx.compose.ui.graphics.Canvas,
+        canvas: Canvas,
         color: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified,
         shadow: androidx.compose.ui.graphics.Shadow? = null,
         textDecoration: androidx.compose.ui.text.style.TextDecoration? = null,
     )
     fun paint(
-        canvas: androidx.compose.ui.graphics.Canvas,
+        canvas: Canvas,
         color: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified,
         shadow: androidx.compose.ui.graphics.Shadow? = null,
         textDecoration: androidx.compose.ui.text.style.TextDecoration? = null,
@@ -101,7 +87,7 @@ interface Paragraph {
         blendMode: androidx.compose.ui.graphics.BlendMode = androidx.compose.ui.graphics.drawscope.DrawScope.DefaultBlendMode,
     )
     fun paint(
-        canvas: androidx.compose.ui.graphics.Canvas,
+        canvas: Canvas,
         brush: androidx.compose.ui.graphics.Brush,
         alpha: Float = Float.NaN,
         shadow: androidx.compose.ui.graphics.Shadow? = null,
@@ -118,7 +104,7 @@ interface Paragraph {
  */
 fun Paragraph(
     text: String,
-    style: McTextStyle,
+    style: Style,
     spanStyles: List<AnnotatedString.Range<SpanStyle>> = listOf(),
     placeholders: List<AnnotatedString.Range<Placeholder>> = listOf(),
     maxLines: Int = DefaultMaxLines,
@@ -147,7 +133,7 @@ fun Paragraph(
  * [androidx.compose.ui.text.style.TextDirection.Content] is used as the default value.
  *
  * @param text the text to be laid out
- * @param style the [McTextStyle] to be applied to the whole text
+ * @param style the [Style] to be applied to the whole text
  * @param width how wide the text is allowed to be
  * @param density density of the device
  * @param fontFamilyResolver [FontFamily.Resolver] to be used to load the font given in [SpanStyle]s
@@ -169,7 +155,7 @@ fun Paragraph(
 )
 fun Paragraph(
     text: String,
-    style: McTextStyle,
+    style: Style,
     width: Float,
     density: Density,
     fontFamilyResolver: FontFamily.Resolver,
@@ -198,7 +184,7 @@ fun Paragraph(
  * [androidx.compose.ui.text.style.TextDirection.Content] is used as the default value.
  *
  * @param text the text to be laid out
- * @param style the [McTextStyle] to be applied to the whole text
+ * @param style the [Style] to be applied to the whole text
  * @param constraints how wide and tall the text is allowed to be. [Constraints.maxWidth] will
  *   define the width of the Paragraph. [Constraints.maxHeight] helps defining the number of lines
  *   that fit with ellipsis is true. Minimum components of the [Constraints] object are no-op.
@@ -217,7 +203,7 @@ fun Paragraph(
 )
 fun Paragraph(
     text: String,
-    style: McTextStyle,
+    style: Style,
     constraints: Constraints,
     density: Density,
     fontFamilyResolver: FontFamily.Resolver,
@@ -246,7 +232,7 @@ fun Paragraph(
  * [androidx.compose.ui.text.style.TextDirection.Content] is used as the default value.
  *
  * @param text the text to be laid out
- * @param style the [McTextStyle] to be applied to the whole text
+ * @param style the [Style] to be applied to the whole text
  * @param constraints how wide and tall the text is allowed to be. [Constraints.maxWidth] will
  *   define the width of the Paragraph. [Constraints.maxHeight] helps defining the number of lines
  *   that fit with ellipsis is true. Minimum components of the [Constraints] object are no-op.
@@ -261,7 +247,7 @@ fun Paragraph(
  */
 fun Paragraph(
     text: String,
-    style: McTextStyle,
+    style: Style,
     constraints: Constraints,
     density: Density,
     fontFamilyResolver: FontFamily.Resolver,

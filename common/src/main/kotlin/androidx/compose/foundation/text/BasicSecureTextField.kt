@@ -60,7 +60,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.consumeAsFlow
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 /**
  * BasicSecureTextField is specifically designed for password entry fields and is a preconfigured
@@ -125,7 +125,7 @@ fun BasicSecureTextField(
     enabled: Boolean = true,
     readOnly: Boolean = false,
     inputTransformation: InputTransformation? = null,
-    textStyle: McTextStyle = McTextStyle.Default,
+    textStyle: Style = Style.EMPTY,
     keyboardOptions: KeyboardOptions = KeyboardOptions.SecureTextField,
     onKeyboardAction: KeyboardActionHandler? = null,
     onTextLayout: (Density.(getResult: () -> TextLayoutResult?) -> Unit)? = null,
@@ -350,7 +350,7 @@ fun BasicSecureTextField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     inputTransformation: InputTransformation? = null,
-    textStyle: McTextStyle = McTextStyle.Default,
+    textStyle: Style = Style.EMPTY,
     keyboardOptions: KeyboardOptions = KeyboardOptions.SecureTextField,
     onKeyboardAction: KeyboardActionHandler? = null,
     onTextLayout: (Density.(getResult: () -> TextLayoutResult?) -> Unit)? = null,
@@ -392,7 +392,7 @@ fun BasicSecureTextField(
     enabled: Boolean = true,
     readOnly: Boolean = false,
     inputTransformation: InputTransformation? = null,
-    textStyle: McTextStyle = McTextStyle.Default,
+    textStyle: Style = Style.EMPTY,
     keyboardOptions: KeyboardOptions = KeyboardOptions.SecureTextField,
     onKeyboardAction: KeyboardActionHandler? = null,
     onTextLayout: (Density.(getResult: () -> TextLayoutResult?) -> Unit)? = null,

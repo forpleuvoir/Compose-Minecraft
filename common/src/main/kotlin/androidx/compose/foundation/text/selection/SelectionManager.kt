@@ -62,7 +62,10 @@ import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.geometry.isUnspecified
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -1195,7 +1198,10 @@ internal fun merge(lhs: Selection?, rhs: Selection?): Selection? {
     return lhs?.merge(rhs) ?: rhs
 }
 
-internal fun isCopyKeyEvent(keyEvent: KeyEvent): Boolean = false
+// 平台适配点:桌面语义 —— Ctrl+C 复制选中文本(与官方 SelectionManager.desktop.kt 一致:
+// Windows/Linux 用 Ctrl,MacOS 用 Meta;此处平台固定 MC 桌面环境,统一 Ctrl)。
+internal fun isCopyKeyEvent(keyEvent: KeyEvent): Boolean =
+    keyEvent.key == Key.C && keyEvent.isCtrlPressed
 
 internal fun Modifier.selectionMagnifier(manager: SelectionManager): Modifier = this
 

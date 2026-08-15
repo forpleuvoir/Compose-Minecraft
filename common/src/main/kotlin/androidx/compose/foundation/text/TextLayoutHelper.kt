@@ -26,7 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 /**
  * Returns true if the this TextLayoutResult can be reused for given parameters.
@@ -43,7 +43,7 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
  */
 internal fun TextLayoutResult.canReuse(
     text: AnnotatedString,
-    style: McTextStyle,
+    style: Style,
     placeholders: List<AnnotatedString.Range<Placeholder>>,
     maxLines: Int,
     softWrap: Boolean,
@@ -65,7 +65,7 @@ internal fun TextLayoutResult.canReuse(
     }
     if (
         !(layoutInput.text == text &&
-            // 平台适配点:McTextStyle 无布局/绘制属性分离,整样式参与比较
+            // 平台适配点:Style 无布局/绘制属性分离,整样式参与比较
             layoutInput.style == style &&
             layoutInput.placeholders == placeholders &&
             layoutInput.maxLines == maxLines &&

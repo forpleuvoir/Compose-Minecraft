@@ -22,24 +22,29 @@ import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import androidx.compose.ui.text.platform.StyleSegment
+import net.minecraft.network.chat.Style
 
 /**
  * Modifier element for String based text
  *
  * This is faster than [TextAnnotatedStringElement]
  *
- * 平台适配点:TextStyle → McTextStyle。
+ * 平台适配点:TextStyle → Style。
  */
 internal class TextStringSimpleElement(
     private val text: String,
-    private val style: McTextStyle,
+    private val style: Style,
     private val fontFamilyResolver: FontFamily.Resolver,
     private val overflow: TextOverflow = TextOverflow.Clip,
     private val softWrap: Boolean = true,
     private val maxLines: Int = Int.MAX_VALUE,
     private val minLines: Int = DefaultMinLines,
     private val color: ColorProducer? = null,
+    /** 平台适配点(T.3):MC Component 展平后的多段样式;空 = 单样式(旧行为)。 */
+    private val segments: List<StyleSegment> = emptyList(),
+    /** 平台适配点(T.10):文本缩放;1f = 原样。 */
+    private val scale: Float = 1f,
 ) : ModifierNodeElement<TextStringSimpleNode>() {
 
     override fun create(): TextStringSimpleNode =
@@ -52,6 +57,8 @@ internal class TextStringSimpleElement(
             maxLines,
             minLines,
             color,
+            segments,
+            scale,
         )
 
     override fun update(node: TextStringSimpleNode) {
@@ -66,6 +73,8 @@ internal class TextStringSimpleElement(
                     softWrap = softWrap,
                     fontFamilyResolver = fontFamilyResolver,
                     overflow = overflow,
+                    segments = segments,
+                    scale = scale,
                 ),
         )
     }

@@ -26,6 +26,7 @@ import net.minecraft.client.renderer.state.gui.BlitRenderState
 import net.minecraft.client.renderer.state.gui.GuiRenderState
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState
 import net.minecraft.locale.Language
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toComponent
 import org.joml.Matrix3x2f
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -290,9 +291,11 @@ internal class MinecraftRenderContext {
     /**
      * 把一条文本绘制命令转成 [GuiTextRenderState]。
      *
-     * - 文本:命令携带的 MC 样式快照([McTextStyle])→ 构造带完整 [Style] 的 [Component],
+     * - 文本:命令携带的 MC 样式快照([Style])→ 构造带完整 [Style] 的 [Component],
      *   颜色/加粗/斜体/下划线/删除线/乱码/资源字体全部生效(T.1);
-     * - 颜色:样式 color(0xAARRGGBB,alpha 生效);背景色/阴影由样式 backgroundColor/dropShadow 提供;
+     * - 颜色:样式 color(TextColor.value 为 0xRRGGBB,补 alpha 为不透明;无颜色时用 MC 默认白);
+     * - 背景/阴影:对齐 MC 原生(backgroundColor=0 无背景、dropShadow=false),
+     *   不再由样式携带(原 McTextStyle 的 background/shadow 字段已随包装移除);
      * - 坐标:命令记录的**行顶** y(MC 的 y 即行顶:下划线画在 y+9、背景为 y..y+9,
      *   见 Font.PreparedTextBuilder.accept),不可再加基线偏移;
      * - pose:命令矩阵(字形顶点经 pose 变换;JOML Matrix3x2f 为列主序构造);
@@ -306,9 +309,9 @@ internal class MinecraftRenderContext {
             command.matrix.toMatrix3x2f(),
             command.x.roundToInt(),
             command.y.roundToInt(),
-            command.style.color.toArgb(1f),
-            command.style.background.toArgb(1f),
-            command.style.shadow,
+            command.style.color?.value?.or(0xFF000000.toInt()) ?: 0xFFFFFFFF.toInt(),
+            0, // backgroundColor:对齐 MC 原生,无背景
+            false, // dropShadow:对齐 MC 原生,不画阴影
             false, // includeEmpty
             scissor?.toScreenRectangle(),
         )

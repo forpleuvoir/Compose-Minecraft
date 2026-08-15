@@ -4,6 +4,11 @@ plugins {
 }
 
 dependencies {
+
+    compileOnly(libs.mixin)
+    compileOnly(libs.mixinExtras.common)
+    annotationProcessor(libs.mixinExtras.common)
+
     // ── Compose Runtime / 平台中立基础模块(官方 artifact,不携带 Skia)──
     // Compose UI commonMain 源码(仓库内 androidx/compose)依赖这些已编译模块;
     // ui-graphics/ui-text/ui/foundation/animation 的 commonMain 与 Minecraft actual 在同一源码树内编译。

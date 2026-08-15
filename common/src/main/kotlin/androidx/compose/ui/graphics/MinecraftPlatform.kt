@@ -23,7 +23,7 @@ import androidx.compose.ui.graphics.colorspace.ColorSpace
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -712,7 +712,7 @@ internal class MinecraftCanvas internal constructor(
         val text: String,
         val x: Float,
         val y: Float,
-        val style: McTextStyle,
+        val style: Style,
     ) : DrawCommand {
         override val paint: PaintSnapshot? = null
     }
@@ -732,7 +732,7 @@ internal class MinecraftCanvas internal constructor(
         text: String,
         x: Float,
         y: Float,
-        style: McTextStyle,
+        style: Style,
     ) {
         drawCommands.add(
             DrawTextCommand(

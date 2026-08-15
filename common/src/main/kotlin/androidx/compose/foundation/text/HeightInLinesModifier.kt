@@ -40,7 +40,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 /**
  * The default minimum height in terms of minimum number of visible lines.
@@ -55,12 +55,12 @@ internal const val DefaultMinLines = 1
  * function for calculating maxLines constraints since MultiParagraph computation already handles
  * that.
  *
- * 平台适配点:TextStyle → McTextStyle;字体解析(fontFamily/fontWeight 等)与 fontSize 均随
+ * 平台适配点:TextStyle → Style;字体解析(fontFamily/fontWeight 等)与 fontSize 均随
  * TextStyle 移除,行高直接用 MC 固定度量(经 [computeSizeForDefaultText])。
  */
 @OptIn(ExperimentalFoundationApi::class)
 internal fun Modifier.heightInLines(
-    textStyle: McTextStyle,
+    textStyle: Style,
     minLines: Int = DefaultMinLines,
     maxLines: Int = Int.MAX_VALUE,
 ): Modifier {
@@ -75,7 +75,7 @@ internal fun Modifier.heightInLines(
 }
 
 private class HeightInLinesElement(
-    private val textStyle: McTextStyle,
+    private val textStyle: Style,
     private val minLines: Int,
     private val maxLines: Int,
 ) : ModifierNodeElement<HeightInLinesNode>() {
@@ -111,7 +111,7 @@ private class HeightInLinesElement(
 }
 
 private class HeightInLinesNode(
-    private var textStyle: McTextStyle,
+    private var textStyle: Style,
     private var minLines: Int,
     private var maxLines: Int,
 ) :
@@ -168,7 +168,7 @@ private class HeightInLinesNode(
         dirty = true
     }
 
-    fun update(textStyle: McTextStyle, minLines: Int, maxLines: Int) {
+    fun update(textStyle: Style, minLines: Int, maxLines: Int) {
         if (this.textStyle != textStyle || this.minLines != minLines || this.maxLines != maxLines) {
             this.textStyle = textStyle
             this.minLines = minLines
@@ -180,7 +180,7 @@ private class HeightInLinesNode(
 
     private fun computeHeights(
         density: Density,
-        resolvedStyle: McTextStyle,
+        resolvedStyle: Style,
         fontFamilyResolver: FontFamily.Resolver,
     ) {
         // TODO (jossiwolf): It's unfortunate we do two layouts here. Can we optimize this?
@@ -224,7 +224,7 @@ private class HeightInLinesNode(
 }
 
 internal fun Modifier.legacyHeightInLines(
-    textStyle: McTextStyle,
+    textStyle: Style,
     minLines: Int = DefaultMinLines,
     maxLines: Int = Int.MAX_VALUE,
 ) =

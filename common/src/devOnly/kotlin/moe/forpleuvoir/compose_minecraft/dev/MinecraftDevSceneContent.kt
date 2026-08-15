@@ -12,8 +12,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
-import moe.forpleuvoir.compose_minecraft.platform.ui.McText
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import androidx.compose.foundation.text.BasicText
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
+import net.minecraft.network.chat.Style
 
 /**
  * 开发环境总菜单(dev scene 主界面):
@@ -29,13 +30,13 @@ fun MinecraftDevSceneContent() {
             .background(Color(0xF0121212))
     ) {
         Column(Modifier.padding(16.dp)) {
-            McText(
+            BasicText(
                 "Compose Minecraft Dev Menu",
-                style = McTextStyle(color = Color.White, bold = true),
+                style = Style.EMPTY.withColor(Color.White).withBold(true),
             )
-            McText(
+            BasicText(
                 "选择一项测试:",
-                style = McTextStyle(color = Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
             )
 
             DevMenuButton(
@@ -46,7 +47,7 @@ fun MinecraftDevSceneContent() {
 
             DevMenuButton(
                 title = "样式与交互验证 (Style/Click/Focus/Scroll)",
-                subtitle = "McText 样式矩阵、鼠标点击、焦点、滚轮",
+                subtitle = "BasicText 样式矩阵、鼠标点击、焦点、滚轮",
                 onClick = { ComposeScreen.open { StyleMatrixDevScene() } },
             )
 
@@ -80,7 +81,7 @@ internal fun DevMenuButton(
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
-        McText(title, style = McTextStyle(color = Color.White, bold = true))
-        McText(subtitle, style = McTextStyle(color = Color(0xFF90A4AE)))
+        BasicText(title, style = Style.EMPTY.withColor(Color.White).withBold(true))
+        BasicText(subtitle, style = Style.EMPTY.withColor(Color(0xFF90A4AE)))
     }
 }

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright 2024 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,7 +34,6 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -50,8 +49,9 @@ import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
-import moe.forpleuvoir.compose_minecraft.platform.ui.McText
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import androidx.compose.foundation.text.BasicText
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
+import net.minecraft.network.chat.Style
 
 /**
  * Layout constants from the [Material 3 Menu Spec](https://m3.material.io/components/menus/specs).
@@ -73,7 +73,7 @@ internal object ContextMenuSpec {
 
     // 平台适配点:fontSize/lineHeight/letterSpacing 排版参数随 TextStyle 移除(MC 固定 9px 行高),
     // 仅保留颜色;textAlign 由布局对齐承担
-    fun textStyle(color: Color): McTextStyle = McTextStyle(color = color)
+    fun textStyle(color: Color): Style = Style.EMPTY.withColor(color)
 }
 
 private val DefaultPopupProperties = PopupProperties(focusable = true)
@@ -208,7 +208,7 @@ internal fun ContextMenuItem(
                 icon(if (enabled) colors.iconColor else colors.disabledIconColor)
             }
         }
-        McText(
+        BasicText(
             text = label,
             style =
                 ContextMenuSpec.textStyle(

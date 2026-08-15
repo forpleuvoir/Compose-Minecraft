@@ -25,7 +25,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.isUnspecified
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.text.AnnotatedString
@@ -53,7 +52,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import kotlin.jvm.JvmStatic
 import kotlin.math.max
 import kotlin.math.min
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toColor
+import net.minecraft.network.chat.Style
 
 // visible for testing
 internal const val DefaultWidthCharCount = 10 // min width for TextField is 10 chars long
@@ -71,7 +71,7 @@ internal val EmptyTextReplacement = "H".repeat(DefaultWidthCharCount) // just a 
  * Until we have font metrics APIs, use the height of reference text as a workaround.
  */
 internal fun computeSizeForDefaultText(
-    style: McTextStyle,
+    style: Style,
     density: Density,
     fontFamilyResolver: FontFamily.Resolver,
     text: String = EmptyTextReplacement,
@@ -146,8 +146,8 @@ internal class TextFieldDelegate {
                     highlightPaint,
                 )
             } else if (!deletionPreviewHighlightRange.collapsed) {
-                // 平台适配点:McTextStyle.color 恒为具体颜色,无 Unspecified 分支
-                val textColor = textLayoutResult.layoutInput.style.color
+                // 平台适配点:Style.color 恒为具体颜色,无 Unspecified 分支
+                val textColor = textLayoutResult.layoutInput.style.color?.toColor() ?: Color.White
                 highlightPaint.color = textColor.copy(alpha = textColor.alpha * 0.2f)
                 drawHighlight(
                     canvas,

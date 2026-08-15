@@ -17,7 +17,6 @@
 package androidx.compose.foundation.text
 
 import androidx.compose.foundation.internal.requirePrecondition
-import androidx.compose.foundation.text.TextDelegate.Companion.paint
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.text.AnnotatedString
@@ -38,7 +37,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.constrain
 import androidx.compose.ui.util.fastRoundToInt
 import kotlin.math.ceil
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 /**
  * An object that paints text onto a [Canvas].
@@ -74,7 +73,7 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 @Stable
 internal class TextDelegate(
     val text: AnnotatedString,
-    val style: McTextStyle,
+    val style: Style,
     val maxLines: Int = Int.MAX_VALUE,
     val minLines: Int = DefaultMinLines,
     val softWrap: Boolean = true,
@@ -128,7 +127,7 @@ internal class TextDelegate(
                 intrinsicsLayoutDirection = layoutDirection
                 MultiParagraphIntrinsics(
                     annotatedString = text,
-                    // 平台适配点:resolveDefaults 随 TextStyle 移除,McTextStyle 无缺省解析
+                    // 平台适配点:resolveDefaults 随 TextStyle 移除,Style 无缺省解析
                     style = style,
                     density = density,
                     fontFamilyResolver = fontFamilyResolver,
@@ -316,7 +315,7 @@ internal fun Float.ceilToIntPx(): Int = ceil(this).fastRoundToInt()
 internal fun updateTextDelegate(
     current: TextDelegate,
     text: AnnotatedString,
-    style: McTextStyle,
+    style: Style,
     density: Density,
     fontFamilyResolver: FontFamily.Resolver,
     softWrap: Boolean = true,

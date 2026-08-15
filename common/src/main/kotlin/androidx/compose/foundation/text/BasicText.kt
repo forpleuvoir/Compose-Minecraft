@@ -49,6 +49,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.platform.StyleSegment
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Constraints.Companion.fitPrioritizingWidth
@@ -58,7 +59,9 @@ import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastMapIndexedNotNull
 import androidx.compose.ui.util.fastRoundToInt
 import kotlin.math.floor
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.flatten
+import net.minecraft.network.chat.Component
+import net.minecraft.network.chat.Style
 
 /**
  * Basic element that displays text and provides semantics / accessibility information. Typically
@@ -86,13 +89,15 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
  *   fits in the available space and lays the text out with this size. This performs multiple layout
  *   passes and can be slower than using a fixed font size. This takes precedence over sizes defined
  *   through [style]. See [TextAutoSize] and the sample code.
+ * @param scale 平台适配点(T.10):文本缩放(1f = 原样)。布局尺寸与字形矩阵同步缩放,
+ *   等价于放大字号(MC 无原生字号参数,经渲染矩阵变换实现)。
  * @sample androidx.compose.foundation.samples.TextAutoSizeBasicTextSample
  */
 @Composable
-internal fun BasicText(
+fun BasicText(
     text: String,
     modifier: Modifier = Modifier,
-    style: McTextStyle = McTextStyle.Default,
+    style: Style = Style.EMPTY,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -100,6 +105,7 @@ internal fun BasicText(
     minLines: Int = 1,
     color: ColorProducer? = null,
     autoSize: TextAutoSize? = null,
+    scale: Float = 1f,
 ) {
     validateMinMaxLines(minLines = minLines, maxLines = maxLines)
     val selectionRegistrar = LocalSelectionRegistrar.current
@@ -150,8 +156,74 @@ internal fun BasicText(
                     maxLines = maxLines,
                     minLines = minLines,
                     color = color,
+                    scale = scale,
                 )
         }
+    Layout(finalModifier, EmptyMeasurePolicy)
+}
+
+/**
+ * MC 化的 BasicText:直接输入 MC [Component](富文本,可含多段样式)。
+ *
+ * 平台适配点(T.3):把 [Component] 按 [flatten] 展平为带自身样式的段列表,
+ * 每段与 [defaultStyle] 按属性合并 —— 段样式缺失的属性用 [defaultStyle] 补缺
+ * (MC `Style.applyTo` 语义:自身属性优先、缺失用参数补)。布局用拼接文本,
+ * 绘制按段切分样式。
+ *
+ * @param component 要显示的 MC 富文本组件。
+ * @param modifier [Modifier] 应用于此布局节点。
+ * @param defaultStyle 默认样式:Component 段缺失的属性(如颜色)从此样式补缺。
+ * @param onTextLayout 新文本布局计算完成时的回调。
+ * @param overflow 视觉溢出处理方式。
+ * @param softWrap 是否软换行。
+ * @param maxLines 最大可见行数。
+ * @param minLines 最小可见行数。
+ * @param color 覆盖文本颜色的颜色生产者(覆盖所有段)。
+ * @param scale 平台适配点(T.10):文本缩放(1f = 原样)。布局尺寸与字形矩阵同步缩放,
+ *   等价于放大字号(MC 无原生字号参数,经渲染矩阵变换实现)。
+ */
+@Composable
+fun BasicText(
+    component: Component,
+    modifier: Modifier = Modifier,
+    defaultStyle: Style = Style.EMPTY,
+    onTextLayout: ((TextLayoutResult) -> Unit)? = null,
+    overflow: TextOverflow = TextOverflow.Clip,
+    softWrap: Boolean = true,
+    maxLines: Int = Int.MAX_VALUE,
+    minLines: Int = 1,
+    color: ColorProducer? = null,
+    scale: Float = 1f,
+) {
+    validateMinMaxLines(minLines = minLines, maxLines = maxLines)
+
+    val fontFamilyResolver = LocalFontFamilyResolver.current
+
+    // 平台适配点(T.3):展平为带自身样式的段;每段缺失属性用 defaultStyle 补缺(applyTo 语义)
+    val segments =
+        remember(component, defaultStyle) {
+            component.flatten().map { seg ->
+                StyleSegment(style = seg.style.applyTo(defaultStyle), text = seg.getString())
+            }
+        }
+    val text = remember(segments) { segments.joinToString("") { it.text } }
+
+    BackgroundTextMeasurement(text = text, style = defaultStyle, fontFamilyResolver = fontFamilyResolver)
+
+    val finalModifier =
+        modifier then
+            TextStringSimpleElement(
+                text = text,
+                style = defaultStyle,
+                fontFamilyResolver = fontFamilyResolver,
+                overflow = overflow,
+                softWrap = softWrap,
+                maxLines = maxLines,
+                minLines = minLines,
+                color = color,
+                segments = segments,
+                scale = scale,
+            )
     Layout(finalModifier, EmptyMeasurePolicy)
 }
 
@@ -189,7 +261,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
-    style: McTextStyle = McTextStyle.Default,
+    style: Style = Style.EMPTY,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -308,7 +380,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: String,
     modifier: Modifier = Modifier,
-    style: McTextStyle = McTextStyle.Default,
+    style: Style = Style.EMPTY,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -349,7 +421,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
-    style: McTextStyle = McTextStyle.Default,
+    style: Style = Style.EMPTY,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -377,7 +449,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: String,
     modifier: Modifier = Modifier,
-    style: McTextStyle = McTextStyle.Default,
+    style: Style = Style.EMPTY,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -400,7 +472,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
-    style: McTextStyle = McTextStyle.Default,
+    style: Style = Style.EMPTY,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -425,7 +497,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: String,
     modifier: Modifier = Modifier,
-    style: McTextStyle = McTextStyle.Default,
+    style: Style = Style.EMPTY,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -438,7 +510,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
-    style: McTextStyle = McTextStyle.Default,
+    style: Style = Style.EMPTY,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -573,7 +645,7 @@ private fun measureWithTextRangeMeasureConstraints(
 
 private fun Modifier.textModifier(
     text: AnnotatedString,
-    style: McTextStyle,
+    style: Style,
     onTextLayout: ((TextLayoutResult) -> Unit)?,
     overflow: TextOverflow,
     softWrap: Boolean,
@@ -634,7 +706,7 @@ private fun LayoutWithLinksAndInlineContent(
     onTextLayout: ((TextLayoutResult) -> Unit)?,
     hasInlineContent: Boolean,
     inlineContent: Map<String, InlineTextContent> = mapOf(),
-    style: McTextStyle,
+    style: Style,
     overflow: TextOverflow,
     softWrap: Boolean,
     maxLines: Int,
@@ -730,7 +802,7 @@ private fun LayoutWithLinksAndInlineContent(
 @NonRestartableComposable
 internal fun BackgroundTextMeasurement(
     text: String,
-    style: McTextStyle,
+    style: Style,
     fontFamilyResolver: FontFamily.Resolver,
 ) {
     // Minecraft 平台第一版不预热文字测量
@@ -744,7 +816,7 @@ internal fun BackgroundTextMeasurement(
 @NonRestartableComposable
 internal fun BackgroundTextMeasurement(
     text: AnnotatedString,
-    style: McTextStyle,
+    style: Style,
     fontFamilyResolver: FontFamily.Resolver,
     placeholders: List<AnnotatedString.Range<Placeholder>>?,
 ) {

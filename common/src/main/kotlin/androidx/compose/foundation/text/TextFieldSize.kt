@@ -16,14 +16,12 @@
 package androidx.compose.foundation.text
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntSize
 import kotlin.math.roundToInt
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 import net.minecraft.client.Minecraft
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -36,7 +34,7 @@ import net.minecraft.client.Minecraft
 private val MinWidthCharCount = 10 // 官方 min width 为 10 字符宽
 
 @OptIn(ExperimentalFoundationApi::class)
-internal fun Modifier.textFieldMinSize(style: McTextStyle) = composed {
+internal fun Modifier.textFieldMinSize(style: Style) = composed {
     // 平台适配点:MC 度量恒定,无需响应字体解析状态/density 变化
     val font = Minecraft.getInstance().font
     val lineHeightPx = font.lineHeight.toFloat()

@@ -27,12 +27,12 @@ import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 /** Element for any text that is in a selection container. */
 internal class SelectableTextAnnotatedStringElement(
     private val text: AnnotatedString,
-    private val style: McTextStyle,
+    private val style: Style,
     private val fontFamilyResolver: FontFamily.Resolver,
     private val onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     private val overflow: TextOverflow = TextOverflow.Clip,

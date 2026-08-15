@@ -27,18 +27,18 @@ import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 /**
  * Modifier element for any Text with [AnnotatedString] or [onTextLayout] parameters
  *
  * This is slower than [TextAnnotatedStringElement]
  *
- * 平台适配点:TextStyle → McTextStyle。
+ * 平台适配点:TextStyle → Style。
  */
 internal class TextAnnotatedStringElement(
     private val text: AnnotatedString,
-    private val style: McTextStyle,
+    private val style: Style,
     private val fontFamilyResolver: FontFamily.Resolver,
     private val onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     private val overflow: TextOverflow = TextOverflow.Clip,

@@ -22,26 +22,26 @@ import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.TraversableNode
 import androidx.compose.ui.node.traverseAncestors
 import kotlin.jvm.JvmInline
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 /**
- * Compose phase that is requesting the inherited [McTextStyle]. In the [Layout] phase, only
- * [McTextStyle] properties that affect layout are computed. All other properties are left as the
+ * Compose phase that is requesting the inherited MC [Style]. In the [Layout] phase, only
+ * [Style] properties that affect layout are computed. All other properties are left as the
  * default values. For [Draw], only the properties that affect drawing text are computed. For [All],
  * all the properties are computed.
  *
- * 平台适配点:TextStyle → McTextStyle。
+ * 平台适配点:原 Compose TextStyle → MC [Style](经 Mixin `StyleMixin` 桥接)。
  */
 @JvmInline
 internal value class StylePhase private constructor(internal val value: Int) {
     companion object {
-        /** A request to compute the inherited [McTextStyle] properties that affect layout. */
+        /** A request to compute the inherited [Style] properties that affect layout. */
         val Layout: StylePhase = StylePhase(1)
 
-        /** A request to compute the inherited [McTextStyle] properties that affect drawing. */
+        /** A request to compute the inherited [Style] properties that affect drawing. */
         val Draw: StylePhase = StylePhase(2)
 
-        /** A request to compute all the inherited [McTextStyle] properties. */
+        /** A request to compute all the inherited [Style] properties. */
         val All: StylePhase = StylePhase(0.inv())
     }
 }
@@ -52,17 +52,17 @@ internal value class StylePhase private constructor(internal val value: Int) {
  * Use [inheritedTextStyle] to find the node and request the inherited properties.
  */
 internal interface TextStyleProviderNode : TraversableNode {
-    fun computeInheritedTextStyle(phase: StylePhase, fallback: McTextStyle): McTextStyle
+    fun computeInheritedTextStyle(phase: StylePhase, fallback: Style): Style
 }
 
 /**
- * Request the inherited [McTextStyle]. This should be used in a node to determine the inherited text
+ * Request the inherited MC [Style]. This should be used in a node to determine the inherited text
  * style properties. This either returns the inherited text style or [fallback]. The specified
- * properties of [McTextStyle] are will override the inherited values. That is, the [fallback] value
+ * properties of [Style] are will override the inherited values. That is, the [fallback] value
  * is merged with the inherited styles before being returned by this function.
  */
-internal fun DelegatableNode.inheritedTextStyle(phase: StylePhase, fallback: McTextStyle): McTextStyle {
-    var result: McTextStyle = fallback
+internal fun DelegatableNode.inheritedTextStyle(phase: StylePhase, fallback: Style): Style {
+    var result: Style = fallback
     traverseAncestors(OuterNodeKey) {
         if (it is StyleOuterNode) {
             result = it.computeInheritedTextStyle(phase, fallback)

@@ -74,14 +74,14 @@ internal class TextLinkScope(internal val initialText: AnnotatedString) {
                 // If link styles don't contain a non-null style for at least one of the states,
                 // we don't add any additional style to the list of annotations
                 if (
-                    it.item is LinkAnnotation && !(it.item as LinkAnnotation).styles.isNullOrEmpty()
+                    it.item is LinkAnnotation && !it.item.styles.isNullOrEmpty()
                 ) {
                     arrayListOf(
                         // original link annotation
                         it,
                         // SpanStyle from the link styling object, or default SpanStyle otherwise
                         AnnotatedString.Range(
-                            (it.item as LinkAnnotation).styles?.style ?: SpanStyle(),
+                            it.item.styles?.style ?: SpanStyle(),
                             it.start,
                             it.end,
                         ),

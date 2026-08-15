@@ -485,7 +485,7 @@ private inline fun calculateExtraItems(
             if (items == null) {
                 items = mutableListOf()
             }
-            items?.add(measuredItem)
+            items.add(measuredItem)
         }
     }
 
@@ -532,7 +532,7 @@ private fun linesRetainedForLookahead(
             var lineIndex = visibleLines.lastOrNull()?.let { it.index + 1 } ?: 0
             if (firstItem != null) {
                 for (i in firstItem.index..min(lastVisibleItem.index, itemsCount - 1)) {
-                    if (list?.fastAny { it.items.any { it.index == i } } != true) {
+                    if (list?.fastAny { it.items.any { item -> item.index == i } } != true) {
                         if (list == null) list = mutableListOf()
                         val measuredLine = measuredLineProvider.getAndMeasure(lineIndex = lineIndex)
                         lineIndex++

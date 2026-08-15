@@ -89,7 +89,6 @@ internal val DelegatableNode.isDelegationRoot: Boolean
 // a bit, but I think we want to avoid giving this power to public API just yet. We can
 // introduce this as valid cases arise
 @Suppress("BanInlineOptIn")
-@OptIn(ExperimentalComposeUiApi::class)
 internal inline fun DelegatableNode.visitAncestors(
     mask: Int,
     includeSelf: Boolean = false,
@@ -294,7 +293,7 @@ internal inline fun <reified T> DelegatableNode.ancestors(
     var result: MutableList<T>? = null
     visitAncestors(type, includeSelf) {
         if (result == null) result = mutableListOf()
-        result?.add(it)
+        result.add(it)
     }
     return result
 }
@@ -490,9 +489,9 @@ fun DelegatableNode.findNearestBeyondBoundsLayoutAncestor(): BeyondBoundsLayout?
             if (it is BeyondBoundsLayoutProviderModifierNode) {
                 beyondBoundsNode = it
             } else if (it is DelegatingNode) {
-                it.forEachImmediateDelegate {
-                    if (it is BeyondBoundsLayoutProviderModifierNode) {
-                        beyondBoundsNode = it
+                it.forEachImmediateDelegate { modifierNode ->
+                    if (modifierNode is BeyondBoundsLayoutProviderModifierNode) {
+                        beyondBoundsNode = modifierNode
                         return@forEachImmediateDelegate
                     }
                 }
@@ -506,9 +505,9 @@ fun DelegatableNode.findNearestBeyondBoundsLayoutAncestor(): BeyondBoundsLayout?
             if (it is ModifierLocalModifierNode) {
                 modifierLocalNode = it
             } else if (it is DelegatingNode) {
-                it.forEachImmediateDelegate {
-                    if (it is ModifierLocalModifierNode) {
-                        modifierLocalNode = it
+                it.forEachImmediateDelegate { modifierNode ->
+                    if (modifierNode is ModifierLocalModifierNode) {
+                        modifierLocalNode = modifierNode
                         return@forEachImmediateDelegate
                     }
                 }
@@ -518,7 +517,7 @@ fun DelegatableNode.findNearestBeyondBoundsLayoutAncestor(): BeyondBoundsLayout?
                 localNode != null &&
                     localNode.providedValues.contains(ModifierLocalBeyondBoundsLayout)
             )
-                return localNode.providedValues.get(ModifierLocalBeyondBoundsLayout)
+                return localNode.providedValues[ModifierLocalBeyondBoundsLayout]
         }
     }
 
@@ -611,10 +610,10 @@ internal inline fun <reified T> Modifier.Node.dispatchForKind(
                         stack = stack ?: mutableVectorOf()
                         val theNode = node
                         if (theNode != null) {
-                            stack?.add(theNode)
+                            stack.add(theNode)
                             node = null
                         }
-                        stack?.add(next)
+                        stack.add(next)
                     }
                 }
             }

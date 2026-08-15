@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.constrain
 import androidx.compose.ui.unit.isUnspecified
 import androidx.compose.ui.unit.sp
 import kotlin.math.min
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 /**
  * Performs text layout using [MultiParagraph].
@@ -49,7 +49,7 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
  */
 internal class MultiParagraphLayoutCache(
     private var text: AnnotatedString,
-    style: McTextStyle,
+    style: Style,
     private var fontFamilyResolver: FontFamily.Resolver,
     private var overflow: TextOverflow = TextOverflow.Clip,
     private var softWrap: Boolean = true,
@@ -91,9 +91,9 @@ internal class MultiParagraphLayoutCache(
     /**
      * The style used for layout. Marks style-affected cache properties dirty if the new style's
      * layout-affecting attributes are different.
-     * 平台适配点:McTextStyle 无布局/绘制属性分离,整样式参与比较。
+     * 平台适配点:Style 无布局/绘制属性分离,整样式参与比较。
      */
-    private var style: McTextStyle = style
+    private var style: Style = style
         set(value) {
             val newStyleHasSameLayoutAffectingAttrs = value == field
             field = value
@@ -279,7 +279,7 @@ internal class MultiParagraphLayoutCache(
     /** Call when any parameters change, invalidation is a result of calling this method. */
     fun update(
         text: AnnotatedString,
-        style: McTextStyle,
+        style: Style,
         fontFamilyResolver: FontFamily.Resolver,
         overflow: TextOverflow,
         softWrap: Boolean,
@@ -317,7 +317,7 @@ internal class MultiParagraphLayoutCache(
                 intrinsicsLayoutDirection = layoutDirection
                 MultiParagraphIntrinsics(
                     annotatedString = text,
-                    // 平台适配点:resolveDefaults 随 TextStyle 移除,McTextStyle 无缺省解析
+                    // 平台适配点:resolveDefaults 随 TextStyle 移除,Style 无缺省解析
                     style = style,
                     density = density!!,
                     fontFamilyResolver = fontFamilyResolver,

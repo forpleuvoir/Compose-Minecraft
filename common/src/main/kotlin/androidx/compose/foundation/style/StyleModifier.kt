@@ -78,7 +78,7 @@ import androidx.compose.ui.util.fastCoerceAtLeast
 import androidx.compose.ui.util.fastCoerceIn
 import androidx.compose.ui.util.fastRoundToInt
 import kotlin.math.max
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style as McStyle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -737,8 +737,8 @@ internal class StyleOuterNode(styleState: StyleState?, style: Style) :
      * invalidated. Instead, we just mark the node as invalidated, and whenever we recalculate the
      * style, we use the same ResolvedStyle that we had cached before.
      */
-    override fun computeInheritedTextStyle(phase: StylePhase, fallback: McTextStyle): McTextStyle =
-        resolveInheritedStyle(phase.toFlags())?.toMcTextStyle(fallback) ?: fallback
+    override fun computeInheritedTextStyle(phase: StylePhase, fallback: McStyle): McStyle =
+        resolveInheritedStyle(phase.toFlags())?.toMcStyle(fallback) ?: fallback
 
     internal var ancestorNodes: MutableObjectList<StyleOuterNode>? = null
 

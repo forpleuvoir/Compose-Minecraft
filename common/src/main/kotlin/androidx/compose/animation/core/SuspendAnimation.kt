@@ -21,6 +21,7 @@ import androidx.compose.ui.MotionDurationScale
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
 
 /**
  * Target based animation that animates from the given [initialValue] towards the [targetValue],
@@ -40,7 +41,7 @@ import kotlinx.coroutines.CancellationException
  * @sample androidx.compose.animation.core.samples.suspendAnimateFloatVariant
  * @see AnimationState.animateTo
  */
-public suspend fun animate(
+suspend fun animate(
     initialValue: Float,
     targetValue: Float,
     initialVelocity: Float = 0f,
@@ -65,7 +66,7 @@ public suspend fun animate(
  * @param block Will be invoked on each animation frame with up-to-date value and velocity.
  * @see AnimationState.animateDecay
  */
-public suspend fun animateDecay(
+suspend fun animateDecay(
     initialValue: Float,
     initialVelocity: Float,
     animationSpec: FloatDecayAnimationSpec,
@@ -90,7 +91,7 @@ public suspend fun animateDecay(
  *
  * @see AnimationState.animateTo
  */
-public suspend fun <T, V : AnimationVector> animate(
+suspend fun <T, V : AnimationVector> animate(
     typeConverter: TwoWayConverter<T, V>,
     initialValue: T,
     targetValue: T,
@@ -135,7 +136,7 @@ public suspend fun <T, V : AnimationVector> animate(
  *   the animation related info can be accessed via [AnimationScope].
  * @sample androidx.compose.animation.core.samples.animateToOnAnimationState
  */
-public suspend fun <T, V : AnimationVector> AnimationState<T, V>.animateTo(
+suspend fun <T, V : AnimationVector> AnimationState<T, V>.animateTo(
     targetValue: T,
     animationSpec: AnimationSpec<T> = spring(),
     sequentialAnimation: Boolean = false,
@@ -178,7 +179,7 @@ public suspend fun <T, V : AnimationVector> AnimationState<T, V>.animateTo(
  *   loop will exit after the [block] returns. All the animation related info can be accessed via
  *   [AnimationScope].
  */
-public suspend fun <T, V : AnimationVector> AnimationState<T, V>.animateDecay(
+suspend fun <T, V : AnimationVector> AnimationState<T, V>.animateDecay(
     animationSpec: DecayAnimationSpec<T>,
     sequentialAnimation: Boolean = false,
     block: AnimationScope<T, V>.() -> Unit = {},
@@ -227,7 +228,7 @@ internal suspend fun <T, V : AnimationVector> AnimationState<T, V>.animate(
     var lateInitScope: AnimationScope<T, V>? = null
     try {
         if (startTimeNanos == AnimationConstants.UnspecifiedTime) {
-            val durationScale = coroutineContext.durationScale
+            val durationScale = currentCoroutineContext().durationScale
             animation.callWithFrameNanos {
                 lateInitScope =
                     AnimationScope(
@@ -267,7 +268,7 @@ internal suspend fun <T, V : AnimationVector> AnimationState<T, V>.animate(
                         // First frame
                         doAnimationFrameWithScale(
                             startTimeNanos,
-                            coroutineContext.durationScale,
+                            currentCoroutineContext().durationScale,
                             animation,
                             this@animate,
                             block,
@@ -276,9 +277,9 @@ internal suspend fun <T, V : AnimationVector> AnimationState<T, V>.animate(
         }
         // Subsequent frames
         while (lateInitScope!!.isRunning) {
-            val durationScale = coroutineContext.durationScale
+            val durationScale = currentCoroutineContext().durationScale
             animation.callWithFrameNanos {
-                lateInitScope!!.doAnimationFrameWithScale(it, durationScale, animation, this, block)
+                lateInitScope.doAnimationFrameWithScale(it, durationScale, animation, this, block)
             }
         }
         // End of animation

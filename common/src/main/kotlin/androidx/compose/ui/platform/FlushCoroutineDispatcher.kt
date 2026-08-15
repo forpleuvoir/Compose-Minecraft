@@ -16,17 +16,10 @@
 
 package androidx.compose.ui.platform
 
+import kotlinx.coroutines.*
 import kotlin.concurrent.Volatile
 import kotlin.coroutines.CoroutineContext
-import kotlinx.coroutines.CancellableContinuation
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Delay
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.InternalCoroutinesApi
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.Runnable
-import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Dispatcher with the ability to immediately perform (flush) all pending tasks.
@@ -108,14 +101,13 @@ internal class FlushCoroutineDispatcher(
         }
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     override fun scheduleResumeAfterDelay(timeMillis: Long, continuation: CancellableContinuation<Unit>) {
         val block = Runnable { continuation.resume(Unit, null) }
         synchronized(delayedTasksLock) {
             delayedTasks.add(block)
         }
         val job = scope.launch {
-            kotlinx.coroutines.delay(timeMillis)
+            delay(timeMillis.milliseconds)
             performRun {
                 val isTaskAlive = synchronized(delayedTasksLock) {
                     delayedTasks.remove(block)

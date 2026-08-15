@@ -21,12 +21,10 @@ package androidx.compose.foundation.text
 import androidx.compose.foundation.ComposeFoundationFlags
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.Interaction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.overscroll
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.handwriting.stylusHandwriting
@@ -69,7 +67,6 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.IntrinsicMeasurable
 import androidx.compose.ui.layout.IntrinsicMeasureScope
@@ -90,7 +87,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.SoftwareKeyboardController
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
@@ -111,12 +107,9 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastRoundToInt
-import kotlin.math.max
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import net.minecraft.network.chat.Style
 
 /**
  * Base composable that enables users to edit text via hardware or software keyboard.
@@ -187,7 +180,7 @@ internal fun CoreTextField(
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
     modifier: Modifier = Modifier,
-    textStyle: McTextStyle = McTextStyle.Default,
+    textStyle: Style = Style.EMPTY,
     visualTransformation: VisualTransformation = VisualTransformation.None,
     onTextLayout: (TextLayoutResult) -> Unit = {},
     interactionSource: MutableInteractionSource? = null,
@@ -301,7 +294,7 @@ internal fun CoreTextField(
     manager.enabled = enabled
     @OptIn(ExperimentalFoundationApi::class)
     if (ComposeFoundationFlags.isSmartSelectionEnabled) {
-        // 平台适配点:McTextStyle 无 localeList,智能选区使用系统当前 LocaleList
+        // 平台适配点:Style 无 localeList,智能选区使用系统当前 LocaleList
         manager.platformSelectionBehaviors =
             rememberPlatformSelectionBehaviors(SelectedTextType.EditableText, LocaleList.current)
     }
@@ -877,7 +870,7 @@ internal class LegacyTextFieldState(
     fun update(
         untransformedText: AnnotatedString,
         visualText: AnnotatedString,
-        textStyle: McTextStyle,
+        textStyle: Style,
         softWrap: Boolean,
         density: Density,
         fontFamilyResolver: FontFamily.Resolver,

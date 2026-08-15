@@ -24,9 +24,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorProducer
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
-import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.layout.AlignmentLine
@@ -63,12 +61,14 @@ import androidx.compose.ui.unit.Constraints.Companion.fitPrioritizingWidth
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.util.fastRoundToInt
 import androidx.compose.ui.util.trace
-import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toColor
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
+import net.minecraft.network.chat.Style
 
 /** Node that implements Text for [AnnotatedString] or [onTextLayout] parameters. */
 internal class TextAnnotatedStringNode(
     private var text: AnnotatedString,
-    private var style: McTextStyle,
+    private var style: Style,
     private var fontFamilyResolver: FontFamily.Resolver,
     private var onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     private var overflow: TextOverflow = TextOverflow.Clip,
@@ -126,13 +126,13 @@ internal class TextAnnotatedStringNode(
     }
 
     /** Element has draw parameters to update */
-    fun updateDraw(color: ColorProducer?, style: McTextStyle): Boolean {
+    fun updateDraw(color: ColorProducer?, style: Style): Boolean {
         var changed = false
         if (color != this.overrideColor) {
             changed = true
         }
         overrideColor = color
-        // 平台适配点:McTextStyle 无布局/绘制属性分离,整样式参与比较
+        // 平台适配点:MC Style 无布局/绘制属性分离,整样式参与比较
         changed = changed || style != this.style
         return changed
     }
@@ -154,7 +154,7 @@ internal class TextAnnotatedStringNode(
 
     /** Element has layout parameters to update */
     fun updateLayoutRelatedArgs(
-        style: McTextStyle,
+        style: Style,
         placeholders: List<AnnotatedString.Range<Placeholder>>?,
         minLines: Int,
         maxLines: Int,
@@ -165,7 +165,7 @@ internal class TextAnnotatedStringNode(
     ): Boolean {
         var changed: Boolean
 
-        // 平台适配点:McTextStyle 无布局/绘制属性分离,整样式参与比较
+        // 平台适配点:MC Style 无布局/绘制属性分离,整样式参与比较
         changed = this.style != style
         this.style = style
 
@@ -354,9 +354,11 @@ internal class TextAnnotatedStringNode(
                                 TextLayoutInput(
                                     text = inputLayout.layoutInput.text,
                                     style =
-                                        // 平台适配点:TextStyle.merge → McTextStyle.copy
-                                        this@TextAnnotatedStringNode.style.copy(
-                                            color = overrideColor?.invoke() ?: style.color
+                                        // 平台适配点:TextStyle.merge → Style.withColor
+                                        this@TextAnnotatedStringNode.style.withColor(
+                                            overrideColor?.invoke()
+                                                ?: this@TextAnnotatedStringNode.style.color?.toColor()
+                                                ?: Color.White
                                         ),
                                     placeholders = inputLayout.layoutInput.placeholders,
                                     maxLines = inputLayout.layoutInput.maxLines,
@@ -541,9 +543,11 @@ internal class TextAnnotatedStringNode(
                 canvas.clipRect(bounds)
             }
             try {
-                // 平台适配点:McTextStyle 无 brush/shadow/textDecoration 分离,装饰由样式承载
+                // 平台适配点:MC Style 无 brush/shadow/textDecoration 分离,装饰由样式承载
                 val overrideColorVal = overrideColor?.invoke() ?: Color.Unspecified
-                val color = if (overrideColorVal.isSpecified) overrideColorVal else style.color
+                val color =
+                    if (overrideColorVal.isSpecified) overrideColorVal
+                    else style.color?.toColor() ?: Color.White
                 localParagraph.paint(canvas = canvas, color = color)
             } finally {
                 if (willClip) {

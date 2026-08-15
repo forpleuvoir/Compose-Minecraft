@@ -1,7 +1,6 @@
-package moe.forpleuvoir.compose_minecraft.platform.ui
+package moe.forpleuvoir.compose_minecraft.platform.ui.text
 
 import androidx.compose.runtime.ProvidableCompositionLocal
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 
 /**

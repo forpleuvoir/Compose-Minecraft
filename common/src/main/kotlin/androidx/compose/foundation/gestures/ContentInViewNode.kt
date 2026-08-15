@@ -295,7 +295,7 @@ internal class ContentInViewNode(
         bringIntoViewSpec: BringIntoViewSpec,
         viewportAdjustmentForReverseScroll: IntOffset,
     ): Float {
-        val viewportSize = viewportSize ?: return 0f
+        val viewportSize = viewportSize
 
         val rectangleToMakeVisible: Rect =
             findBringIntoViewRequest()
