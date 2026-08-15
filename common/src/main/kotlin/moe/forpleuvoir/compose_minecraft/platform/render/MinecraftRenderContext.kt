@@ -14,7 +14,10 @@ import androidx.compose.ui.graphics.MinecraftCanvas.DrawPointsCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawRectCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawRoundRectCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand
+import androidx.compose.ui.graphics.MinecraftCanvas.PaintSnapshot
 import androidx.compose.ui.graphics.PaintingStyle
+import androidx.compose.ui.graphics.PointMode
+import androidx.compose.ui.graphics.StrokeCap
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.client.gui.render.TextureSetup
@@ -49,6 +52,14 @@ internal class MinecraftRenderContext {
 
     /** 三角化输出缓冲(每帧复用,避免分配) */
     private val triangleSink = GeometryTessellator.Sink()
+
+    /**
+     * 三角化结果缓存:按「命令几何内容 + aaScale + Paint 参数」指纹复用顶点数组。
+     * 重复图形(相同内容与缩放)命中缓存直接复用,不再每帧重新三角化;
+     * 内容变化(坐标/参数/缩放)指纹随之变化 → 自动失效重建。
+     * 缓存数组被 [GuiTriangleRenderState] 只读共享;膨胀超限时整体清空。
+     */
+    private val triangleCache = HashMap<Long, FloatArray>()
 
     /** 把 [canvas] 中的命令逐条提交到 [renderState](GUI 坐标 = 场景 px,密度 1) */
     fun render(canvas: MinecraftCanvas, renderState: GuiRenderState) {
@@ -174,20 +185,99 @@ internal class MinecraftRenderContext {
         tessellate: (GeometryTessellator.Sink) -> Unit,
     ) {
         val paint = command.paint ?: return
-        triangleSink.aaScale = matrixScale(command.matrix) * guiScale
-        triangleSink.clear()
-        tessellate(triangleSink)
-        if (triangleSink.vertexCount < 3) return
+        val aaScale = matrixScale(command.matrix) * guiScale
+        val key = geometryFingerprint(command, paint, aaScale)
+        var vertices = triangleCache[key]
+        if (vertices == null) {
+            triangleSink.aaScale = aaScale
+            triangleSink.clear()
+            tessellate(triangleSink)
+            if (triangleSink.vertexCount < 3) return
+            vertices = triangleSink.toArray()
+            if (triangleCache.size > 1024) triangleCache.clear()
+            triangleCache[key] = vertices
+        }
         MinecraftGuiTriangles.ensureCompiled()
         renderState.addGuiElement(
             GuiTriangleRenderState(
                 pose = command.matrix.toMatrix3x2f(),
                 colorArgb = paint.color.toArgb(paint.alpha),
                 scissor = scissor?.toScreenRectangle(),
-                vertices = triangleSink.toArray(),
+                vertices = vertices,
                 stroke = paint.style == PaintingStyle.Stroke,
             )
         )
+    }
+
+    /**
+     * 命令几何内容指纹(64 位,碰撞概率 ~2^-64 可忽略):
+     * 遍历命令参数 + aaScale + Paint(style/strokeWidth/strokeCap),
+     * 内容任何变化 → 指纹变化 → 缓存自动失效。
+     */
+    private fun geometryFingerprint(command: DrawCommand, paint: PaintSnapshot, aaScale: Float): Long {
+        var h1 = 1125899906842597L
+        var h2 = 31L
+        fun mix(v: Float) {
+            h1 = h1 * 31 + v.toRawBits()
+            h2 = h2 * 31 + (h1 ushr 1)
+        }
+        fun mix(i: Int) {
+            h1 = h1 * 31 + i
+            h2 = h2 * 31 + (h1 ushr 1)
+        }
+        fun mixB(b: Boolean) = mix(if (b) 1 else 0)
+        mix(aaScale)
+        mix(if (paint.style == PaintingStyle.Fill) 0 else 1)
+        mix(paint.strokeWidth)
+        mix(
+            when (paint.strokeCap) {
+                StrokeCap.Butt -> 0
+                StrokeCap.Round -> 1
+                StrokeCap.Square -> 2
+                else -> 0
+            }
+        )
+        when (command) {
+            is DrawCircleCommand -> {
+                mix(1); mix(command.centerX); mix(command.centerY); mix(command.radius)
+            }
+            is DrawOvalCommand -> {
+                mix(2); mix(command.left); mix(command.top); mix(command.right); mix(command.bottom)
+            }
+            is DrawArcCommand -> {
+                mix(3); mix(command.left); mix(command.top); mix(command.right); mix(command.bottom)
+                mix(command.startAngle); mix(command.sweepAngle); mixB(command.useCenter)
+            }
+            is DrawRoundRectCommand -> {
+                mix(4); mix(command.left); mix(command.top); mix(command.right); mix(command.bottom)
+                mix(command.radiusX); mix(command.radiusY)
+            }
+            is DrawLineCommand -> {
+                mix(5); mix(command.p1x); mix(command.p1y); mix(command.p2x); mix(command.p2y)
+            }
+            is DrawPathCommand -> {
+                mix(6)
+                for (seg in command.segments) {
+                    mix(seg.type.ordinal)
+                    mix(seg.points.size)
+                    for (v in seg.points) mix(v)
+                }
+            }
+            is DrawPointsCommand -> {
+                mix(7)
+                mix(
+                    when (command.pointMode) {
+                        PointMode.Points -> 0
+                        PointMode.Lines -> 1
+                        PointMode.Polygon -> 2
+                        else -> 0
+                    }
+                )
+                for (p in command.points) { mix(p.x); mix(p.y) }
+            }
+            else -> return 0L // 不缓存(非三角化命令)
+        }
+        return (h1 shl 1) xor h2
     }
 
     /** 命令矩阵(列主序 4x4)2D 部分的最大轴缩放 */
