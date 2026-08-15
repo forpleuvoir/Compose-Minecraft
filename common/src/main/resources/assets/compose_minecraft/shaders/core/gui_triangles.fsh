@@ -10,13 +10,12 @@
 // - edgeCoverage 为顶点插值后的「到最近真实轮廓的有符号屏幕像素距离」
 //   (GeometryTessellator 计算):轮廓外侧为负、真实轮廓上为 0、内侧为正;
 //   内部实心三角形为 OPAQUE 大数 → smoothstep 恒为 1,完全覆盖;
-// - 过渡带:smoothstep(-1.0·aa, 1.0·aa, d),其中 aa = fwidth(d)。
-//   由于 d 已按「矩阵最大轴缩放 × guiScale」换算成物理像素,且 fwidth
-//   测量的是 d 在屏幕空间的变化率(≈1px),过渡带宽度恒约 2 个物理像素
-//   (跨真实轮廓两侧)。几何外扩/内缩深度取 1.5px:45° 斜边处 fwidth =
-//   |dFdx|+|dFdy| ≈ √2·梯度 ≈ 1.41,1.5px 深度保证任意斜角下几何边缘
-//   (coverage = ±1.5)落在过渡带外,alpha 严格归零 —— 无残留细线;轮廓上
-//   alpha 0.5,与三环填充的 coverage 0/±1.5 端点对齐,无阶梯、无发糊;
+// - 过渡带:**固定过渡** smoothstep(-1.0, 1.0, d),恒约 2 物理像素。
+//   coverage 已按物理像素距离归一化(设计梯度 ≈ 1),固定斜率与 fwidth
+//   方案等价但**无 fwidth 噪声**:fwidth 在三角形边界(coverage 场方向
+//   突变,如角部共享边)测量到巨大梯度 → 过渡带抖动 → 边缘线偏移
+//   (三角形底边左端视觉下移 1px 的根因)。代价:coverage 场梯度偏离 1
+//   的局部(尖角深几何)过渡带略宽(发糊),但单调稳定。
 // - 顶点着色器把 LineWidth 属性(承载 coverage)直接传给本着色器,
 //   属性类型 float、平滑插值(非 flat),OpenGL / Vulkan 后端一致。
 //
@@ -50,13 +49,9 @@ void main() {
         fragColor = vec4(debugValue, debugValue, debugValue, 1.0);
         return;
     }
-    // 有符号距离 → 覆盖率:轮廓上 0.5,内侧(≥1.5px) 1,外侧(≤-1.5px) 0。
-    // 过渡带 smoothstep(-1.0aa, 1.0aa, d):±1px —— 三角化器外扩/内缩深度
-    // 1.5px(> fwidth 最大值 √2,任意斜角边缘 alpha 归零,无残留细线),
-    // 同时保证任何「距轮廓 ≥ 1.5px 的真距离」顶点都完全饱和,内部填充与
-    // 壳带在共享边上 alpha 严格一致(无接缝)。
-    float aa = max(fwidth(edgeCoverage), 0.0001);
-    float coverage = smoothstep(-1.0 * aa, 1.0 * aa, edgeCoverage);
+    // 固定过渡:轮廓上 0.5,内侧(≥1px) 1,外侧(≤-1px) 0;
+    // 与几何外扩/内缩深度 1.5px 兼容(边缘 alpha 归零),无 fwidth 抖动。
+    float coverage = smoothstep(-1.0, 1.0, edgeCoverage);
     color.a *= coverage;
     if (color.a == 0.0) {
         discard;

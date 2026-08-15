@@ -196,8 +196,17 @@ internal object GeometryTessellator {
      * eps = 0.15 物理像素:最终弦高上限,远小于 AA 过渡带。
      */
     private fun simplifyPolygon(pts: FloatArray, aaScale: Float): FloatArray {
-        val n = pts.size / 2
-        if (n < 6) return pts
+        var n = pts.size / 2
+        // 首尾重复点剔除(闭合路径;三角形等小多边形也必须处理 ——
+        // 否则 fillPolygon 把重复顶点当独立点,产生零长度边 → 退化三角形
+        // + 角部楔形,coverage 场混乱,如三角形底边左端异常)
+        if (n >= 3 && dist(pts[0], pts[1], pts[(n - 1) * 2], pts[(n - 1) * 2 + 1]) < 1e-4f) {
+            n--
+        }
+        if (n < 3) return pts
+        if (n < 6) {
+            return if (n == pts.size / 2) pts else pts.copyOf(n * 2)
+        }
         val eps = 0.15f / aaScale
         val outX = ArrayList<Float>(n)
         val outY = ArrayList<Float>(n)
@@ -279,6 +288,8 @@ internal object GeometryTessellator {
      * [d] > 0 膨胀(外扩带外侧),[d] < 0 收缩(内缩壳内侧)。
      * - 凸顶点(转向与面积符号同号):相邻边偏移线交点(深度 |d|/cos(θ/2)),
      *   超限(> 2.5|d|,尖角)沿交点方向截断;
+     *   ⚠ 不能钳到 |d|:角平分线与边夹角 θ/2,垂距 = 深度×sin(θ/2),钳到 |d|
+     *   会使角部带垂距不足(53° 角仅 0.67px)→ 底边两端过渡带断层;
      * - 凹顶点 / 近共线:沿角平分线(入/出边外法线平均)平移 [d]。
      * [orientation] = 面积符号(±1),确定外法线侧:外法线 = 边方向右法线 × orientation。
      */
@@ -313,7 +324,10 @@ internal object GeometryTessellator {
                 val s = ((pix - ppx) * ey[i] - (piy - ppy) * ex[i]) / cross
                 var ix = ppx + ex[prev] * s
                 var iy = ppy + ey[prev] * s
-                // 尖角钳制:交点距顶点过远 → 沿交点方向截断
+                // 尖角钳制:交点距顶点过远 → 沿交点方向截断。
+                // ⚠ 不能钳到 |d|:角平分线方向与边夹角 θ/2,垂距 = 深度×sin(θ/2),
+                // 钳到 |d| 会让角部外扩/内缩带垂距不足(如 53° 角垂距仅 0.67px)
+                // → 底边两端过渡带断层(___ 阶梯)。2.5|d| 保持垂距 ≥ |d|(过渡带完整)。
                 val ox = ix - pts[i * 2]
                 val oy = iy - pts[i * 2 + 1]
                 val od = sqrt(ox * ox + oy * oy)
