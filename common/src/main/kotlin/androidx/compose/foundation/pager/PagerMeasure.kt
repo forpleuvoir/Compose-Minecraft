@@ -718,6 +718,5 @@ internal const val MaxPageOffset = 0.5f
 
 private inline fun debugLog(generateMsg: () -> String) {
     if (PagerDebugConfig.MeasureLogic) {
-        println("PagerMeasure: ${generateMsg()}")
     }
 }

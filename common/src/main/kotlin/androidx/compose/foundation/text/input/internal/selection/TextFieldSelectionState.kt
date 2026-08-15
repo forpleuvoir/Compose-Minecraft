@@ -1900,13 +1900,8 @@ internal inline fun TextFieldSelectionState.menuItem(
         }
     }
 
-private const val DEBUG = false
-private const val DEBUG_TAG = "TextFieldSelectionState"
 
 private inline fun logDebug(text: () -> String) {
-    if (DEBUG) {
-        println("$DEBUG_TAG: ${text()}")
-    }
 }
 
 /** A callback triggered when [TextToolbar] is requested to be shown. */

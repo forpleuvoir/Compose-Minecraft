@@ -652,7 +652,6 @@ private const val DebugEnabled = false
 
 private inline fun debugLog(generateMsg: () -> String) {
     if (DebugEnabled) {
-        println("CacheWindowLogic: ${generateMsg()}")
     }
 }
 

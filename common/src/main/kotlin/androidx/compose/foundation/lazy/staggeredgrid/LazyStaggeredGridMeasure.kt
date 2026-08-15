@@ -60,10 +60,8 @@ private inline fun <T> withDebugLogging(
     val result =
         if (DebugLoggingEnabled) {
             try {
-                println("╭──────{ measure start }───────────")
                 with(scope, block)
             } finally {
-                println("╰──────{ measure done }────────────")
             }
         } else {
             with(scope, block)
@@ -80,7 +78,6 @@ private fun Array<ArrayDeque<LazyStaggeredGridMeasuredItem>>.debugRender(): Stri
 
 private inline fun debugLog(message: () -> String) {
     if (DebugLoggingEnabled) {
-        println("│ - ${message()}")
     }
 }
 

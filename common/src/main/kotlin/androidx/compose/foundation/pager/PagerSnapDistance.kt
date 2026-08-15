@@ -105,6 +105,5 @@ internal class PagerSnapDistanceMaxPages(private val pagesLimit: Int) : PagerSna
 
 private inline fun debugLog(generateMsg: () -> String) {
     if (PagerDebugConfig.PagerSnapDistance) {
-        println("PagerSnapDistance: ${generateMsg()}")
     }
 }

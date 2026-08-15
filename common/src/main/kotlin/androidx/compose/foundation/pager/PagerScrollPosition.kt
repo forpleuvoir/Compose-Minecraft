@@ -125,7 +125,6 @@ internal const val NearestItemsExtraItemCount = 100
 
 private inline fun debugLog(generateMsg: () -> String) {
     if (PagerDebugConfig.ScrollPosition) {
-        println("PagerScrollPosition: ${generateMsg()}")
     }
 }
 

@@ -100,7 +100,6 @@ class FocusRequester @RememberInComposition constructor() {
      */
     fun captureFocus(): Boolean {
         if (focusRequesterNodes.isEmpty()) {
-            println("$FocusWarning: $FocusRequesterNotInitialized")
             return false
         }
         focusRequesterNodes.forEach {
@@ -126,7 +125,6 @@ class FocusRequester @RememberInComposition constructor() {
      */
     fun freeFocus(): Boolean {
         if (focusRequesterNodes.isEmpty()) {
-            println("$FocusWarning: $FocusRequesterNotInitialized")
             return false
         }
         focusRequesterNodes.forEach {
@@ -155,7 +153,6 @@ class FocusRequester @RememberInComposition constructor() {
     // )
     fun saveFocusedChild(): Boolean {
         if (focusRequesterNodes.isEmpty()) {
-            println("$FocusWarning: $FocusRequesterNotInitialized")
             return false
         }
         focusRequesterNodes.forEach { if (it.saveFocusedChild()) return true }
@@ -173,7 +170,6 @@ class FocusRequester @RememberInComposition constructor() {
      */
     fun restoreFocusedChild(): Boolean {
         if (focusRequesterNodes.isEmpty()) {
-            println("$FocusWarning: $FocusRequesterNotInitialized")
             return false
         }
         var success = false
@@ -262,7 +258,6 @@ class FocusRequester @RememberInComposition constructor() {
         check(this !== Default) { InvalidFocusRequesterInvocation }
         check(this !== Cancel) { InvalidFocusRequesterInvocation }
         if (focusRequesterNodes.isEmpty()) {
-            println("$FocusWarning: $FocusRequesterNotInitialized")
             return false
         }
         var success = false

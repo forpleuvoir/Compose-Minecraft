@@ -598,7 +598,6 @@ internal fun Modifier.pagerSemantics(
 
 private inline fun debugLog(generateMsg: () -> String) {
     if (PagerDebugConfig.MainPagerComposable) {
-        println("Pager: ${generateMsg()}")
     }
 }
 

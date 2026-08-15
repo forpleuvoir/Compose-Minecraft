@@ -299,7 +299,6 @@ internal class LayoutNode(
         }
 
         if (DebugChanges) {
-            println("$instance added to $this at index $index")
         }
 
         instance._foldedParent = this
@@ -348,7 +347,6 @@ internal class LayoutNode(
             onChildRemoved(_foldedChildren[i])
             val child = _foldedChildren.removeAt(i)
             if (DebugChanges) {
-                println("$child removed from $this at index $i")
             }
         }
     }
@@ -361,7 +359,6 @@ internal class LayoutNode(
         _foldedChildren.clear()
 
         if (DebugChanges) {
-            println("Removed all children from $this")
         }
     }
 
@@ -406,7 +403,6 @@ internal class LayoutNode(
             val child = _foldedChildren.removeAt(fromIndex)
 
             if (DebugChanges) {
-                println("$child moved in $this from index $fromIndex to $toIndex")
             }
 
             _foldedChildren.add(toIndex, child)

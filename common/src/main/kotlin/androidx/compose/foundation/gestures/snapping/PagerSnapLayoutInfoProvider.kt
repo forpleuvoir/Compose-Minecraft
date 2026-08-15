@@ -220,7 +220,6 @@ private fun PagerState.dragGestureDelta() =
 
 private inline fun debugLog(generateMsg: () -> String) {
     if (PagerDebugConfig.PagerSnapLayoutInfoProvider) {
-        println("PagerSnapLayoutInfoProvider: ${generateMsg()}")
     }
 }
 

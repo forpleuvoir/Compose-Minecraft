@@ -36,12 +36,8 @@ private val TargetDistance = 2500.dp
 private val BoundDistance = 1500.dp
 private val MinimumDistance = 50.dp
 
-private const val DEBUG = false
 
 private inline fun debugLog(generateMsg: () -> String) {
-    if (DEBUG) {
-        println("LazyScrolling: ${generateMsg()}")
-    }
 }
 
 /**

@@ -153,7 +153,6 @@ private const val Debug = false
 
 private inline fun debugLog(generateMsg: () -> String) {
     if (Debug) {
-        println("StickToTopBehavior: ${generateMsg()}")
     }
 }
 

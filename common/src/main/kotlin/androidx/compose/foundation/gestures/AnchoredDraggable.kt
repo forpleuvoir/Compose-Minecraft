@@ -1809,10 +1809,6 @@ private val NoOpDecayAnimationSpec: DecayAnimationSpec<Float> =
         }
         .generateDecayAnimationSpec()
 
-private const val DEBUG = false
 
 private inline fun debugLog(generateMsg: () -> String) {
-    if (DEBUG) {
-        println("AnchoredDraggable: ${generateMsg()}")
-    }
 }

@@ -33,7 +33,6 @@ internal class LayoutTreeConsistencyChecker(
     fun assertConsistent() {
         val inconsistencyFound = !isTreeConsistent(root)
         if (inconsistencyFound) {
-            println(logTree())
             throw IllegalStateException("Inconsistency found!")
         }
     }

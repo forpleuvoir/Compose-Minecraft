@@ -361,7 +361,6 @@ internal class FocusOwnerImpl(
         trace("FocusOwnerImpl:dispatchKeyEvent") {
             if (focusInvalidationManager.hasPendingInvalidation()) {
                 // Ignoring this to unblock b/346370327.
-                println("$FocusWarning: Dispatching key event while focus system is invalidated.")
                 return false
             }
             if (!validateKeyEvent(keyEvent)) return false
@@ -385,10 +384,6 @@ internal class FocusOwnerImpl(
     override fun dispatchInterceptedSoftKeyboardEvent(keyEvent: KeyEvent): Boolean {
         if (focusInvalidationManager.hasPendingInvalidation()) {
             // Ignoring this to unblock b/346370327.
-            println(
-                "$FocusWarning: Dispatching intercepted soft keyboard event while the focus system" +
-                    " is invalidated."
-            )
             return false
         }
 
@@ -413,9 +408,6 @@ internal class FocusOwnerImpl(
     ): Boolean {
         if (focusInvalidationManager.hasPendingInvalidation()) {
             // Ignoring this to unblock b/379289347.
-            println(
-                "$FocusWarning: Dispatching rotary event while the focus system is invalidated."
-            )
             return false
         }
 
@@ -435,9 +427,6 @@ internal class FocusOwnerImpl(
     override fun dispatchIndirectPointerEvent(event: IndirectPointerEvent): Boolean {
         if (focusInvalidationManager.hasPendingInvalidation()) {
             // Ignoring this to unblock b/379289347.
-            println(
-                "$FocusWarning: Dispatching indirect pointer event while the focus system is invalidated."
-            )
             return false
         }
 

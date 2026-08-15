@@ -31,7 +31,6 @@ internal const val SharedTransitionDebug = false
 
 internal inline fun sharedTransitionDebug(message: () -> String) {
     if (SharedTransitionDebug) {
-        println("SharedTransition: " + message())
     }
 }
 

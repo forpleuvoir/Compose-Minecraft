@@ -466,10 +466,6 @@ internal fun calculateFinalOffset(
     }
 }
 
-private const val DEBUG = false
 
 private inline fun debugLog(generateMsg: () -> String) {
-    if (DEBUG) {
-        println("SnapFlingBehavior: ${generateMsg()}")
-    }
 }

@@ -970,7 +970,6 @@ internal val EmptyLayoutInfo =
 
 private inline fun debugLog(generateMsg: () -> String) {
     if (PagerDebugConfig.PagerState) {
-        println("PagerState: ${generateMsg()}")
     }
 }
 

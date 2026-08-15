@@ -57,7 +57,6 @@ import androidx.compose.ui.platform.InspectorInfo
 @ExperimentalFoundationApi
 fun Modifier.contentReceiver(receiveContentListener: ReceiveContentListener): Modifier {
     // TODO: https://youtrack.jetbrains.com/issue/CMP-1263
-    println("Modifier.receiveContent isn't supported in Compose Multiplatform yet")
     return then(ReceiveContentElement(receiveContentListener = receiveContentListener))
 }
 

@@ -48,7 +48,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
  * Static field to turn on a bunch of verbose logging to debug animations. Since this is a constant,
  * any log statements guarded by this value should be removed by the compiler when it's false.
  */
-private const val DEBUG = false
 private const val TAG = "ContentInViewModifier"
 
 /** A minimum amount of delta that it is considered a valid scroll. */
@@ -131,7 +130,7 @@ internal class ContentInViewNode(
 
         suspendCancellableCoroutine { continuation ->
             val request = Request(currentBounds = localRect, continuation = continuation)
-            if (DEBUG) println("[$TAG] Registering bringChildIntoView request: $request")
+
             // Once the request is enqueued, even if it returns false, the queue will take care of
             // handling continuation cancellation so we don't need to do that here.
             if (bringIntoViewRequests.enqueue(request) && !isAnimationRunning) {
@@ -147,7 +146,7 @@ internal class ContentInViewNode(
         // Don't care if the viewport grew.
         if (size >= previousViewportSize) return
 
-        if (DEBUG) println("[$TAG] viewport shrunk: $previousViewportSize -> $size")
+
 
         // reverseDirection and reverseScroll are not the same concepts. They are often opposite of
         // each other (except rtl horizontal reverse scrolling). Therefore while adjusting the
@@ -165,7 +164,7 @@ internal class ContentInViewNode(
             }
 
         getFocusedRect()?.let { focusedChildBounds ->
-            if (DEBUG) println("[$TAG] focused child bounds: $focusedChildBounds")
+
             if (
                 !isAnimationRunning &&
                     !trackingFocusedChild &&
@@ -185,10 +184,6 @@ internal class ContentInViewNode(
                         containerOffset = viewportAdjustmentForReverseScroll
                     )
             ) {
-                if (DEBUG)
-                    println(
-                        "[$TAG] focused child was clipped by viewport shrink: $focusedChildBounds"
-                    )
                 trackingFocusedChild = true
                 launchAnimation(viewportAdjustmentForReverseScroll)
             }
@@ -201,7 +196,7 @@ internal class ContentInViewNode(
             "launchAnimation called when previous animation was running"
         }
 
-        if (DEBUG) println("[$TAG] launchAnimation")
+
         val animationState = UpdatableAnimationState(requireBringIntoViewSpec().scrollAnimationSpec)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
             var cancellationException: CancellationException? = null
@@ -212,10 +207,6 @@ internal class ContentInViewNode(
                 scrollingLogic.scroll(scrollPriority = MutatePriority.Default) {
                     animationState.value =
                         calculateScrollDelta(bringIntoViewSpec, viewportAdjustmentForReverseScroll)
-                    if (DEBUG)
-                        println(
-                            "[$TAG] Starting scroll animation down from ${animationState.value}…"
-                        )
                     animationState.animateToZero(
                         // This lambda will be invoked on every frame, during the choreographer
                         // callback.
@@ -225,12 +216,6 @@ internal class ContentInViewNode(
                             // TODO(427897566): The above heuristic may not always be true.
                             val scrollMultiplier = if (reverseDirection) 1f else -1f
                             val adjustedDelta = scrollMultiplier * delta
-                            if (DEBUG)
-                                println(
-                                    "[$TAG] Scroll target changed by Δ$delta to " +
-                                        "${animationState.value}, scrolling by $adjustedDelta " +
-                                        "(reverseDirection=$reverseDirection)"
-                                )
                             val consumedScroll =
                                 with(scrollingLogic) {
                                     scrollMultiplier *
@@ -241,7 +226,7 @@ internal class ContentInViewNode(
                                             .reverseIfNeeded()
                                             .toFloat()
                                 }
-                            if (DEBUG) println("[$TAG] Consumed $consumedScroll of scroll")
+
                             if (consumedScroll.absoluteValue < delta.absoluteValue) {
                                 // If the scroll state didn't consume all the scroll on this frame,
                                 // it probably won't consume any more later either (we might have
@@ -261,7 +246,7 @@ internal class ContentInViewNode(
                         // passes for the frame. This means that the scroll performed in the above
                         // lambda will have been applied to the layout nodes.
                         afterFrame = {
-                            if (DEBUG) println("[$TAG] afterFrame")
+
 
                             // Complete any BIV requests that were satisfied by this scroll
                             // adjustment.
@@ -269,17 +254,12 @@ internal class ContentInViewNode(
                                 // If a request is no longer attached, remove it.
                                 if (bounds == null) return@resumeAndRemoveWhile true
                                 bounds.isMaxVisible().also { visible ->
-                                    if (DEBUG && visible) {
-                                        println("[$TAG] Completed BIV request with bounds $bounds")
-                                    }
                                 }
                             }
 
                             // Stop tracking any KIV requests that were satisfied by this scroll
                             // adjustment.
                             if (trackingFocusedChild && getFocusedRect()?.isMaxVisible() == true) {
-                                if (DEBUG)
-                                    println("[$TAG] Completed tracking focused child request")
                                 trackingFocusedChild = false
                             }
 
@@ -287,8 +267,6 @@ internal class ContentInViewNode(
                             // replacements, or added/removed requests since the last frame.
                             animationState.value =
                                 calculateScrollDelta(bringIntoViewSpec, IntOffset.Zero)
-                            if (DEBUG)
-                                println("[$TAG] scroll target after frame: ${animationState.value}")
                         },
                     )
                 }
@@ -296,23 +274,11 @@ internal class ContentInViewNode(
                 // Complete any BIV requests if the animation didn't need to run, or if there were
                 // requests that were too large to satisfy. Note that if the animation was
                 // cancelled, this won't run, and the requests will be cancelled instead.
-                if (DEBUG)
-                    println(
-                        "[$TAG] animation completed successfully, resuming" +
-                            " ${bringIntoViewRequests.size} remaining BIV requests…"
-                    )
                 bringIntoViewRequests.resumeAndRemoveAll()
             } catch (e: CancellationException) {
                 cancellationException = e
                 throw e
             } finally {
-                if (DEBUG) {
-                    println(
-                        "[$TAG] animation completed with ${bringIntoViewRequests.size} " +
-                            "unsatisfied BIV requests"
-                    )
-                    cancellationException?.printStackTrace()
-                }
                 isAnimationRunning = false
                 // Any BIV requests that were not completed should be considered cancelled.
                 bringIntoViewRequests.cancelAndRemoveAll(cancellationException)
