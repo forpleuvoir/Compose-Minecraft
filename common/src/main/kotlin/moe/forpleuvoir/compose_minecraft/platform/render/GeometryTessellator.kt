@@ -27,9 +27,11 @@ import kotlin.math.sqrt
 // - **有符号屏幕像素距离**:到「最近真实轮廓边」的带符号距离(× Sink.aaScale,
 //   其中 aaScale = 矩阵最大轴缩放 × guiScale,即局部坐标 → 物理像素);
 //   轮廓外侧为负、真实轮廓上为 0、轮廓内侧为正;
-// - 过渡带:着色器 smoothstep(-1.0·fwidth(d), 1.0·fwidth(d), d),恒约 2 物理
-//   像素(跨真实轮廓两侧),几何外扩/内缩深度取 1.5px(fwidth 在 45°
-//   斜边处最大为 √2 ≈ 1.41,1.5px 深度保证任意斜角下边缘 alpha 归零);
+// - 过渡带:固定 smoothstep(-1.0, 1.0, d)(fill 与 stroke 分属两个 shader,
+//   gui_triangles / gui_triangles_stroke),恒约 2 物理像素(跨真实轮廓两侧);
+//   几何外扩/内缩深度取 1.5px(> fwidth 最大值 √2,任意斜角下边缘 alpha 归零);
+//   不能用 fwidth:描边是分段三角形,GPU fwidth 在三角形边界(coverage 场跳变)
+//   测大梯度 → 带内半透明/边缘断点(实测回退);
 // - **距离场连续性铁律**:任何顶点 coverage 必须是「到轮廓的近似距离」
 //   (梯度 ≈ 1,fwidth ≈ 1,过渡带处处等宽且垂直轮廓);OPAQUE 大数只允许
 //   用于距轮廓 ≥ 1.5px 的纯内部三角形(quad 等无轮廓图元)。
@@ -723,9 +725,11 @@ internal object GeometryTessellator {
         if (strokeWidth <= 0f) 1f else strokeWidth
 
     /**
-     * 带发射器:中心线点对序列 → 带四边形 + 双侧 fringe。
-     * 带四边形 coverage:外轮廓边 0、内轮廓边 0、带内 = 到对侧轮廓边的垂直
-     * 距离(真距离近似,梯度 ≈ 1);外 fringe 0 → -1、内 fringe 0 → +1。
+     * 带发射器:中心线点对序列 → 带内 4 三角形 + 双侧 fringe。
+     * 带内剖分按段两端中心线点是否同一顶点:边带用中心线点(cA/cB,段边界
+     * coverage 场连续无分段线)、join 弧段用段中心(弧段对称时 = 顶点 V,不
+     * 退化无缝隙);coverage 轮廓边 0、中心 +h;外 fringe 0 → -1.5(带外渐隐)、
+     * 内 fringe 0 → -1.5(圆孔方向渐隐,方向与符号必须与 coverage 语义一致)。
      */
     private class StrokeEmitter(val sink: Sink, val h: Float, val w: Float) {
         private var prevOx = 0f
