@@ -77,7 +77,7 @@ import androidx.compose.ui.platform.PlatformWindowInsetsProviderNode
 import androidx.compose.ui.platform.createPlatformClipboard
 import androidx.compose.ui.platform.createPlatformClipboardManager
 import androidx.compose.ui.platform.setLightingInfo
-import moe.forpleuvoir.compose_minecraft.minecraft.MinecraftGraphicsContext
+import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftGraphicsContext
 import androidx.compose.ui.scene.ComposeScene
 import androidx.compose.ui.scene.ComposeSceneInputHandler
 import androidx.compose.ui.scene.ComposeScenePointer

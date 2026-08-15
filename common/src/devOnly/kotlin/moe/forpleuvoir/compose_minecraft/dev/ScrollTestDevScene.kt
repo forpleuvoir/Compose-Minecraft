@@ -1,4 +1,4 @@
-package moe.forpleuvoir.compose_minecraft.minecraft
+package moe.forpleuvoir.compose_minecraft.dev
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -14,6 +14,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.ui.McText
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 /**
  * 滚动专项测试页(独立 ComposeScreen,由总菜单按钮打开)。

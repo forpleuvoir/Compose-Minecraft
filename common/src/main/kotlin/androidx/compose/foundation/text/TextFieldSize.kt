@@ -23,7 +23,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntSize
 import kotlin.math.roundToInt
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 import net.minecraft.client.Minecraft
 
 // ─────────────────────────────────────────────────────────────────────────────

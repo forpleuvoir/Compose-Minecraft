@@ -1,4 +1,4 @@
-package moe.forpleuvoir.compose_minecraft.minecraft
+package moe.forpleuvoir.compose_minecraft.dev
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -11,6 +11,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.ui.McText
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 /**
  * 开发环境总菜单(dev scene 主界面):

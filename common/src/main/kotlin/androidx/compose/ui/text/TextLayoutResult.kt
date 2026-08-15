@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 /** The data class which holds the set of parameters of the text layout computation. */
 class TextLayoutInput

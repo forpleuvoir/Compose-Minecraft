@@ -98,7 +98,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 private object BasicTextFieldDefaults {
     val CursorBrush = SolidColor(Color.Black)

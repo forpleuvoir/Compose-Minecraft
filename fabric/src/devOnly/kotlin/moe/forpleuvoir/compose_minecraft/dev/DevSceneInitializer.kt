@@ -1,14 +1,21 @@
-package moe.forpleuvoir.compose_minecraft.minecraft
+package moe.forpleuvoir.compose_minecraft.dev
 
+import com.mojang.blaze3d.platform.InputConstants
+import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.MinecraftInitializer
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper
+import net.minecraft.client.KeyMapping
 import kotlin.concurrent.thread
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.TitleScreen
+import net.minecraft.resources.Identifier
 import org.slf4j.LoggerFactory
 
 /**
  * devOnly 开发验证 Scene 初始化(参考 ibuki_gourd 的 devOnly 模式)。
  *
- * 通过 `META-INF/services/moe.forpleuvoir.compose_minecraft.minecraft.MinecraftInitializer`
+ * 通过 `META-INF/services/moe.forpleuvoir.compose_minecraft.MinecraftInitializer`
  * 注册;本类位于 common 的 devOnly source set,只出现在 dev run classpath,
  * 发布 jar 不包含。
  *
@@ -22,6 +29,22 @@ import org.slf4j.LoggerFactory
 class DevSceneInitializer : MinecraftInitializer {
 
     override fun init() {
+        val category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("compose_minecraft", "dev"))
+
+        val key = KeyMappingHelper.registerKeyMapping(
+            KeyMapping(
+                "key.compose_minecraft.test",
+                InputConstants.Type.KEYSYM,
+                InputConstants.KEY_NUMPAD1,
+                category
+            )
+        )
+        ClientTickEvents.END_CLIENT_TICK.register {
+            while (key.consumeClick()) {
+                it.gui.setScreen(ComposeScreen { MinecraftDevSceneContent() })
+            }
+        }
+
         LOGGER.info("[dev] DevSceneInitializer loaded, waiting for Minecraft client...")
         thread(name = "Compose-Minecraft-DevScene", isDaemon = true) {
             while (true) {
@@ -35,12 +58,7 @@ class DevSceneInitializer : MinecraftInitializer {
                             mc.gui.setScreen(ComposeScreen { MinecraftDevSceneContent() })
                         }
                     }
-                    // 等待 ComposeScreen 关闭(退回标题界面),再回到外层循环重新武装
-                    while (true) {
-                        val screen = runCatching { mc.gui.screen() }.getOrNull()
-                        if (screen == null || screen !is ComposeScreen) break
-                        Thread.sleep(100)
-                    }
+                    break
                 }
                 Thread.sleep(100)
             }

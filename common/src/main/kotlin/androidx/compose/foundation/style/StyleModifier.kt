@@ -78,7 +78,7 @@ import androidx.compose.ui.util.fastCoerceAtLeast
 import androidx.compose.ui.util.fastCoerceIn
 import androidx.compose.ui.util.fastRoundToInt
 import kotlin.math.max
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 

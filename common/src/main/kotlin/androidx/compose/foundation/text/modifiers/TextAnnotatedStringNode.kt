@@ -63,7 +63,7 @@ import androidx.compose.ui.unit.Constraints.Companion.fitPrioritizingWidth
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.util.fastRoundToInt
 import androidx.compose.ui.util.trace
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 /** Node that implements Text for [AnnotatedString] or [onTextLayout] parameters. */
 internal class TextAnnotatedStringNode(

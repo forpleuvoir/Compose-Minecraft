@@ -23,7 +23,7 @@ import androidx.compose.ui.graphics.colorspace.ColorSpace
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin

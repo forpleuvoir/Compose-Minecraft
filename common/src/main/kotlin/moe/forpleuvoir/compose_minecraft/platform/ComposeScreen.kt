@@ -1,4 +1,4 @@
-package moe.forpleuvoir.compose_minecraft.minecraft
+package moe.forpleuvoir.compose_minecraft.platform
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.InternalComposeUiApi

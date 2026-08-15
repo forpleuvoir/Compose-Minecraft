@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.constrain
 import kotlin.jvm.JvmInline
 import kotlin.math.min
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 /**
  * Performs text layout using [Paragraph].

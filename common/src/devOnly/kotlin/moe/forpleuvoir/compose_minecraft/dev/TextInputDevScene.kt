@@ -1,4 +1,4 @@
-package moe.forpleuvoir.compose_minecraft.minecraft
+package moe.forpleuvoir.compose_minecraft.dev
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -19,6 +20,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
+import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.ui.LocalCharFilter
+import moe.forpleuvoir.compose_minecraft.platform.ui.McText
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 /**
  * 文本输入测试屏幕(独立 ComposeScreen,由总菜单按钮打开)。
@@ -60,7 +65,7 @@ fun TextInputDevScene() {
             )
             McText(
                 "直接键入(英文/中文输入法上屏);退格/方向键/Home/End/Delete;\n" +
-                    "Shift+方向键选区;Ctrl+C/V/X 剪贴板;输入超出宽度时水平滚动",
+                        "Shift+方向键选区;Ctrl+C/V/X 剪贴板;输入超出宽度时水平滚动",
                 style = McTextStyle(color = Color(0xFFB0BEC5)),
             )
 
@@ -75,7 +80,7 @@ fun TextInputDevScene() {
                         .background(Color(0xFF263238)),
                 textStyle = McTextStyle(color = Color.White),
                 cursorBrush = SolidColor(Color.White),
-                lineLimits = androidx.compose.foundation.text.input.TextFieldLineLimits.SingleLine,
+                lineLimits = TextFieldLineLimits.SingleLine,
             )
             McText(
                 "text = ${textFieldState.text.toString().ifEmpty { "(empty)" }}",

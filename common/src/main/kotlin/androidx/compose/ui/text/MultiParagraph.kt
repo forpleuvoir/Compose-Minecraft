@@ -41,7 +41,7 @@ import androidx.compose.ui.util.fastFlatMap
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastJoinToString
 import androidx.compose.ui.util.fastMap
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 /**
  * Lays out and renders multiple paragraphs at once. Unlike [Paragraph], supports multiple

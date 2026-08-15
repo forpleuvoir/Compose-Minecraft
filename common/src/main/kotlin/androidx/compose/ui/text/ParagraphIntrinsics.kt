@@ -21,7 +21,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.text.platform.ActualParagraphIntrinsics
 import androidx.compose.ui.unit.Density
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 /** Calculates and presents the intrinsic width and height of text. */
 interface ParagraphIntrinsics {

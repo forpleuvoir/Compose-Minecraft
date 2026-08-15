@@ -1,4 +1,4 @@
-package moe.forpleuvoir.compose_minecraft.minecraft
+package moe.forpleuvoir.compose_minecraft.dev
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -21,6 +21,8 @@ import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import moe.forpleuvoir.compose_minecraft.platform.ui.McText
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 /**
  * 图形(几何)绘制验证屏幕:验证 CPU 三角化回放到 GuiRenderState 的

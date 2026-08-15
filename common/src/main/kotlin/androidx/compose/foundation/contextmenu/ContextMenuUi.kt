@@ -50,8 +50,8 @@ import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
-import moe.forpleuvoir.compose_minecraft.minecraft.McText
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McText
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 /**
  * Layout constants from the [Material 3 Menu Spec](https://m3.material.io/components/menus/specs).

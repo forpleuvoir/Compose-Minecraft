@@ -58,7 +58,7 @@ import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastMapIndexedNotNull
 import androidx.compose.ui.util.fastRoundToInt
 import kotlin.math.floor
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 /**
  * Basic element that displays text and provides semantics / accessibility information. Typically

@@ -1,6 +1,6 @@
 package moe.forpleuvoir.compose_minecraft
 
-import moe.forpleuvoir.compose_minecraft.minecraft.MinecraftClientSetup
+import moe.forpleuvoir.compose_minecraft.MinecraftClientSetup
 import net.fabricmc.api.ClientModInitializer
 
 /**

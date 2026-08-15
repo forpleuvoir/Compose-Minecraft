@@ -61,7 +61,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import kotlin.jvm.JvmField
 import kotlin.math.ceil
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 /**
  * This class is currently the actual object that [Style] lambdas get executed with, so this is the

@@ -53,7 +53,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import kotlin.jvm.JvmStatic
 import kotlin.math.max
 import kotlin.math.min
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 // visible for testing
 internal const val DefaultWidthCharCount = 10 // min width for TextField is 10 chars long

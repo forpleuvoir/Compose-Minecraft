@@ -1,4 +1,4 @@
-package moe.forpleuvoir.compose_minecraft.minecraft
+package moe.forpleuvoir.compose_minecraft.platform.render
 
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color

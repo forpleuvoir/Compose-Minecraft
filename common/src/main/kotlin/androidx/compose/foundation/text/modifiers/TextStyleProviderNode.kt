@@ -22,7 +22,7 @@ import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.TraversableNode
 import androidx.compose.ui.node.traverseAncestors
 import kotlin.jvm.JvmInline
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 /**
  * Compose phase that is requesting the inherited [McTextStyle]. In the [Layout] phase, only

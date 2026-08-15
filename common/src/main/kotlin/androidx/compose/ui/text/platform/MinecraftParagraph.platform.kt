@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import kotlin.math.ceil
 import kotlin.math.roundToInt
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.Font as MinecraftFont
 

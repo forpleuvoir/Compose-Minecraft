@@ -39,7 +39,7 @@ import androidx.compose.ui.text.style.modulate
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.util.fastRoundToInt
 import kotlin.math.ceil
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 object TextPainter {
 

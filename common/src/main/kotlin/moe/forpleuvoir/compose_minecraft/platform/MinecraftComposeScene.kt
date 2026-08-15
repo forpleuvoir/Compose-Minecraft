@@ -1,4 +1,4 @@
-package moe.forpleuvoir.compose_minecraft.minecraft
+package moe.forpleuvoir.compose_minecraft.platform
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.InternalComposeUiApi
@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
+import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderContext
+import moe.forpleuvoir.compose_minecraft.platform.ui.LocalCharFilter
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.state.gui.GuiRenderState
 

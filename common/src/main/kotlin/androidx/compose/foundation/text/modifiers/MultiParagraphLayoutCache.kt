@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.constrain
 import androidx.compose.ui.unit.isUnspecified
 import androidx.compose.ui.unit.sp
 import kotlin.math.min
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 /**
  * Performs text layout using [MultiParagraph].

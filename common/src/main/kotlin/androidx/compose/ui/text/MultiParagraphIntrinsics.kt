@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastFilteredMap
 import androidx.compose.ui.util.fastMaxBy
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.McTextStyle
 
 /**
  * Calculates and provides the intrinsic width and height of text that contains [ParagraphStyle].
