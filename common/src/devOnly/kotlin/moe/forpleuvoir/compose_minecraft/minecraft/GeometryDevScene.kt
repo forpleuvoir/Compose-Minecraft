@@ -101,9 +101,9 @@ fun GeometryDevScene() {
                     color = Color(0xFFD81B60), startAngle = -60f, sweepAngle = 90f, useCenter = false,
                     topLeft = Offset(230f, 10f), size = Size(90f, 90f),
                 )
-                // 边界:近全圆扇形(359°,几乎闭合)
+                // 边界:大开口扇形(60° 缺口,径向边斜率大、阶梯短)
                 drawArc(
-                    color = Color(0xFF7E57C2), startAngle = 10f, sweepAngle = 359f, useCenter = true,
+                    color = Color(0xFF7E57C2), startAngle = 30f, sweepAngle = 300f, useCenter = true,
                     topLeft = Offset(340f, 10f), size = Size(90f, 90f),
                 )
                 // 边界:极小弧(15°)

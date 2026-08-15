@@ -1553,9 +1553,8 @@ internal object GeometryTessellator {
     }
 
     /**
-     * 圆/椭圆细分段数(Skia 式偏差驱动):弦的弓高(到真实弧的偏差)≤ 0.25 物理像素。
-     * 弓高 ≈ c²/8R → c = √(8R·tol/aaScale),段数 = 2πR/c,与缩放无关。
+     * 圆/椭圆细分段数:每段弦长约 0.5 屏幕像素(弧轮廓折线角彻底不可见)。
      */
     private fun circleSegments(radius: Float, aaScale: Float): Int =
-        max(16, (2.0 * PI * sqrt(radius * aaScale / 2.0)).roundToInt())
+        max(96, (2.0 * PI * radius * aaScale * 2.0).roundToInt())
 }

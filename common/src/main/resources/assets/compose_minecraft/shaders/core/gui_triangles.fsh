@@ -45,11 +45,11 @@ void main() {
     fragColor = vec4(debugValue, debugValue, debugValue, 1.0);
     return;
     #endif
-    // 有符号距离 → 覆盖率:轮廓上 0.5,内侧(≥1px) 1,外侧(≤-1px) 0。
-    // 过渡带 smoothstep(-aa, aa, d):±1px 物理宽度 —— 过窄(±0.5px)时
-    // 像素 alpha 只呈现 0/0.5/1 三档,斜边呈"三层阶梯"状锯齿。
+    // 有符号距离 → 覆盖率:轮廓上 0.5,内侧(≥1.5px) 1,外侧(≤-1.5px) 0。
+    // 过渡带 smoothstep(-1.5aa, 1.5aa, d):±1.5px —— 比 ±1px(三档
+    // 阶梯明显)更柔,比 ±2px(发糊)更锐的折中。
     float aa = max(fwidth(edgeCoverage), 0.0001);
-    float coverage = smoothstep(-aa, aa, edgeCoverage);
+    float coverage = smoothstep(-1.5 * aa, 1.5 * aa, edgeCoverage);
     color.a *= coverage;
     if (color.a == 0.0) {
         discard;
