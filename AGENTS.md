@@ -83,9 +83,29 @@ gradlew buildAllModJar
    `clickable` 自带焦点目标,不要与 `focusable` 叠加(会造成 Tab 循环);
    `onKeyEvent` 不要无条件消费导航键(Tab/方向键),否则焦点导航失效。
 
+## 移植源码维护经验(与调试)
+
+- **对照官方源码**:`androidx/compose/**` 是 CMP 1.11 移植源码,官方 sources jar 在本地
+  Gradle 缓存中(foundation-desktop / ui-text-desktop 等)。改动前先对照官方实现,
+  避免引入与官方语义不符的自研逻辑。
+- **警惕占位实现**:移植中常见 `= this` / `= null` / `= false` / `map` 恒返回 `null`
+  等占位(expect/actual 剥离后未补全)。"某功能完全失效/行为怪异"时优先排查这类占位。
+- **只替换渲染,不动行为**:平台适配点只替换"实际绘制到 MC GuiRenderState"的部分;
+  滚动/光标/选区/输入等行为逻辑保持 Compose 原版。自研行为逻辑(额外截断、偏移、截取)
+  易破坏多行与滚动场景。
+- **文本行边界语义**:行尾为 exclusive end(含 `\n`),行归属用半开区间 `[start, end)`;
+  选区、光标、命中测试的行换算均依赖此语义,改动需保持一致。
+- **运行时诊断**:静态分析到极限时,在关键路径加 `println`(输出到 MC 客户端日志
+  `fabric/runs/client/logs/latest.log`);用 `System.identityHashCode` 区分同类的多个
+  节点实例;定位后移除日志再提交。
+- **输入桥接**:MC `KeyEvent.modifiers` 为位标志(Control=2 / Shift=1 / Alt=4,
+  见 `InputWithModifiers`),键码为 GLFW 值(经 `InputConstants` 抽象),Compose `Key`
+  为 AWT VK 编码;桥接层只做映射,不直接绑定 LWJGL/AWT 类型。
+
 ## 已知限制
 
-- 文本输入(charTyped/IME)未接通,`BasicTextField` 源码存在但链路未通;
+- 文本输入:charTyped 已接通(经 typed KeyEvent 转发);IME 候选窗口由系统输入法负责,
+  组合态提示(preedit)未实现;
 - Popup 部分可用(foundation 依赖),Dialog 未移植;
 - 剪贴板 / 指针图标为占位实现;
 - 平台未配置 maven 发布,消费者直接依赖发布 JAR。
