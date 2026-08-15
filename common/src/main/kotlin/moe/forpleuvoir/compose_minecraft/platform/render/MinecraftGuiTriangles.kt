@@ -47,14 +47,15 @@ internal object MinecraftGuiTriangles {
     private val LOGGER: Logger = LogUtils.getLogger()
 
     /**
-     * 自定义三角形 pipeline:与 GUI 相同的渲染语义(纯色、TRANSLUCENT alpha
-     * 混合、DynamicTransforms/Projection 绑定),拓扑为 [PrimitiveTopology.TRIANGLES],
+     * 自定义三角形 pipeline(填充):与 GUI 相同的渲染语义(纯色、TRANSLUCENT
+     * alpha 混合、DynamicTransforms/Projection 绑定),拓扑为 [PrimitiveTopology.TRIANGLES],
      * shader 为自写的 core/gui_triangles。
      *
      * 顶点格式 POSITION_COLOR_LINE_WIDTH:LineWidth 属性承载「到最近真实轮廓的
      * 有符号屏幕像素距离」(coverage:外侧负、轮廓 0、内侧正),片元着色器
      * 用 smoothstep(-1.0·fwidth(d), 1.0·fwidth(d), d) 做边缘抗锯齿,过渡带
-     * 恒约为 2 物理像素(跨轮廓两侧各 ±1px,与几何外扩/内缩深度 1px 匹配)。
+     * 恒约 2 物理像素;几何外扩/内缩深度 1.5px(> fwidth 最大 √2,任意斜角
+     * 下边缘 alpha 归零,无残留细线)。
      * 不注册进 RenderPipelines(neoForm 下 register 不可访问,渲染时
      * GuiRenderer 直接使用对象本身,无需注册表)。
      */
@@ -71,6 +72,25 @@ internal object MinecraftGuiTriangles {
             .build()
     }
 
+    /**
+     * 描边专用 pipeline:顶点格式与绑定同 [pipeline],shader 为
+     * core/gui_triangles_stroke —— 片元 AA 用**固定过渡**
+     * smoothstep(-1.0, 1.0, d)(不依赖 fwidth),消除描边近似距离场在
+     * 三角形拼接处的 fwidth 噪声(单像素毛刺)。
+     */
+    val strokePipeline: RenderPipeline by lazy {
+        RenderPipeline.builder()
+            .withLocation(Identifier.fromNamespaceAndPath("compose_minecraft", "pipeline/gui_triangles_stroke"))
+            .withVertexShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles_stroke"))
+            .withFragmentShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles_stroke"))
+            .withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
+            .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
+            .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR_LINE_WIDTH)
+            .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
+            .withCull(false)
+            .build()
+    }
+
     @Volatile
     private var compiled = false
 
@@ -78,6 +98,7 @@ internal object MinecraftGuiTriangles {
      * 确保 pipeline 的 shader 已编译(幂等,只编译一次)。
      * 必须在主线程、渲染上下文活跃时调用(与 GameRenderer.preloadUiShader 相同约束),
      * 本平台由 [MinecraftRenderContext] 首次遇到几何命令时触发。
+     * 填充与描边两个 pipeline 同时编译(懒加载对象 + precompile)。
      */
     fun ensureCompiled() {
         if (compiled) return
@@ -93,6 +114,7 @@ internal object MinecraftGuiTriangles {
             }
         }
         device.precompilePipeline(pipeline, shaderSource)
+        device.precompilePipeline(strokePipeline, shaderSource)
         compiled = true
     }
 }
@@ -106,8 +128,8 @@ internal object MinecraftGuiTriangles {
  * - 颜色:统一 0xAARRGGBB(三角化器已把 Compose Color 与 Paint.alpha 折算好);
  * - coverage:与顶点一一对应的「到最近真实轮廓的有符号屏幕像素距离」
  *   (LineWidth 属性槽):外侧为负、轮廓上为 0、内侧为正;内部实心三角形为大数;
- *   片元着色器 smoothstep(-1.0·fwidth(d), 1.0·fwidth(d), d) 做约 2 物理像素的
- *   边缘抗锯齿过渡;
+ * - [stroke] = true 走描边专用 pipeline(gui_triangles_stroke,固定过渡无
+ *   fwidth 噪声),false 走填充 pipeline(gui_triangles,fwidth smoothstep);
  * - bounds:局部包围盒经 pose 变换后与 scissor 求交 —— 供 GuiRenderer 的
  *   层级归并(findAppropriateNode)使用,非 null 是元素被接受的前提。
  */
@@ -117,11 +139,13 @@ internal class GuiTriangleRenderState(
     val scissor: ScreenRectangle?,
     /** 交错 [x, y, coverage] 平铺,每 3 个顶点一个三角形 */
     val vertices: FloatArray,
+    val stroke: Boolean = false,
 ) : GuiElementRenderState {
 
     private val elementBounds: ScreenRectangle = computeBounds(pose, scissor, vertices)
 
-    override fun pipeline(): RenderPipeline = MinecraftGuiTriangles.pipeline
+    override fun pipeline(): RenderPipeline =
+        if (stroke) MinecraftGuiTriangles.strokePipeline else MinecraftGuiTriangles.pipeline
 
     override fun textureSetup(): TextureSetup = TextureSetup.noTexture()
 

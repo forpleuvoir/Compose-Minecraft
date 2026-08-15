@@ -28,7 +28,8 @@ import kotlin.math.sqrt
 //   其中 aaScale = 矩阵最大轴缩放 × guiScale,即局部坐标 → 物理像素);
 //   轮廓外侧为负、真实轮廓上为 0、轮廓内侧为正;
 // - 过渡带:着色器 smoothstep(-1.0·fwidth(d), 1.0·fwidth(d), d),恒约 2 物理
-//   像素(跨真实轮廓两侧 ±1px),与几何外扩/内缩深度 1px 精确匹配;
+//   像素(跨真实轮廓两侧),几何外扩/内缩深度取 1.5px(fwidth 在 45°
+//   斜边处最大为 √2 ≈ 1.41,1.5px 深度保证任意斜角下边缘 alpha 归零);
 // - **距离场连续性铁律**:任何顶点 coverage 必须是「到轮廓的近似距离」
 //   (梯度 ≈ 1,fwidth ≈ 1,过渡带处处等宽且垂直轮廓);OPAQUE 大数只允许
 //   用于距轮廓 ≥ 1.5px 的纯内部三角形(quad 等无轮廓图元)。
@@ -42,9 +43,9 @@ import kotlin.math.sqrt
 //      **无角帽三角形**,外部楔形被膨胀轮廓自然覆盖;
 //   2. 内缩带:真实轮廓(0)→ miter 收缩轮廓(+1),同理自闭合;
 //   3. 内部填充:收缩轮廓内部凸 → 形心扇形 / 凹 → 耳切,顶点 coverage =
-//      到原始轮廓的真距离(≥ 1px,与内缩带 +1 同处饱和区,无缝);
+//      到原始轮廓的真距离(≥ 1.5px,与内缩带 +1.5 同处饱和区,无缝);
 // - 描边 = 带展开:每段带四边形 coverage 用「到对侧轮廓边的垂直距离」
-//   (真距离近似),外/内轮廓边各带 1px fringe;圆 join 两侧(外凸弧 + 内凹弧)
+//   (真距离近似),外/内轮廓边各带 1.5px fringe;圆 join 两侧(外凸弧 + 内凹弧)
 //   均细分发射,闭合路径首尾 join 由顶点环自然闭合;
 // - 自交路径:交点切分 → EvenOdd 子环,每个子环独立三环填充;
 //   切分失败兜底只画外扩带(不输出错误三角形);
@@ -359,31 +360,31 @@ internal object GeometryTessellator {
             return
         }
 
-        val w = 1f / sink.aaScale
+        val w = 1.5f / sink.aaScale
         val outer = offsetPolygon(pts, n, w, orientation)
         val inner = offsetPolygon(pts, n, -w, orientation)
 
-        // 1. 外扩带:轮廓 0 → 膨胀轮廓 -1(每边 2 三角形,自闭合无角帽)
+        // 1. 外扩带:轮廓 0 → 膨胀轮廓 -1.5(每边 2 三角形,自闭合无角帽)
         for (i in 0 until n) {
             val j = (i + 1) % n
             val ax = pts[i * 2]; val ay = pts[i * 2 + 1]
             val bx = pts[j * 2]; val by = pts[j * 2 + 1]
             val ox = outer[i * 2]; val oy = outer[i * 2 + 1]
             val px = outer[j * 2]; val py = outer[j * 2 + 1]
-            sink.triangle(ax, ay, 0f, bx, by, 0f, px, py, -1f)
-            sink.triangle(ax, ay, 0f, px, py, -1f, ox, oy, -1f)
+            sink.triangle(ax, ay, 0f, bx, by, 0f, px, py, -1.5f)
+            sink.triangle(ax, ay, 0f, px, py, -1.5f, ox, oy, -1.5f)
         }
-        // 2. 内缩带:轮廓 0 → 收缩轮廓 +1(饱和区,与内部填充无缝)
+        // 2. 内缩带:轮廓 0 → 收缩轮廓 +1.5(饱和区,与内部填充无缝)
         for (i in 0 until n) {
             val j = (i + 1) % n
             val ax = pts[i * 2]; val ay = pts[i * 2 + 1]
             val bx = pts[j * 2]; val by = pts[j * 2 + 1]
             val ix = inner[i * 2]; val iy = inner[i * 2 + 1]
             val qx = inner[j * 2]; val qy = inner[j * 2 + 1]
-            sink.triangle(ax, ay, 0f, bx, by, 0f, qx, qy, 1f)
-            sink.triangle(ax, ay, 0f, qx, qy, 1f, ix, iy, 1f)
+            sink.triangle(ax, ay, 0f, bx, by, 0f, qx, qy, 1.5f)
+            sink.triangle(ax, ay, 0f, qx, qy, 1.5f, ix, iy, 1.5f)
         }
-        // 3. 内部填充:收缩轮廓内 fan / 耳切,coverage = 到原始轮廓真距离(≥ 1px,饱和)
+        // 3. 内部填充:收缩轮廓内 fan / 耳切,coverage = 到原始轮廓真距离(≥ 1.5px,饱和)
         fillInner(inner, n, pts, n, sink)
     }
 
@@ -427,7 +428,7 @@ internal object GeometryTessellator {
         }
     }
 
-    /** 内缩轮廓(凹)耳切填充:顶点 coverage = 到原始轮廓真距离(≥ 1px 饱和,无视觉兜底垃圾) */
+    /** 内缩轮廓(凹)耳切填充:顶点 coverage = 到原始轮廓真距离(≥ 1.5px 饱和,无视觉兜底垃圾) */
     private fun earClipInner(inner: FloatArray, m: Int, orig: FloatArray, on: Int, sink: Sink) {
         val innerArea = signedArea2(inner, m)
         val orientation = if (innerArea >= 0f) 1 else -1
@@ -473,7 +474,7 @@ internal object GeometryTessellator {
             }
             i = next[i]
         }
-        // 收尾:剩余环兜底输出(coverage ≥ 1px 饱和,不产生垃圾视觉)
+        // 收尾:剩余环兜底输出(coverage ≥ 1.5px 饱和,不产生垃圾视觉)
         var idx = i
         var count = 0
         while (count < remaining - 2) {
@@ -545,7 +546,7 @@ internal object GeometryTessellator {
         // 子边访问标记:边 i 的子边 s = (hits[i][s], hits[i][s+1])
         val used = Array(n) { BooleanArray(hits[it].size - 1) }
 
-        val w = 1f / sink.aaScale
+        val w = 1.5f / sink.aaScale
         // 外扩带兜底(子环失败时使用)
         fun outerBandOnly() {
             val area2 = signedArea2(pts, n)
@@ -557,12 +558,12 @@ internal object GeometryTessellator {
                 sink.triangle(
                     pts[i * 2], pts[i * 2 + 1], 0f,
                     pts[j * 2], pts[j * 2 + 1], 0f,
-                    outer[j * 2], outer[j * 2 + 1], -1f,
+                    outer[j * 2], outer[j * 2 + 1], -1.5f,
                 )
                 sink.triangle(
                     pts[i * 2], pts[i * 2 + 1], 0f,
-                    outer[j * 2], outer[j * 2 + 1], -1f,
-                    outer[i * 2], outer[i * 2 + 1], -1f,
+                    outer[j * 2], outer[j * 2 + 1], -1.5f,
+                    outer[i * 2], outer[i * 2 + 1], -1.5f,
                 )
             }
         }
@@ -705,10 +706,14 @@ internal object GeometryTessellator {
         private var prevOy = 0f
         private var prevIx = 0f
         private var prevIy = 0f
+        private var prevCx = 0f
+        private var prevCy = 0f
         private var firstOx = 0f
         private var firstOy = 0f
         private var firstIx = 0f
         private var firstIy = 0f
+        private var firstCx = 0f
+        private var firstCy = 0f
         private var hasPrev = false
 
         fun reset() {
@@ -723,17 +728,19 @@ internal object GeometryTessellator {
             val iy = py - my * h
             if (!hasPrev) {
                 firstOx = ox; firstOy = oy; firstIx = ix; firstIy = iy
+                firstCx = px; firstCy = py
             } else {
-                emitSegment(prevOx, prevOy, prevIx, prevIy, ox, oy, ix, iy, mx, my)
+                emitSegment(prevOx, prevOy, prevIx, prevIy, ox, oy, ix, iy, mx, my, prevCx, prevCy, px, py)
             }
             prevOx = ox; prevOy = oy; prevIx = ix; prevIy = iy
+            prevCx = px; prevCy = py
             hasPrev = true
         }
 
         /** 闭合:最后一个点对 → 第一个点对之间的带段 */
         fun close() {
             if (hasPrev) {
-                emitSegment(prevOx, prevOy, prevIx, prevIy, firstOx, firstOy, firstIx, firstIy, 0f, 0f)
+                emitSegment(prevOx, prevOy, prevIx, prevIy, firstOx, firstOy, firstIx, firstIy, 0f, 0f, prevCx, prevCy, firstCx, firstCy)
             }
         }
 
@@ -745,25 +752,34 @@ internal object GeometryTessellator {
             return if (len > 1e-6f) (-dy / len) to (dx / len) else 1f to 0f
         }
 
-        /** 带段 (po→o 外轮廓, pi→i 内轮廓),[mx, my] 为段法线(闭合段为 0,0 时由边方向计算) */
+        /**
+         * 带段 (po→o 外轮廓, pi→i 内轮廓):**中心线点(cA/cB)剖分** ——
+         * 四条轮廓边全 0、中心线点 cA/cB 为 +h;相邻段共享中心线点
+         * (段 k 的 cB = 段 k+1 的 cA),coverage 场在段边界连续,
+         * **不产生分段线**(段中心剖分的 M 不同 → 段边界斜率不一致 →
+         * 每段一条可见线,已废弃)。
+         * [mx, my] 为段法线(闭合段为 0,0 时由边方向计算,仅 fringe 使用)。
+         */
         private fun emitSegment(
             poX: Float, poY: Float, piX: Float, piY: Float,
             oX: Float, oY: Float, iX: Float, iY: Float,
             mx: Float, my: Float,
+            cAX: Float, cAY: Float, cBX: Float, cBY: Float,
         ) {
-            val aaScale = sink.aaScale
-            // 带四边形:(po, o, i, pi):coverage 用「到对侧轮廓边垂直距离」近似
-            val d1 = distToLine(iX, iY, poX, poY, oX, oY) * aaScale
-            val d2 = distToLine(poX, poY, iX, iY, piX, piY) * aaScale
-            sink.triangle(poX, poY, 0f, oX, oY, 0f, iX, iY, d1)
-            sink.triangle(poX, poY, d2, iX, iY, 0f, piX, piY, 0f)
-            // 外 fringe(0 → -1):法线 = 段法线(闭合段为 0,0 时由外轮廓边方向计算)
+            val hc = h * sink.aaScale // 中心线 coverage = 半宽(屏幕像素)
+            // 带内 4 三角形:轮廓(0)→ 中心线(+h)
+            sink.triangle(poX, poY, 0f, oX, oY, 0f, cBX, cBY, hc)
+            sink.triangle(poX, poY, 0f, cBX, cBY, hc, cAX, cAY, hc)
+            sink.triangle(piX, piY, 0f, cAX, cAY, hc, cBX, cBY, hc)
+            sink.triangle(piX, piY, 0f, cBX, cBY, hc, iX, iY, 0f)
+            // 外 fringe(0 → -1.5):外轮廓外侧 1.5px 渐隐(任意斜角 fwidth≤1.41 下边缘归零)
             val (fx, fy) = if (mx != 0f || my != 0f) mx to my else closeNormal(oX, oY, poX, poY)
-            sink.triangle(poX, poY, 0f, oX, oY, 0f, oX + fx * w, oY + fy * w, -1f)
-            sink.triangle(poX, poY, 0f, oX + fx * w, oY + fy * w, -1f, poX + fx * w, poY + fy * w, -1f)
-            // 内 fringe(0 → +1)
-            sink.triangle(iX, iY, 0f, piX, piY, 0f, piX - fx * w, piY - fy * w, 1f)
-            sink.triangle(iX, iY, 0f, piX - fx * w, piY - fy * w, 1f, iX - fx * w, iY - fy * w, 1f)
+            sink.triangle(poX, poY, 0f, oX, oY, 0f, oX + fx * w, oY + fy * w, -1.5f)
+            sink.triangle(poX, poY, 0f, oX + fx * w, oY + fy * w, -1.5f, poX + fx * w, poY + fy * w, -1.5f)
+            // 内 fringe(0 → -1.5):内轮廓向带外(圆孔方向)渐隐 ——
+            // 方向与符号必须与 coverage 语义一致(带外为负),否则内圈实心/颜色加深
+            sink.triangle(iX, iY, 0f, piX, piY, 0f, iX - fx * w, iY - fy * w, -1.5f)
+            sink.triangle(iX, iY, 0f, iX - fx * w, iY - fy * w, -1.5f, piX - fx * w, piY - fy * w, -1.5f)
         }
     }
 
@@ -783,7 +799,7 @@ internal object GeometryTessellator {
         if (n < 2) return
         val h = effectiveWidth(strokeWidth) / 2f
         if (h <= 0f) return
-        val w = 1f / sink.aaScale
+        val w = 1.5f / sink.aaScale
         val aaScale = sink.aaScale
 
         // 单位边法线(数学左法线)
@@ -850,7 +866,7 @@ internal object GeometryTessellator {
      * [sign] = +1 首端(带外方向 = -边方向),-1 末端(+边方向)。
      */
     private fun roundCapEnd(px: Float, py: Float, nx: Float, ny: Float, sign: Int, h: Float, sink: Sink) {
-        val w = 1f / sink.aaScale
+        val w = 1.5f / sink.aaScale
         val aaScale = sink.aaScale
         // 带外方向 = sign × (-边方向);边方向 = (ny, -nx)(左法线反解)
         val dirX = -sign * ny
@@ -867,19 +883,28 @@ internal object GeometryTessellator {
             val ay = py + h * sin(t).toFloat()
             // 扇形(圆心 +h,弧 0):coverage = 带中心线距离场
             sink.triangle(px, py, h * aaScale, prevX, prevY, 0f, ax, ay, 0f)
-            // 弧段径向 fringe(0 → -1)
+            // 弧段径向 fringe(0 → -1.5)
             val rnx = (ax - px) / h
             val rny = (ay - py) / h
-            sink.triangle(prevX, prevY, 0f, ax, ay, 0f, ax + rnx * w, ay + rny * w, -1f)
-            sink.triangle(prevX, prevY, 0f, ax + rnx * w, ay + rny * w, -1f, prevX + rnx * w, prevY + rny * w, -1f)
+            sink.triangle(prevX, prevY, 0f, ax, ay, 0f, ax + rnx * w, ay + rny * w, -1.5f)
+            sink.triangle(prevX, prevY, 0f, ax + rnx * w, ay + rny * w, -1.5f, prevX + rnx * w, prevY + rny * w, -1.5f)
             prevX = ax
             prevY = ay
         }
     }
 
     /**
-     * butt 端帽:端边(端点处 ±n·h 连线)coverage 0,向带内 1px 梯形 +1;
+     * butt 端帽:端边(端点处 ±n·h 连线)coverage 0,向带内 1.5px 梯形 +1.5;
      * 端边外侧 fringe + 两端角帽(与带长边 fringe 衔接)。
+     * [sign] = +1 首端,-1 末端(带外方向)。
+     */
+    /**
+     * butt 端帽:端边(端点处 ±n·h 连线)本身就是带轮廓的一部分(带四边形在
+     * 端边 coverage = 0,向带内由带四边形自然渐显),因此只补:
+     * - 端边外侧 fringe(0 → -1.5):向带外 1.5px 渐隐;
+     * - 两端角帽:端边 fringe 与带长边 fringe 之间的外部楔形。
+     * (不得再加「端边向带内 1.5px 的梯形」—— 端边内侧已被带四边形覆盖,
+     * 梯形与之重叠会造成 alpha 叠加 → 端部黑色。)
      * [sign] = +1 首端,-1 末端(带外方向)。
      */
     private fun endCapButt(px: Float, py: Float, nx: Float, ny: Float, sign: Int, h: Float, w: Float, sink: Sink) {
@@ -889,18 +914,10 @@ internal object GeometryTessellator {
         val oy = py + ny * h
         val ix = px - nx * h
         val iy = py - ny * h
-        // 内缩边(向带内 1px)
-        val o2x = ox + dirX * w
-        val o2y = oy + dirY * w
-        val i2x = ix + dirX * w
-        val i2y = iy + dirY * w
-        // 梯形 (O, I, I', O'):端边 0 → 内缩边 +1
-        sink.triangle(ox, oy, 0f, ix, iy, 0f, i2x, i2y, 1f)
-        sink.triangle(ox, oy, 0f, i2x, i2y, 1f, o2x, o2y, 1f)
-        // 端边外侧 fringe(0 → -1)
-        sink.triangle(ox, oy, 0f, ix, iy, 0f, ix + dirX * w, iy + dirY * w, -1f)
-        sink.triangle(ox, oy, 0f, ix + dirX * w, iy + dirY * w, -1f, ox + dirX * w, oy + dirY * w, -1f)
-        // 角帽:端边端点与带长边 fringe 之间的外部楔形(0 → -1)
+        // 端边外侧 fringe(0 → -1.5)
+        sink.triangle(ox, oy, 0f, ix, iy, 0f, ix + dirX * w, iy + dirY * w, -1.5f)
+        sink.triangle(ox, oy, 0f, ix + dirX * w, iy + dirY * w, -1.5f, ox + dirX * w, oy + dirY * w, -1.5f)
+        // 角帽:端边端点与带长边 fringe 之间的外部楔形(0 → -1.5)
         cornerCap(ox, oy, nx, ny, dirX, dirY, w, sink)
         cornerCap(ix, iy, -nx, -ny, dirX, dirY, w, sink)
     }
