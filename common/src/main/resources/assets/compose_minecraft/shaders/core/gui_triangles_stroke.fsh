@@ -44,8 +44,11 @@ void main() {
         fragColor = vec4(debugValue, debugValue, debugValue, 1.0);
         return;
     }
-    // 固定过渡:轮廓上 0.5,内侧(≥1px) 1,外侧(≤-1px) 0;
-    // 过渡带恒 2 物理像素,与几何外扩/内缩深度 1.5px 兼容(边缘 alpha 归零)。
+    // 固定过渡:轮廓上 0.5,内侧(≥1px) 1,外侧(≤-1px) 0。
+    // 不能用 fwidth:描边是分段三角形,GPU 的 fwidth 在三角形边界(相邻像素
+    // 分属不同三角形、coverage 场跳变)测到巨大梯度 → 过渡带异常 → 带内
+    // 半透明(线框)+ 边缘断点。固定宽度过渡带稳定,仅对段边界 coverage
+    // 场的连续程度敏感(毛刺源于几何覆盖,见 GeometryTessellator)。
     float coverage = smoothstep(-1.0, 1.0, edgeCoverage);
     color.a *= coverage;
     if (color.a == 0.0) {

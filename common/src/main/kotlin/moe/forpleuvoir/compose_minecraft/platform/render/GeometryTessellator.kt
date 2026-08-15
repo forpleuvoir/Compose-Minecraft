@@ -140,6 +140,18 @@ internal object GeometryTessellator {
         return ceil(PI / half).toInt().coerceIn(12, 1024)
     }
 
+    /**
+     * 描边细分段数:按**段长 ≤ 2 物理像素**(取与 [arcSegments] 的较大者)。
+     * 描边带是分段三角形拼接,段边界(coverage 场拼接)处有折角 —— 段角越大
+     * 拼接跳变越明显(外圈毛刺/台阶)。段长 2px 是细分密度与性能的折中
+     * (1px 段长对毛刺无进一步改善但帧数大幅下降,已回退)。
+     */
+    private fun strokeSegments(radiusPx: Float): Int {
+        val byAngle = arcSegments(radiusPx)
+        val byLength = ceil(2.0 * PI * radiusPx / 2.0).toInt()
+        return max(byAngle, byLength).coerceAtMost(2048)
+    }
+
     /** 圆/椭圆点列(起点 3 点钟,顺时针,y-down) */
     private fun ellipsePoints(
         cx: Float, cy: Float, rx: Float, ry: Float,
@@ -734,7 +746,12 @@ internal object GeometryTessellator {
             hasPrev = false
         }
 
-        /** 发射中心线点 (px, py) 处法线 (mx, my) 的点对,与上一个点对组成带段 */
+        /**
+         * 发射中心线点 (px, py) 处法线 (mx, my) 的点对,与上一个点对组成带段。
+         * 段类型由 emitSegment 判定:段两端同一中心线点 = join 弧段(法线旋转,
+         * 用段中心剖分,避免中心线点 cA=cB=顶点 的退化三角形);不同 = 边带
+         * (直线段,用中心线点剖分,段边界场连续无分段线)。
+         */
         fun emit(px: Float, py: Float, mx: Float, my: Float) {
             val ox = px + mx * h
             val oy = py + my * h
@@ -751,7 +768,7 @@ internal object GeometryTessellator {
             hasPrev = true
         }
 
-        /** 闭合:最后一个点对 → 第一个点对之间的带段 */
+        /** 闭合:最后一个点对 → 第一个点对之间的带段(直线段,中心线点剖分) */
         fun close() {
             if (hasPrev) {
                 emitSegment(prevOx, prevOy, prevIx, prevIy, firstOx, firstOy, firstIx, firstIy, 0f, 0f, prevCx, prevCy, firstCx, firstCy)
@@ -767,11 +784,15 @@ internal object GeometryTessellator {
         }
 
         /**
-         * 带段 (po→o 外轮廓, pi→i 内轮廓):**中心线点(cA/cB)剖分** ——
-         * 四条轮廓边全 0、中心线点 cA/cB 为 +h;相邻段共享中心线点
-         * (段 k 的 cB = 段 k+1 的 cA),coverage 场在段边界连续,
-         * **不产生分段线**(段中心剖分的 M 不同 → 段边界斜率不一致 →
-         * 每段一条可见线,已废弃)。
+         * 带段 (po→o 外轮廓, pi→i 内轮廓) 剖分:
+         * - 直线段([isArc]=false):**中心线点(cA/cB)剖分** —— 四条轮廓边全 0、
+         *   中心线点 cA/cB 为 +h;相邻段共享中心线点,coverage 场在段边界
+         *   连续,**不产生分段线**(段中心剖分的 M 不同 → 段边界斜率不一致 →
+         *   每段一条可见线,仅直线段不得使用);
+         * - join 弧段([isArc]=true):**段中心 M=(po+o+i+pi)/4 剖分** —— 弧段
+         *   对称时 M = 顶点 V,不退化、覆盖完整(四边形绕 M 的 4 三角形),
+         *   且相邻弧段共享 M=V → 无分段线、无缝隙(中心线点剖分在弧段
+         *   cA=cB=V 会退化成零面积三角形 → 带中央缝隙 → 转角毛刺)。
          * [mx, my] 为段法线(闭合段为 0,0 时由边方向计算,仅 fringe 使用)。
          */
         private fun emitSegment(
@@ -780,12 +801,25 @@ internal object GeometryTessellator {
             mx: Float, my: Float,
             cAX: Float, cAY: Float, cBX: Float, cBY: Float,
         ) {
-            val hc = h * sink.aaScale // 中心线 coverage = 半宽(屏幕像素)
-            // 带内 4 三角形:轮廓(0)→ 中心线(+h)
-            sink.triangle(poX, poY, 0f, oX, oY, 0f, cBX, cBY, hc)
-            sink.triangle(poX, poY, 0f, cBX, cBY, hc, cAX, cAY, hc)
-            sink.triangle(piX, piY, 0f, cAX, cAY, hc, cBX, cBY, hc)
-            sink.triangle(piX, piY, 0f, cBX, cBY, hc, iX, iY, 0f)
+            val hc = h * sink.aaScale // 中心 coverage = 半宽(屏幕像素)
+            // 段两端同一中心线点(法线旋转,join 弧段)→ 段中心剖分;
+            // 否则为边带(直线段)→ 中心线点剖分。
+            val isArc = dist(cAX, cAY, cBX, cBY) < 1e-6f
+            if (isArc) {
+                // 弧段:段中心 M(对称时 = 顶点 V)
+                val mcx = (poX + oX + iX + piX) / 4f
+                val mcy = (poY + oY + iY + piY) / 4f
+                sink.triangle(poX, poY, 0f, oX, oY, 0f, mcx, mcy, hc)
+                sink.triangle(oX, oY, 0f, iX, iY, 0f, mcx, mcy, hc)
+                sink.triangle(iX, iY, 0f, piX, piY, 0f, mcx, mcy, hc)
+                sink.triangle(piX, piY, 0f, poX, poY, 0f, mcx, mcy, hc)
+            } else {
+                // 直线段(边带):中心线点剖分(段边界场连续,无分段线)
+                sink.triangle(poX, poY, 0f, oX, oY, 0f, cBX, cBY, hc)
+                sink.triangle(poX, poY, 0f, cBX, cBY, hc, cAX, cAY, hc)
+                sink.triangle(piX, piY, 0f, cAX, cAY, hc, cBX, cBY, hc)
+                sink.triangle(piX, piY, 0f, cBX, cBY, hc, iX, iY, 0f)
+            }
             // 外 fringe(0 → -1.5):外轮廓外侧 1.5px 渐隐(任意斜角 fwidth≤1.41 下边缘归零)
             val (fx, fy) = if (mx != 0f || my != 0f) mx to my else closeNormal(oX, oY, poX, poY)
             sink.triangle(poX, poY, 0f, oX, oY, 0f, oX + fx * w, oY + fy * w, -1.5f)
@@ -833,7 +867,7 @@ internal object GeometryTessellator {
         val em = StrokeEmitter(sink, h, w)
         em.reset()
 
-        /** 顶点 join:法线从 (in) 旋转到 (out) 的短弧,按弦长 ~2px 细分发射 */
+        /** 顶点 join:法线从 (in) 旋转到 (out) 的短弧,按弦长 ~2px 细分发射(弧段) */
         fun vertexArc(px: Float, py: Float, inX: Float, inY: Float, outX: Float, outY: Float) {
             val cross = inX * outY - inY * outX
             val dot = inX * outX + inY * outY
@@ -945,7 +979,7 @@ internal object GeometryTessellator {
         val by = py + n2y * w
         if (dist(ax, ay, bx, by) < 1e-4f) {
             // 同向(直线顶点):单侧楔形
-            sink.triangle(px, py, 0f, ax, ay, -1f, px - n1y * w, py + n1x * w, -1f)
+            sink.triangle(px, py, 0f, ax, ay, -1.5f, px - n1y * w, py + n1x * w, -1.5f)
         } else {
             sink.triangle(px, py, 0f, ax, ay, -1f, bx, by, -1f)
         }
@@ -957,7 +991,7 @@ internal object GeometryTessellator {
     fun circle(cx: Float, cy: Float, radius: Float, fill: Boolean, strokeWidth: Float, sink: Sink) {
         val r = radius.coerceAtLeast(0f)
         if (r <= 0f) return
-        val segments = arcSegments(r * sink.aaScale)
+        val segments = if (fill) arcSegments(r * sink.aaScale) else strokeSegments(r * sink.aaScale)
         val pts = ellipsePoints(cx, cy, r, r, 0.0, 2.0 * PI, segments)
         if (fill) {
             fillPolygon(pts, sink)
@@ -973,7 +1007,7 @@ internal object GeometryTessellator {
         if (rx <= 0f || ry <= 0f) return
         val cx = (left + right) / 2f
         val cy = (top + bottom) / 2f
-        val segments = arcSegments(max(rx, ry) * sink.aaScale)
+        val segments = if (fill) arcSegments(max(rx, ry) * sink.aaScale) else strokeSegments(max(rx, ry) * sink.aaScale)
         val pts = ellipsePoints(cx, cy, rx, ry, 0.0, 2.0 * PI, segments)
         if (fill) {
             fillPolygon(pts, sink)
@@ -999,7 +1033,8 @@ internal object GeometryTessellator {
         val cy = (top + bottom) / 2f
         val start = startAngleDeg * PI / 180.0
         val sweep = sweepAngleDeg * PI / 180.0
-        val segments = max(4, ceil(abs(sweep) / (2.0 * PI) * arcSegments(max(rx, ry) * sink.aaScale)).toInt())
+        val radiusPx = max(rx, ry) * sink.aaScale
+        val segments = max(4, ceil(abs(sweep) / (2.0 * PI) * (if (fill) arcSegments(radiusPx) else strokeSegments(radiusPx))).toInt())
         val pts = ellipsePoints(cx, cy, rx, ry, start, sweep, segments)
         if (fill) {
             if (useCenter) {

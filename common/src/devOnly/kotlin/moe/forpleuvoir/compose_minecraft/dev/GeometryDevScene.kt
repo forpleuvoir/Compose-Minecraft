@@ -271,14 +271,14 @@ fun GeometryDevScene() {
                 }
                 drawPath(starStroke, color = Color(0xFF80DEEA), style = Stroke(width = 3f))
 
-                // 边界:锐角折线 Path 描边(尖角 join)
+                // 边界:锐角折线 Path 描边(尖角 join + 两端 round 端帽)
                 val zigzag = Path().apply {
                     moveTo(400f, 95f)
                     lineTo(430f, 15f)
                     lineTo(455f, 95f)
                     lineTo(485f, 15f)
                 }
-                drawPath(zigzag, color = Color(0xFFFFAB91), style = Stroke(width = 4f))
+                drawPath(zigzag, color = Color(0xFFFFAB91), style = Stroke(width = 4f, cap = StrokeCap.Round))
             }
 
             // ── 点:Points(Round/Butt) / Lines / Polygon(连续折线)──

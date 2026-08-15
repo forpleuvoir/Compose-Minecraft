@@ -772,6 +772,7 @@ internal class MinecraftCanvas internal constructor(
                     alpha = snapshot.alpha * alphaMultiplier,
                     style = snapshot.style,
                     strokeWidth = snapshot.strokeWidth,
+                    strokeCap = snapshot.strokeCap,
                 )
                 when (command) {
                     is DrawRectCommand      ->
