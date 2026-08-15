@@ -40,14 +40,16 @@ void main() {
     if (color.a == 0.0) {
         discard;
     }
-#if DEBUG_COVERAGE == 1
+    #if DEBUG_COVERAGE == 1
     float debugValue = clamp(edgeCoverage * 0.5 + 0.5, 0.0, 1.0);
     fragColor = vec4(debugValue, debugValue, debugValue, 1.0);
     return;
-#endif
-    // 有符号距离 → 覆盖率:轮廓上 0.5,内侧(≥0.5px) 1,外侧(≤-0.5px) 0
+    #endif
+    // 有符号距离 → 覆盖率:轮廓上 0.5,内侧(≥1px) 1,外侧(≤-1px) 0。
+    // 过渡带 smoothstep(-aa, aa, d):±1px 物理宽度 —— 过窄(±0.5px)时
+    // 像素 alpha 只呈现 0/0.5/1 三档,斜边呈"三层阶梯"状锯齿。
     float aa = max(fwidth(edgeCoverage), 0.0001);
-    float coverage = smoothstep(-0.5 * aa, 0.5 * aa, edgeCoverage);
+    float coverage = smoothstep(-aa, aa, edgeCoverage);
     color.a *= coverage;
     if (color.a == 0.0) {
         discard;

@@ -1,3 +1,5 @@
+@file:Suppress("GrazieInspection", "SpellCheckingInspection")
+
 package moe.forpleuvoir.compose_minecraft.minecraft
 
 import androidx.compose.ui.geometry.Offset
@@ -305,7 +307,7 @@ internal object GeometryTessellator {
 
         // 轮廓点:从 (left + rx, top) 出发,顺时针(视觉),四段直线 + 四个 1/4 椭圆;
         // 圆角细分按屏幕像素(每段弦 ~6 屏幕像素)
-        val cornerSegments = max(2, ceil(max(rx, ry) * sink.aaScale / 6f).toInt())
+        val cornerSegments = max(4, ceil(max(rx, ry) * sink.aaScale / 4f).toInt())
         val pts = ArrayList<Float>((cornerSegments * 4 + 4) * 2)
 
         fun corner(cx: Float, cy: Float, startAngle: Double) {
@@ -388,7 +390,7 @@ internal object GeometryTessellator {
         h: Float, aaScale: Float,
         outline: ArrayList<Float>,
     ) {
-        val segments = max(4, ceil(PI * h * aaScale / 6.0).toInt())
+        val segments = max(6, ceil(PI * h * aaScale / 4.0).toInt())
         // 从 sn 到 -sn 的半圆,旋转方向取经过 pe 的那一侧
         val base = atan2(sny, snx)
         val ccw = (pex * (-sny) + pey * snx) > 0f
@@ -419,17 +421,17 @@ internal object GeometryTessellator {
     ) {
         val subpaths = flatten(segments, sink.aaScale)
         if (fill) {
-            for (subpath in subpaths) {
-                if (subpath.points.size < 6) continue
-                if (isConvex(subpath.points)) {
-                    sink.fanAA(subpath.points)
+            for ((points) in subpaths) {
+                if (points.size < 6) continue
+                if (isConvex(points)) {
+                    sink.fanAA(points)
                 } else {
-                    earClip(subpath.points, sink)
+                    earClip(points, sink)
                 }
             }
         } else {
-            for (subpath in subpaths) {
-                strokeRing(subpath.points, subpath.closed, strokeWidth, cap, sink)
+            for ((points, closed) in subpaths) {
+                strokeRing(points, closed, strokeWidth, cap, sink)
             }
         }
     }
@@ -449,14 +451,15 @@ internal object GeometryTessellator {
         if (points.isEmpty()) return
         val w = effectiveWidth(strokeWidth)
         when (mode) {
-            PointMode.Points -> for (p in points) {
+            PointMode.Points  -> for (p in points) {
                 if (cap == StrokeCap.Round) {
                     circle(p.x, p.y, w / 2f, fill = true, strokeWidth = 0f, sink)
                 } else {
                     squarePoint(p.x, p.y, w / 2f, sink)
                 }
             }
-            PointMode.Lines -> {
+
+            PointMode.Lines   -> {
                 var i = 0
                 while (i + 1 < points.size) {
                     val a = points[i]
@@ -465,6 +468,7 @@ internal object GeometryTessellator {
                     i += 2
                 }
             }
+
             PointMode.Polygon -> {
                 if (points.size < 2) return
                 // 过滤连续重复点(零长度段),避免法线退化
@@ -500,7 +504,10 @@ internal object GeometryTessellator {
 
     // ── 内部:细分 / 展开 / 耳切 ────────────────────────────────────────────
 
-    private data class SubPath(val points: FloatArray, val closed: Boolean)
+    private class SubPath(val points: FloatArray, val closed: Boolean) {
+        operator fun component1(): FloatArray = points
+        operator fun component2(): Boolean = closed
+    }
 
     /** 段序列 → 子路径点序列(二次/三次贝塞尔按 ~8 屏幕像素弦长自适应细分;圆弧已由 Path 预细分) */
     private fun flatten(segments: List<MinecraftPath.PathSegmentData>, aaScale: Float): List<SubPath> {
@@ -523,20 +530,22 @@ internal object GeometryTessellator {
         for (segment in segments) {
             val p = segment.points
             when (segment.type) {
-                MinecraftPath.PathSegmentType.Move -> {
+                MinecraftPath.PathSegmentType.Move      -> {
                     flush(closed = false)
                     startX = p[0]; startY = p[1]
                     current.add(startX); current.add(startY)
                     lastX = startX; lastY = startY
                     hasPoint = true
                 }
-                MinecraftPath.PathSegmentType.Line -> {
+
+                MinecraftPath.PathSegmentType.Line      -> {
                     if (!hasPoint) {
                         current.add(lastX); current.add(lastY); hasPoint = true
                     }
                     lastX = p[0]; lastY = p[1]
                     current.add(lastX); current.add(lastY)
                 }
+
                 MinecraftPath.PathSegmentType.Quadratic -> {
                     if (!hasPoint) {
                         current.add(lastX); current.add(lastY); hasPoint = true
@@ -551,7 +560,8 @@ internal object GeometryTessellator {
                     }
                     lastX = p[2]; lastY = p[3]
                 }
-                MinecraftPath.PathSegmentType.Cubic -> {
+
+                MinecraftPath.PathSegmentType.Cubic     -> {
                     if (!hasPoint) {
                         current.add(lastX); current.add(lastY); hasPoint = true
                     }
@@ -568,7 +578,8 @@ internal object GeometryTessellator {
                     }
                     lastX = p[4]; lastY = p[5]
                 }
-                MinecraftPath.PathSegmentType.Close -> {
+
+                MinecraftPath.PathSegmentType.Close     -> {
                     // 平台适配点:仅在当前位置 != 起点时补闭合边;
                     // 若已回到起点,不添加重复点 —— 否则零长度闭合边会使
                     // strokeRing 闭合 join 的法线退化为零向量,首尾 join 丢失(裂缝)。
@@ -602,6 +613,17 @@ internal object GeometryTessellator {
         val len = sqrt(dx * dx + dy * dy)
         if (len <= 1e-6f) return 0f
         return abs(dx * (ay - py) - dy * (ax - px)) / len
+    }
+
+    /** 点 [px, py] 到线段 (ax, ay)-(bx, by) 的距离(投影钳制在段内) */
+    private fun distToSegment(px: Float, py: Float, ax: Float, ay: Float, bx: Float, by: Float): Float {
+        val dx = bx - ax
+        val dy = by - ay
+        val lenSq = dx * dx + dy * dy
+        if (lenSq <= 1e-6f) return dist(px, py, ax, ay)
+        val t = ((px - ax) * dx + (py - ay) * dy) / lenSq
+        val tc = t.coerceIn(0f, 1f)
+        return dist(px, py, ax + dx * tc, ay + dy * tc)
     }
 
     /**
@@ -674,7 +696,7 @@ internal object GeometryTessellator {
         h: Float,
         sink: Sink,
     ) {
-        val segments = max(4, ceil(PI * h * sink.aaScale / 6.0).toInt())
+        val segments = max(6, ceil(PI * h * sink.aaScale / 4.0).toInt())
         val base = atan2(ny, nx)
         // 旋转方向:使弧经过 +e(e ⊥ n)
         val ccw = (ex * (-ny) + ey * nx) > 0f
@@ -859,7 +881,7 @@ internal object GeometryTessellator {
             if (angle < -PI) angle += 2.0 * PI
             val k = if (nIn != null && nOut != null) {
                 // join 圆弧按屏幕像素弧长细分(每段 ~6 屏幕像素)
-                max(1, ceil(abs(angle) * h * sink.aaScale / 6.0).toInt())
+                max(1, ceil(abs(angle) * h * sink.aaScale / 4.0).toInt())
             } else {
                 0
             }
@@ -904,12 +926,21 @@ internal object GeometryTessellator {
         }
 
         if (closed) {
-            // 闭合:每个顶点都是入/出法线之间的 join;首顶点入法线 = 最后边
+            // 闭合:每个顶点都是入/出法线之间的 join;首顶点入法线 = 最后边。
+            // 顶点带只覆盖边 (0→1)..(n-2→n-1),闭合边 (n-1→0) 的带
+            // 需要把首顶点带与末顶点带之间的四边形补发出来,否则描边开口。
+            var firstA: FloatArray? = null
+            var firstB: FloatArray? = null
             for (i in 0 until n) {
                 val nIn = normals[(i - 1 + n) % n]
                 val nOut = normals[i]
                 vertexBand(pts[i * 2], pts[i * 2 + 1], nIn, nOut)
+                if (i == 0) {
+                    firstA = lastA
+                    firstB = lastB
+                }
             }
+            firstA?.let { fa -> firstB?.let { fb -> emit(fa, fb) } }
         } else {
             // 开放:首端只有出法线(端帽),末顶点只有入法线(端帽)
             val f = 1f / sink.aaScale // 端帽内缩宽度(1 物理像素)
@@ -1023,12 +1054,11 @@ internal object GeometryTessellator {
         var sign = 0
         for (i in 0 until n) {
             val a = (i - 1 + n) % n
-            val b = i
             val c = (i + 1) % n
-            val abx = pts[b * 2] - pts[a * 2]
-            val aby = pts[b * 2 + 1] - pts[a * 2 + 1]
-            val bcx = pts[c * 2] - pts[b * 2]
-            val bcy = pts[c * 2 + 1] - pts[b * 2 + 1]
+            val abx = pts[i * 2] - pts[a * 2]
+            val aby = pts[i * 2 + 1] - pts[a * 2 + 1]
+            val bcx = pts[c * 2] - pts[i * 2]
+            val bcy = pts[c * 2 + 1] - pts[i * 2 + 1]
             val cross = abx * bcy - aby * bcx
             val len = sqrt((abx * abx + aby * aby) * (bcx * bcx + bcy * bcy))
             if (len < 1e-6f) continue
@@ -1042,14 +1072,25 @@ internal object GeometryTessellator {
     }
 
     /**
-     * 耳切三角化(简单多边形,可非凸;自交/洞不支持)。
-     * 维护边的「原始轮廓」标记:所有原始轮廓边在剪耳前发射外侧 fringe 与凸角角帽;
-     * 剪耳三角形恰好含一条原始边时对该边做 AA(内部三角 coverage 0 → +d),
-     * 含 0 或 2+ 条原始边(内部/角部)时实心 —— 与 Skia edge-triangle 一致。
-     * O(n²),GUI 规模足够。退化(共线/重复点)自动剔除。
+     * 凹多边形填充(耳切三角化 + 内缩 AA 壳)。
+     *
+     * AA 结构(与凸路径 fanAA 同源):
+     * 1. 原始轮廓边:外侧 fringe + 凸角角帽(1 物理像素外扩,保留);
+     * 2. 内侧 AA 壳:每条轮廓边发斜坡三角 (a, b, c_i)(轮廓 0 → 壳点 +2),
+     *    每个顶点发楔形三角 (v_i, c_{i-1}, c_i)(0 → +2);
+     *    —— 壳内 coverage 为「到轮廓的垂直距离」,渐变垂直轮廓,过渡带
+     *       恒为 1 物理像素、跨轮廓两侧;
+     * 3. 内缩多边形(轮廓内缩 2 物理像素,顶点为相邻边内缩线的交点)填充:
+     *    凸 → 扇形 / 凹 → 耳切,顶点 coverage = 到原始轮廓的真距离(≥ 2 → 完全覆盖);
+     *    内缩多边形边界与壳的 +2 连续,无硬切。
+     *
+     * 旧方案的缺陷:耳三角形含 2 条原始边或全对角线时按实心输出,轮廓内侧
+     * 无距离斜坡(半宽 AA、轮廓像素 alpha 在 0.5/1.0 间交替);贝塞尔细分出的
+     * 近共线稠密点还会使耳判定叉积符号抖动,收尾兜底输出非法三角形。
+     * 内缩壳不再依赖耳三角形承担 AA,两类问题一并消除。
      */
     private fun earClip(pts: FloatArray, sink: Sink) {
-        var n = pts.size / 2
+        val n = pts.size / 2
         if (n < 3) return
 
         // 剔除连续重复点与共线点
@@ -1069,15 +1110,6 @@ internal object GeometryTessellator {
         while (m > 3 && dist(xs[0], ys[0], xs[m - 1], ys[m - 1]) < 1e-4f) m--
         if (m < 3) return
 
-        val prev = IntArray(m)
-        val next = IntArray(m)
-        for (i in 0 until m) {
-            prev[i] = (i - 1 + m) % m
-            next[i] = (i + 1) % m
-        }
-        // 边 i → next[i] 是否为原始轮廓边(初始全 true;剪耳产生的对角线为 false)
-        val edgeOrig = BooleanArray(m) { true }
-
         // 多边形方向:叉积符号统一
         var area2 = 0f
         for (i in 0 until m) {
@@ -1086,11 +1118,11 @@ internal object GeometryTessellator {
         }
         val orientation = if (area2 >= 0f) 1 else -1
 
-        // 所有原始轮廓边:外侧 fringe + 凸角角帽(填补外部楔形)
+        // ── 1. 原始轮廓边:外侧 fringe + 凸角角帽(填补外部楔形)──
         for (i in 0 until m) {
-            val j = next[i]
-            val n = edgeOuterNormal(xs[i], ys[i], xs[j], ys[j], orientation)
-            sink.edgeFringe(xs[i], ys[i], xs[j], ys[j], n[0], n[1])
+            val j = (i + 1) % m
+            val nrm = edgeOuterNormal(xs[i], ys[i], xs[j], ys[j], orientation)
+            sink.edgeFringe(xs[i], ys[i], xs[j], ys[j], nrm[0], nrm[1])
         }
         // 凸角角帽:原始轮廓的凸顶点处填补外部楔形(尖角像素);
         // 近共线(细分密集点)|sin| < 0.01 视为直线,不加角帽也不影响凸性
@@ -1100,7 +1132,7 @@ internal object GeometryTessellator {
             val cross = (xs[i] - xs[pv]) * (ys[nx] - ys[i]) - (ys[i] - ys[pv]) * (xs[nx] - xs[i])
             val len = sqrt(
                 ((xs[i] - xs[pv]) * (xs[i] - xs[pv]) + (ys[i] - ys[pv]) * (ys[i] - ys[pv])) *
-                    ((xs[nx] - xs[i]) * (xs[nx] - xs[i]) + (ys[nx] - ys[i]) * (ys[nx] - ys[i]))
+                        ((xs[nx] - xs[i]) * (xs[nx] - xs[i]) + (ys[nx] - ys[i]) * (ys[nx] - ys[i]))
             )
             if (len < 1e-6f) continue
             if (cross / len * orientation > 0.01f) {
@@ -1110,64 +1142,265 @@ internal object GeometryTessellator {
             }
         }
 
-        fun emitEar(a: Int, b: Int, c: Int) {
-            val ab = edgeOrig[a]
-            val bc = edgeOrig[b]
-            val ca = edgeOrig[c]
-            val count = (if (ab) 1 else 0) + (if (bc) 1 else 0) + (if (ca) 1 else 0)
-            when {
-                count == 1 && ab -> {
-                    val d = distToLine(xs[c], ys[c], xs[a], ys[a], xs[b], ys[b]) * sink.aaScale
-                    sink.triangleAA(xs[a], ys[a], 0f, xs[b], ys[b], 0f, xs[c], ys[c], d)
-                }
-                count == 1 && bc -> {
-                    val d = distToLine(xs[a], ys[a], xs[b], ys[b], xs[c], ys[c]) * sink.aaScale
-                    sink.triangleAA(xs[b], ys[b], 0f, xs[c], ys[c], 0f, xs[a], ys[a], d)
-                }
-                count == 1 && ca -> {
-                    val d = distToLine(xs[b], ys[b], xs[c], ys[c], xs[a], ys[a]) * sink.aaScale
-                    sink.triangleAA(xs[c], ys[c], 0f, xs[a], ys[a], 0f, xs[b], ys[b], d)
-                }
-                else -> sink.triangle(xs[a], ys[a], xs[b], ys[b], xs[c], ys[c])
-            }
+        // ── 自交检测:自交多边形(蝴蝶结等)不支持耳切,走 EvenOdd 梯形扫描 ──
+        if (findCrossings(xs, ys, m).isNotEmpty()) {
+            evenOddFill(xs, ys, m, sink)
+            return
         }
 
-        var remaining = m
+        // ── 2. 内侧 AA 壳:内缩线交点(壳点)+ 斜坡/楔形三角 ──
+        val w = 2f / sink.aaScale
+        if (w <= 0f || !w.isFinite()) return
+        val cov = 2f // 壳点 coverage = w * aaScale(物理像素 2px → 距离 2)
+        val cx = FloatArray(m)
+        val cy = FloatArray(m)
+        for (i in 0 until m) {
+            // 边 i 的内缩线:过边中点 + 内向法线·w,方向 = 边方向
+            val j = (i + 1) % m
+            val nrm = edgeOuterNormal(xs[i], ys[i], xs[j], ys[j], orientation)
+            val qx = (xs[i] + xs[j]) / 2f - nrm[0] * w
+            val qy = (ys[i] + ys[j]) / 2f - nrm[1] * w
+            var dx = xs[j] - xs[i]
+            var dy = ys[j] - ys[i]
+            val len = sqrt(dx * dx + dy * dy)
+            if (len < 1e-6f) continue
+            dx /= len
+            dy /= len
+            // 与上一条边的内缩线求交 → 壳点(凸/凹顶点统一:内缩线的交点)
+            val pv = (i - 1 + m) % m
+            val jj = (pv + 1) % m
+            val nrm2 = edgeOuterNormal(xs[pv], ys[pv], xs[jj], ys[jj], orientation)
+            val qx2 = (xs[pv] + xs[jj]) / 2f - nrm2[0] * w
+            val qy2 = (ys[pv] + ys[jj]) / 2f - nrm2[1] * w
+            var dx2 = xs[jj] - xs[pv]
+            var dy2 = ys[jj] - ys[pv]
+            val len2 = sqrt(dx2 * dx2 + dy2 * dy2)
+            if (len2 < 1e-6f) continue
+            dx2 /= len2
+            dy2 /= len2
+            val denom = dx * dy2 - dy * dx2
+            if (abs(denom) < 1e-4f) {
+                // 近共线(平滑接合/拐点):交点 ≈ 顶点正内方,取「顶点 + 内向法线平均 × w」,
+                // 而非边中点内缩 —— 中点内缩会让壳边偏离顶点,楔形/斜坡覆盖场错位
+                val mx = nrm[0] + nrm2[0]
+                val my = nrm[1] + nrm2[1]
+                val ml = sqrt(mx * mx + my * my)
+                if (ml < 1e-6f) {
+                    cx[i] = qx
+                    cy[i] = qy
+                } else {
+                    cx[i] = xs[i] - (mx / ml) * w
+                    cy[i] = ys[i] - (my / ml) * w
+                }
+            } else {
+                // q + s·d = q2 + t·d2 → s = ((q2 - q) × d2) / (d × d2)
+                val s = ((qx2 - qx) * dy2 - (qy2 - qy) * dx2) / denom
+                val ix = qx + dx * s
+                val iy = qy + dy * s
+                // 数值防护:交点应落在顶点附近(合法角点在 w/sin(θ/2) 内);
+                // 距顶点过远(近共线数值退化/异常)→ 退回边中点内缩
+                if (dist(ix, iy, xs[i], ys[i]) > w * 20f) {
+                    cx[i] = qx
+                    cy[i] = qy
+                } else {
+                    cx[i] = ix
+                    cy[i] = iy
+                }
+            }
+        }
+        // 2a. 边带四边形 (v_i, v_j, c_j, c_i):轮廓 0 → 壳边 +2
+        //     拆两个三角:(v_i, v_j, c_j) + (v_i, c_j, c_i);
+        //     近共线顶点处壳点 c_i 会贴近/重合 v_j,「斜坡+楔形」会退化成
+        //     零面积三角导致边带缺覆盖,四边形在退化时仍覆盖完整边带。
+        //     壳点沿内向方向外延 50%,盖住壳边与内缩填充边界间的像素缝隙。
+        for (i in 0 until m) {
+            val j = (i + 1) % m
+            val c2x = cx[j] + (cx[j] - xs[j]) * 0.5f
+            val c2y = cy[j] + (cy[j] - ys[j]) * 0.5f
+            val c1x = cx[i] + (cx[i] - xs[i]) * 0.5f
+            val c1y = cy[i] + (cy[i] - ys[i]) * 0.5f
+            sink.triangleAA(xs[i], ys[i], 0f, xs[j], ys[j], 0f, c2x, c2y, cov)
+            sink.triangleAA(xs[i], ys[i], 0f, c2x, c2y, cov, c1x, c1y, cov)
+        }
+
+        // ── 3. 内缩多边形填充(顶点 = 壳点,coverage = 到轮廓真距离)──
+        fillInset(cx, cy, m, xs, ys, m, orientation, sink)
+    }
+
+    /**
+     * 内缩多边形填充:凸 → 扇形 / 凹 → 耳切,顶点 coverage = 到原始轮廓边的
+     * 真距离 × aaScale(≥ 壳深 2px → smoothstep 恒为 1,完全覆盖)。
+     * 不发 fringe/角帽:内缩多边形边界距轮廓 ≥ 2px,与壳的 +2 连续。
+     * 耳切前先剔除近共线顶点(曲线细分冗余点,|sin| < 0.02):稠密近共线点会令
+     * 耳判定的叉积符号抖动而找不到耳,收尾兜底输出跨越轮廓的非法三角形。
+     */
+    private fun fillInset(
+        px: FloatArray, py: FloatArray, m: Int,
+        ox: FloatArray, oy: FloatArray, on: Int,
+        orientation: Int, sink: Sink,
+    ) {
+        if (m < 3) return
+        fun trueDist(x: Float, y: Float): Float {
+            var best = Float.MAX_VALUE
+            for (i in 0 until on) {
+                val j = (i + 1) % on
+                val d = distToSegment(x, y, ox[i], oy[i], ox[j], oy[j])
+                if (d < best) best = d
+            }
+            return best * sink.aaScale
+        }
+
+        // 剔除近共线顶点(|sin| < 0.02 ≈ 1.2°),避免耳判定失效;
+        // 对每段连续剔除的壳点 [r_1..r_k](端点 B_prev/B_next 为保留壳点),
+        // 从壳边向简化弦 (B_prev→B_next) 扇形填充 (B_prev, r_j, B_next):
+        // 简化弦直连 S 弯两端壳点,弦与原壳边之间留出缝隙
+        // (高 aaScale 下呈扁平空洞),扇形把缝隙完整填平。
+        val keep = ArrayList<Int>(m)
+        var idx = 0
+        while (idx < m) {
+            val a = (idx - 1 + m) % m
+            val b = idx
+            val c = (idx + 1) % m
+            val abx = px[b] - px[a]
+            val aby = py[b] - py[a]
+            val bcx = px[c] - px[b]
+            val bcy = py[c] - py[b]
+            val len = sqrt((abx * abx + aby * aby) * (bcx * bcx + bcy * bcy))
+            if (len < 1e-6f) {
+                keep.add(b)
+                idx++
+                continue
+            }
+            if (abs(abx * bcy - aby * bcx) / len >= 0.02f) {
+                keep.add(b)
+                idx++
+                continue
+            }
+            // 连续剔除段 [idx .. j]
+            var j = idx
+            while (true) {
+                val jj = (j + 1) % m
+                val pa = (j - 1 + m) % m
+                val abx2 = px[j] - px[pa]
+                val aby2 = py[j] - py[pa]
+                val bcx2 = px[jj] - px[j]
+                val bcy2 = py[jj] - py[j]
+                val len2 = sqrt((abx2 * abx2 + aby2 * aby2) * (bcx2 * bcx2 + bcy2 * bcy2))
+                if (len2 < 1e-6f || abs(abx2 * bcy2 - aby2 * bcx2) / len2 >= 0.02f) break
+                j = jj
+            }
+            val bp = (idx - 1 + m) % m
+            val bn = (j + 1) % m
+            var r = idx
+            while (true) {
+                sink.triangleAA(
+                    px[bp], py[bp], trueDist(px[bp], py[bp]),
+                    px[r], py[r], trueDist(px[r], py[r]),
+                    px[bn], py[bn], trueDist(px[bn], py[bn]),
+                )
+                if (r == j) break
+                r = (r + 1) % m
+            }
+            idx = j + 1
+        }
+        val n = keep.size
+        if (n < 3) return
+        val qx = FloatArray(n)
+        val qy = FloatArray(n)
+        val values = FloatArray(n)
+        for (k in 0 until n) {
+            val i = keep[k]
+            qx[k] = px[i]
+            qy[k] = py[i]
+            values[k] = trueDist(px[i], py[i])
+        }
+
+        if (isConvex(qx, qy, n)) {
+            // 凸:从形心扇形,顶点 coverage = 真距离
+            var ccx = 0f
+            var ccy = 0f
+            for (k in 0 until n) {
+                ccx += qx[k]
+                ccy += qy[k]
+            }
+            ccx /= n
+            ccy /= n
+            val dc = trueDist(ccx, ccy)
+            for (k in 0 until n) {
+                val j = (k + 1) % n
+                sink.triangleAA(qx[k], qy[k], values[k], qx[j], qy[j], values[j], ccx, ccy, dc)
+            }
+            return
+        }
+
+        // 凹:耳切(无 fringe/角帽),顶点 coverage = 真距离
+        val prev = IntArray(n)
+        val next = IntArray(n)
+        for (i in 0 until n) {
+            prev[i] = (i - 1 + n) % n
+            next[i] = (i + 1) % n
+        }
+        var remaining = n
         var guard = 0
-        val maxGuard = m * m * 2
+        val maxGuard = n * n * 2
         var i = 0
         while (remaining > 3 && guard++ < maxGuard) {
             val a = prev[i]
             val b = i
             val c = next[i]
-            if (isEar(a, b, c, orientation, xs, ys, prev, next, remaining)) {
-                emitEar(a, b, c)
+            if (isEar(a, b, c, orientation, qx, qy, prev, next, remaining)) {
+                sink.triangleAA(qx[a], qy[a], values[a], qx[b], qy[b], values[b], qx[c], qy[c], values[c])
                 next[a] = c
                 prev[c] = a
-                edgeOrig[a] = false // 新边 a→c 为对角线
                 remaining--
             }
             i = next[i]
         }
+        // 收尾:剩余环兜底输出(值 ≥ 壳深,过渡不可见)
         if (remaining >= 3) {
-            // 收尾:剩余环按耳切规则输出(正常路径不会走到多三角形兜底)
             var idx = i
             var count = 0
             while (count < remaining - 2) {
                 val a = prev[idx]
                 val b = idx
                 val c = next[idx]
-                emitEar(a, b, c)
+                sink.triangleAA(qx[a], qy[a], values[a], qx[b], qy[b], values[b], qx[c], qy[c], values[c])
                 next[a] = c
                 prev[c] = a
-                edgeOrig[a] = false
                 idx = c
                 count++
             }
         }
     }
 
-    /** 顶点 b 是否为凸耳:局部凸(含近共线容差)+ 三角形内无其他顶点 */
+    /** 凸性检测(数组形式,供内缩多边形使用) */
+    private fun isConvex(px: FloatArray, py: FloatArray, n: Int): Boolean {
+        if (n < 3) return true
+        var sign = 0
+        for (i in 0 until n) {
+            val a = (i - 1 + n) % n
+            val c = (i + 1) % n
+            val abx = px[i] - px[a]
+            val aby = py[i] - py[a]
+            val bcx = px[c] - px[i]
+            val bcy = py[c] - py[i]
+            val cross = abx * bcy - aby * bcx
+            val len = sqrt((abx * abx + aby * aby) * (bcx * bcx + bcy * bcy))
+            if (len < 1e-6f) continue
+            val s = cross / len
+            if (abs(s) < 0.01f) continue
+            val thisSign = if (s > 0f) 1 else -1
+            if (sign == 0) sign = thisSign
+            else if (sign != thisSign) return false
+        }
+        return true
+    }
+
+    /**
+     * 顶点 b 是否为凸耳:局部凸(含近共线容差)+ 三角形内无其他顶点。
+     * 点在三角形边界上(共线,如拐点处连续共线壳点)不算内部 ——
+     * 否则边界上的共线点会让所有耳判定失效,耳切卡死进入兜底输出垃圾三角形。
+     */
     private fun isEar(
         a: Int, b: Int, c: Int, orientation: Int,
         xs: FloatArray, ys: FloatArray,
@@ -1177,14 +1410,14 @@ internal object GeometryTessellator {
         val cross = (xs[b] - xs[a]) * (ys[c] - ys[a]) - (ys[b] - ys[a]) * (xs[c] - xs[a])
         val len = sqrt(
             ((xs[b] - xs[a]) * (xs[b] - xs[a]) + (ys[b] - ys[a]) * (ys[b] - ys[a])) *
-                ((xs[c] - xs[a]) * (xs[c] - xs[a]) + (ys[c] - ys[a]) * (ys[c] - ys[a]))
+                    ((xs[c] - xs[a]) * (xs[c] - xs[a]) + (ys[c] - ys[a]) * (ys[c] - ys[a]))
         )
         if (len < 1e-6f) return false
         if (cross / len * orientation <= 0.01f) return false
         var count = 0
         var i = next[c]
         while (i != a && count++ <= remaining) {
-            if (i != a && i != b && i != c && pointInTriangle(xs[i], ys[i], xs[a], ys[a], xs[b], ys[b], xs[c], ys[c])) {
+            if (i != b && i != c && pointInTriangle(xs[i], ys[i], xs[a], ys[a], xs[b], ys[b], xs[c], ys[c])) {
                 return false
             }
             i = next[i]
@@ -1196,11 +1429,133 @@ internal object GeometryTessellator {
         val d1 = (px - bx) * (ay - by) - (ax - bx) * (py - by)
         val d2 = (px - cx) * (by - cy) - (bx - cx) * (py - cy)
         val d3 = (px - ax) * (cy - ay) - (cx - ax) * (py - ay)
-        val hasNeg = d1 < 0f || d2 < 0f || d3 < 0f
-        val hasPos = d1 > 0f || d2 > 0f || d3 > 0f
+        // 边界容差:点在边上(共线,|d| < eps)不算内部,避免拐点共线点卡死耳切
+        val eps = 1e-4f
+        val hasNeg = d1 < -eps || d2 < -eps || d3 < -eps
+        val hasPos = d1 > eps || d2 > eps || d3 > eps
         return !(hasNeg && hasPos)
     }
 
+    // ── 自交多边形 EvenOdd 填充 ────────────────────────────────────────────
+
+    private data class Crossing(val i: Int, val t: Float, val j: Int, val u: Float, val x: Float, val y: Float)
+
+    private data class SubEdge(val ax: Float, val ay: Float, val bx: Float, val by: Float)
+
+    /** 非相邻边交点(端点接触不算自交) */
+    private fun findCrossings(xs: FloatArray, ys: FloatArray, n: Int): List<Crossing> {
+        val out = ArrayList<Crossing>()
+        for (i in 0 until n) {
+            val ax = xs[i]
+            val ay = ys[i]
+            val bx = xs[(i + 1) % n]
+            val by = ys[(i + 1) % n]
+            for (j in i + 1 until n) {
+                if (j == i || (j + 1) % n == i || j == (i + 1) % n) continue
+                val cx = xs[j]
+                val cy = ys[j]
+                val dx = xs[(j + 1) % n]
+                val dy = ys[(j + 1) % n]
+                val denom = (ax - bx) * (cy - dy) - (ay - by) * (cx - dx)
+                if (abs(denom) < 1e-9f) continue
+                val t = ((ax - cx) * (cy - dy) - (ay - cy) * (cx - dx)) / denom
+                val u = ((ax - cx) * (ay - by) - (ay - cy) * (ax - bx)) / denom
+                if (t < -1e-9f || t > 1f + 1e-9f || u < -1e-9f || u > 1f + 1e-9f) continue
+                if ((t < 1e-6f && u < 1e-6f) || (t < 1e-6f && u > 1f - 1e-6f) ||
+                    (t > 1f - 1e-6f && u < 1e-6f) || (t > 1f - 1e-6f && u > 1f - 1e-6f)
+                ) continue
+                out.add(Crossing(i, t, j, u, ax + t * (bx - ax), ay + t * (by - ay)))
+            }
+        }
+        return out
+    }
+
+    /**
+     * 自交多边形 EvenOdd 填充:交点切分边 + 水平条带梯形扫描。
+     * 奇数绕序的条带区间填充;梯形左右边在轮廓上 coverage 0,
+     * 上下边(条带内部)OPAQUE —— 轮廓内侧有距离斜坡,配合外侧 fringe 呈完整 AA。
+     */
+    private fun evenOddFill(xs: FloatArray, ys: FloatArray, n: Int, sink: Sink) {
+        val crossings = findCrossings(xs, ys, n)
+        if (crossings.isEmpty()) return
+
+        // 切分边 → 子边
+        val edges = ArrayList<SubEdge>(n + crossings.size * 2)
+        for (i in 0 until n) {
+            val p1x = xs[i]
+            val p1y = ys[i]
+            val p2x = xs[(i + 1) % n]
+            val p2y = ys[(i + 1) % n]
+            val ts = ArrayList<Float>(4)
+            ts.add(0f); ts.add(1f)
+            for ((i1, t, j, u) in crossings) {
+                if (i1 == i) ts.add(t)
+                if (j == i) ts.add(u)
+            }
+            ts.sort()
+            var prev = ts[0]
+            for (k in 1 until ts.size) {
+                val t = ts[k]
+                if (t - prev < 1e-7f) {
+                    prev = t; continue
+                }
+                val x0 = p1x + prev * (p2x - p1x)
+                val y0 = p1y + prev * (p2y - p1y)
+                val x1 = p1x + t * (p2x - p1x)
+                val y1 = p1y + t * (p2y - p1y)
+                if (dist(x0, y0, x1, y1) > 1e-7f) edges.add(SubEdge(x0, y0, x1, y1))
+                prev = t
+            }
+        }
+        if (edges.isEmpty()) return
+
+        // 条带边界 y 值(顶点 + 交点)
+        val ysSet = sortedSetOf<Float>()
+        for ((_, ay, _, by) in edges) {
+            ysSet.add(ay); ysSet.add(by)
+        }
+        val ysArr = ysSet.toFloatArray()
+
+        for (k in 0 until ysArr.size - 1) {
+            val y0 = ysArr[k]
+            val y1 = ysArr[k + 1]
+            if (y1 - y0 < 1e-9f) continue
+            val ym = (y0 + y1) / 2f
+            // 与条带中部相交的活动边
+            val active = ArrayList<SubEdge>(8)
+            for (e in edges) {
+                if ((e.ay - ym) * (e.by - ym) < 0f) active.add(e)
+            }
+            if (active.size < 2) continue
+            fun xat(e: SubEdge, yy: Float): Float {
+                if (abs(e.by - e.ay) < 1e-9f) return (e.ax + e.bx) / 2f
+                return e.ax + (yy - e.ay) * (e.bx - e.ax) / (e.by - e.ay)
+            }
+            active.sortWith(compareBy { xat(it, ym) })
+            var i = 0
+            while (i + 1 < active.size) {
+                val e0 = active[i]
+                val e1 = active[i + 1]
+                // 梯形 (l0, r0, r1, l1):左右边在轮廓上(0),上下边内部(OPAQUE)
+                val l0x = xat(e0, y0)
+                val r0x = xat(e1, y0)
+                val r1x = xat(e1, y1)
+                val l1x = xat(e0, y1)
+                if (dist(l0x, y0, r0x, y0) < 1e-6f && dist(l1x, y1, r1x, y1) < 1e-6f) {
+                    i += 2
+                    continue
+                }
+                sink.triangleAA(l0x, y0, OPAQUE, r0x, y0, OPAQUE, r1x, y1, OPAQUE)
+                sink.triangleAA(l0x, y0, OPAQUE, r1x, y1, OPAQUE, l1x, y1, OPAQUE)
+                i += 2
+            }
+        }
+    }
+
+    /**
+     * 圆/椭圆细分段数(Skia 式偏差驱动):弦的弓高(到真实弧的偏差)≤ 0.25 物理像素。
+     * 弓高 ≈ c²/8R → c = √(8R·tol/aaScale),段数 = 2πR/c,与缩放无关。
+     */
     private fun circleSegments(radius: Float, aaScale: Float): Int =
-        max(12, (2.0 * PI * radius * aaScale / 6.0).roundToInt())
+        max(16, (2.0 * PI * sqrt(radius * aaScale / 2.0)).roundToInt())
 }

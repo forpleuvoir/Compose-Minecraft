@@ -49,7 +49,7 @@ fun GeometryDevScene() {
                 style = McTextStyle(color = Color.White, bold = true),
             )
             McText(
-                "填充:圆/椭圆/弧(useCenter+弓形)/圆角矩形/Path(非凸+贝塞尔)",
+                "填充:圆/椭圆/大扇区(useCenter,披萨缺角)/弧/圆角矩形/Path",
                 style = McTextStyle(color = Color(0xFFB0BEC5)),
             )
             McText(
@@ -57,17 +57,29 @@ fun GeometryDevScene() {
                 style = McTextStyle(color = Color(0xFFB0BEC5)),
             )
 
-            // ── 填充:圆 / 椭圆 ──
+            // ── 填充:同心大扇区(useCenter 扇形,像被拿走一块的披萨)──
             Canvas(
                 Modifier
                     .padding(top = 8.dp)
                     .fillMaxWidth()
                     .height(110.dp)
             ) {
-                drawCircle(color = Color(0xFFE53935), radius = 40f, center = Offset(52f, 55f))
-                drawCircle(color = Color(0xFF1E88E5), radius = 20f, center = Offset(52f, 55f))
+                // 大红扇区:半径 40,300° 扇形(60° 缺口)
+                drawArc(
+                    color = Color(0xFFE53935), startAngle = 45f, sweepAngle = 300f, useCenter = true,
+                    topLeft = Offset(12f, 15f), size = Size(80f, 80f),
+                )
+                // 内蓝扇区:半径 20,同样 300° 缺口
+                drawArc(
+                    color = Color(0xFF1E88E5), startAngle = 45f, sweepAngle = 300f, useCenter = true,
+                    topLeft = Offset(32f, 35f), size = Size(40f, 40f),
+                )
                 drawOval(color = Color(0xFF43A047), topLeft = Offset(110f, 20f), size = Size(120f, 70f))
                 drawOval(color = Color(0xFFFB8C00), topLeft = Offset(240f, 30f), size = Size(90f, 50f))
+                // 边界:极小圆(细分段数下限)
+                drawCircle(color = Color(0xFFF06292), radius = 5f, center = Offset(360f, 55f))
+                // 边界:极扁椭圆(近乎退化)
+                drawOval(color = Color(0xFF9575CD), topLeft = Offset(380f, 50f), size = Size(60f, 10f))
             }
 
             // ── 填充:弧(useCenter 扇形 / 弓形)──
@@ -89,6 +101,16 @@ fun GeometryDevScene() {
                     color = Color(0xFFD81B60), startAngle = -60f, sweepAngle = 90f, useCenter = false,
                     topLeft = Offset(230f, 10f), size = Size(90f, 90f),
                 )
+                // 边界:近全圆扇形(359°,几乎闭合)
+                drawArc(
+                    color = Color(0xFF7E57C2), startAngle = 10f, sweepAngle = 359f, useCenter = true,
+                    topLeft = Offset(340f, 10f), size = Size(90f, 90f),
+                )
+                // 边界:极小弧(15°)
+                drawArc(
+                    color = Color(0xFFFFCA28), startAngle = 0f, sweepAngle = 15f, useCenter = true,
+                    topLeft = Offset(450f, 10f), size = Size(90f, 90f),
+                )
             }
 
             // ── 填充:圆角矩形(真圆角)──
@@ -106,9 +128,20 @@ fun GeometryDevScene() {
                     color = Color(0xFF00897B), topLeft = Offset(160f, 15f),
                     size = Size(110f, 80f), cornerRadius = CornerRadius(40f, 12f),
                 )
+                // 边界:超大圆角(半径被钳到半宽/半高)
+                drawRoundRect(
+                    color = Color(0xFF78909C), topLeft = Offset(300f, 10f),
+                    size = Size(90f, 90f), cornerRadius = CornerRadius(60f, 60f),
+                )
+                // 边界:近零圆角(退化为直角矩形路径)
+                drawRoundRect(
+                    color = Color(0xFF26C6DA), topLeft = Offset(410f, 25f),
+                    size = Size(70f, 60f), cornerRadius = CornerRadius(1f, 1f),
+                )
             }
 
             // ── 填充:Path(非凸多边形 + 二次/三次贝塞尔 + 闭合)──
+            //中昂点关注 画布,这两个画布的抗锯齿做的很差 特别是 blob 的
             Canvas(
                 Modifier
                     .padding(top = 8.dp)
@@ -138,6 +171,25 @@ fun GeometryDevScene() {
                     close()
                 }
                 drawPath(blob, color = Color(0xFF26A69A))
+
+                // 边界:简单三角形(凸 Path 最小形态)
+                val tri = Path().apply {
+                    moveTo(350f, 110f)
+                    lineTo(410f, 30f)
+                    lineTo(460f, 110f)
+                    close()
+                }
+                drawPath(tri, color = Color(0xFFEF5350))
+
+                // 边界:自交 Path(蝴蝶结,当前不支持自交/洞,观察渲染结果)
+                val bowtie = Path().apply {
+                    moveTo(480f, 40f)
+                    lineTo(560f, 110f)
+                    lineTo(560f, 40f)
+                    lineTo(480f, 110f)
+                    close()
+                }
+                drawPath(bowtie, color = Color(0xFFAB47BC))
             }
 
             // ── 描边:圆 / 椭圆 / 弧 / 圆角矩形 / 线 ──
@@ -164,6 +216,7 @@ fun GeometryDevScene() {
                     topLeft = Offset(240f, 15f), size = Size(80f, 80f),
                     style = Stroke(width = 7f),
                 )
+                //这个为什么没有闭合
                 drawRoundRect(
                     color = Color(0xFFEF5350), topLeft = Offset(10f, 110f),
                     size = Size(120f, 30f), cornerRadius = CornerRadius(12f, 12f),
@@ -172,6 +225,17 @@ fun GeometryDevScene() {
                 drawLine(
                     color = Color(0xFF26C6DA), start = Offset(150f, 125f), end = Offset(300f, 125f),
                     strokeWidth = 6f,
+                )
+                // 边界:1px 细描边圆(hairline 效果)
+                drawCircle(
+                    color = Color(0xFFFFF59D), radius = 25f, center = Offset(350f, 45f),
+                    style = Stroke(width = 1f),
+                )
+                // 边界:useCenter 扇形描边(两条半径线 + 弧)
+                drawArc(
+                    color = Color(0xFF4DB6AC), startAngle = -30f, sweepAngle = 120f, useCenter = true,
+                    topLeft = Offset(395f, 15f), size = Size(70f, 70f),
+                    style = Stroke(width = 5f),
                 )
             }
 
@@ -189,6 +253,31 @@ fun GeometryDevScene() {
                     quadraticTo(250f, 10f, 300f, 80f)
                 }
                 drawPath(wave, color = Color(0xFFFFEE58), style = Stroke(width = 5f))
+
+                // 边界:闭合 Path 描边(五角星,验证闭合 join 与收口)
+                val starStroke = Path().apply {
+                    moveTo(330f, 90f)
+                    lineTo(345f, 55f)
+                    lineTo(375f, 55f)
+                    lineTo(350f, 35f)
+                    lineTo(360f, 5f)
+                    lineTo(330f, 22f)
+                    lineTo(300f, 5f)
+                    lineTo(310f, 35f)
+                    lineTo(285f, 55f)
+                    lineTo(315f, 55f)
+                    close()
+                }
+                drawPath(starStroke, color = Color(0xFF80DEEA), style = Stroke(width = 3f))
+
+                // 边界:锐角折线 Path 描边(尖角 join)
+                val zigzag = Path().apply {
+                    moveTo(400f, 95f)
+                    lineTo(430f, 15f)
+                    lineTo(455f, 95f)
+                    lineTo(485f, 15f)
+                }
+                drawPath(zigzag, color = Color(0xFFFFAB91), style = Stroke(width = 4f))
             }
 
             // ── 点:Points(Round/Butt) / Lines / Polygon(连续折线)──
@@ -216,7 +305,7 @@ fun GeometryDevScene() {
                         Offset(140f, 30f), Offset(180f, 30f),
                     ),
                     color = Color(0xFFF48FB1), strokeWidth = 4f,
-                    cap = StrokeCap.Butt,
+                    cap = StrokeCap.Square,
                 )
                 // Lines:两两独立成段(p0→p1, p2→p3),奇数点忽略末点
                 drawPoints(
@@ -251,6 +340,21 @@ fun GeometryDevScene() {
                     ),
                     color = Color(0xFF80DEEA), strokeWidth = 6f,
                 )
+                // 边界:单点(Round)
+                drawPoints(
+                    pointMode = PointMode.Points,
+                    points = listOf(Offset(300f, 30f)),
+                    color = Color(0xFFFF8A65), strokeWidth = 10f,
+                    cap = StrokeCap.Round,
+                )
+                // 边界:垂直折线 Polygon(0° 斜角)
+                drawPoints(
+                    pointMode = PointMode.Polygon,
+                    points = listOf(
+                        Offset(340f, 20f), Offset(340f, 80f), Offset(370f, 80f), Offset(370f, 20f),
+                    ),
+                    color = Color(0xFFAED581), strokeWidth = 4f,
+                )
             }
 
             // ── 抗锯齿:水平/垂直/斜线,1px/2px/6px ──
@@ -275,6 +379,20 @@ fun GeometryDevScene() {
                 // 对角线(非像素对齐,验证两侧渐变)
                 drawLine(
                     color = Color(0xFF4DD0E1), start = Offset(10f, 120f), end = Offset(300f, 10f),
+                    strokeWidth = 1f,
+                )
+                // 边界:近垂直斜线
+                drawLine(
+                    color = Color(0xFFCE93D8), start = Offset(330f, 10f), end = Offset(338f, 120f),
+                    strokeWidth = 2f,
+                )
+                // 边界:短线段(10px)与端点
+                drawLine(
+                    color = Color(0xFFA5D6A7), start = Offset(370f, 20f), end = Offset(380f, 20f),
+                    strokeWidth = 3f,
+                )
+                drawLine(
+                    color = Color(0xFFA5D6A7), start = Offset(370f, 40f), end = Offset(380f, 40f),
                     strokeWidth = 1f,
                 )
             }

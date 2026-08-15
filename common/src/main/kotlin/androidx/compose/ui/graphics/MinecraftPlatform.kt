@@ -16,24 +16,17 @@
 
 package androidx.compose.ui.graphics
 
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.colorspace.ColorSpace
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
-import androidx.compose.ui.graphics.layer.CompositingStrategy
-import androidx.compose.ui.graphics.layer.GraphicsLayer
-import androidx.compose.ui.graphics.shadow.BlurFilter
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
+import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
-import moe.forpleuvoir.compose_minecraft.minecraft.McTextStyle
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Minecraft Compose UI Graphics 平台实现(第一版)
@@ -61,6 +54,7 @@ class MinecraftPaint(
     override var isAntiAlias: Boolean = true,
     override var filterQuality: FilterQuality = FilterQuality.Low,
 ) : Paint {
+    @Deprecated("Use platform-specific extension to get platform reference")
     override fun asFrameworkPaint(): NativePaint {
         throw UnsupportedOperationException("asFrameworkPaint 第一版不支持")
     }
@@ -70,7 +64,7 @@ class MinecraftPaint(
     override fun hashCode(): Int {
         var result = color.hashCode()
         result = 31 * result + alpha.hashCode()
-        result = 31 * result + (colorFilter?.hashCode() ?: 0)
+        result = 31 * result + colorFilter.hashCode()
         result = 31 * result + blendMode.hashCode()
         result = 31 * result + style.hashCode()
         result = 31 * result + strokeWidth.hashCode()
@@ -93,18 +87,22 @@ internal class MinecraftPath(
     internal constructor(segments: List<PathSegmentData>) : this() {
         for (segment in segments) {
             when (segment.type) {
-                PathSegmentType.Move -> moveTo(segment.points[0], segment.points[1])
-                PathSegmentType.Line -> lineTo(segment.points[0], segment.points[1])
-                PathSegmentType.Quadratic -> quadraticBezierTo(
-                    segment.points[0], segment.points[1],
-                    segment.points[2], segment.points[3],
-                )
-                PathSegmentType.Cubic -> cubicTo(
+                PathSegmentType.Move      -> moveTo(segment.points[0], segment.points[1])
+                PathSegmentType.Line      -> lineTo(segment.points[0], segment.points[1])
+                PathSegmentType.Quadratic -> {
+                    quadraticTo(
+                        segment.points[0], segment.points[1],
+                        segment.points[2], segment.points[3]
+                    )
+                }
+
+                PathSegmentType.Cubic     -> cubicTo(
                     segment.points[0], segment.points[1],
                     segment.points[2], segment.points[3],
                     segment.points[4], segment.points[5],
                 )
-                PathSegmentType.Close -> close()
+
+                PathSegmentType.Close     -> close()
             }
         }
     }
@@ -124,7 +122,7 @@ internal class MinecraftPath(
             val startAngleDegrees: Float, val sweepAngleDegrees: Float, val forceMoveTo: Boolean,
         ) : PathCommand()
 
-        class Close : PathCommand()
+        data object Close : PathCommand()
     }
 
     override val isConvex: Boolean get() = false
@@ -154,14 +152,21 @@ internal class MinecraftPath(
 
     override fun relativeLineTo(dx: Float, dy: Float) = lineTo(lastX + dx, lastY + dy)
 
+    @Deprecated("Use quadraticTo() for consistency with cubicTo()", replaceWith = ReplaceWith("quadraticTo(x1, y1, x2, y2)"), level = DeprecationLevel.WARNING)
     override fun quadraticBezierTo(x1: Float, y1: Float, x2: Float, y2: Float) {
         commands.add(PathCommand.QuadTo(x1, y1, x2, y2))
         lastX = x2
         lastY = y2
     }
 
-    override fun relativeQuadraticBezierTo(dx1: Float, dy1: Float, dx2: Float, dy2: Float) =
-        quadraticBezierTo(lastX + dx1, lastY + dy1, lastX + dx2, lastY + dy2)
+    @Deprecated(
+        "Use relativeQuadraticTo() for consistency with relativeCubicTo()",
+        replaceWith = ReplaceWith("relativeQuadraticTo(dx1, dy1, dx2, dy2)"),
+        level = DeprecationLevel.WARNING
+    )
+    override fun relativeQuadraticBezierTo(dx1: Float, dy1: Float, dx2: Float, dy2: Float) {
+        quadraticTo(lastX + dx1, lastY + dy1, lastX + dx2, lastY + dy2)
+    }
 
     override fun cubicTo(
         x1: Float, y1: Float,
@@ -201,6 +206,7 @@ internal class MinecraftPath(
         )
     }
 
+    @Deprecated("Prefer usage of addRect() with a winding direction", replaceWith = ReplaceWith("addRect(rect)"), level = DeprecationLevel.HIDDEN)
     override fun addRect(rect: Rect) = addRect(rect, Path.Direction.CounterClockwise)
 
     override fun addRect(rect: Rect, direction: Path.Direction) {
@@ -211,7 +217,8 @@ internal class MinecraftPath(
                 lineTo(rect.right, rect.bottom)
                 lineTo(rect.left, rect.bottom)
             }
-            Path.Direction.Clockwise -> {
+
+            Path.Direction.Clockwise        -> {
                 moveTo(rect.left, rect.top)
                 lineTo(rect.left, rect.bottom)
                 lineTo(rect.right, rect.bottom)
@@ -221,6 +228,7 @@ internal class MinecraftPath(
         close()
     }
 
+    @Deprecated("Prefer usage of addOval() with a winding direction", replaceWith = ReplaceWith("addOval(oval)"), level = DeprecationLevel.HIDDEN)
     override fun addOval(oval: Rect) = addOval(oval, Path.Direction.CounterClockwise)
 
     override fun addOval(oval: Rect, direction: Path.Direction) {
@@ -244,6 +252,11 @@ internal class MinecraftPath(
         close()
     }
 
+    @Deprecated(
+        "Prefer usage of addRoundRect() with a winding direction",
+        replaceWith = ReplaceWith("addRoundRect(roundRect)"),
+        level = DeprecationLevel.HIDDEN
+    )
     override fun addRoundRect(roundRect: RoundRect) =
         addRoundRect(roundRect, Path.Direction.CounterClockwise)
 
@@ -256,20 +269,22 @@ internal class MinecraftPath(
         val ry = roundRect.bottomLeftCornerRadius.y.coerceIn(0f, (bottom - top) / 2f)
         moveTo(left + rx, top)
         lineTo(right - rx, top)
-        quadraticBezierTo(right, top, right, top + ry)
+        quadraticTo(right, top, right, top + ry)
         lineTo(right, bottom - ry)
-        quadraticBezierTo(right, bottom, right - rx, bottom)
+        quadraticTo(right, bottom, right - rx, bottom)
         lineTo(left + rx, bottom)
-        quadraticBezierTo(left, bottom, left, bottom - ry)
+        quadraticTo(left, bottom, left, bottom - ry)
         lineTo(left, top + ry)
-        quadraticBezierTo(left, top, left + rx, top)
+        quadraticTo(left, top, left + rx, top)
         close()
     }
 
     override fun addArcRad(
         oval: Rect, startAngleRadians: Float, sweepAngleRadians: Float,
-    ) = addArc(oval, Math.toDegrees(startAngleRadians.toDouble()).toFloat(),
-        Math.toDegrees(sweepAngleRadians.toDouble()).toFloat())
+    ) = addArc(
+        oval, Math.toDegrees(startAngleRadians.toDouble()).toFloat(),
+        Math.toDegrees(sweepAngleRadians.toDouble()).toFloat()
+    )
 
     override fun addArc(oval: Rect, startAngleDegrees: Float, sweepAngleDegrees: Float) {
         arcTo(oval, startAngleDegrees, sweepAngleDegrees, true)
@@ -281,13 +296,23 @@ internal class MinecraftPath(
         }
         for (command in path.commands) {
             when (command) {
-                is PathCommand.MoveTo -> moveTo(command.x + offset.x, command.y + offset.y)
-                is PathCommand.LineTo -> lineTo(command.x + offset.x, command.y + offset.y)
-                is PathCommand.QuadTo ->
-                    quadraticBezierTo(command.x1 + offset.x, command.y1 + offset.y, command.x2 + offset.x, command.y2 + offset.y)
+                is PathCommand.MoveTo  -> moveTo(command.x + offset.x, command.y + offset.y)
+                is PathCommand.LineTo  -> lineTo(command.x + offset.x, command.y + offset.y)
+                is PathCommand.QuadTo  -> {
+                    quadraticTo(command.x1 + offset.x, command.y1 + offset.y, command.x2 + offset.x, command.y2 + offset.y)
+                }
+
                 is PathCommand.CubicTo ->
-                    cubicTo(command.x1 + offset.x, command.y1 + offset.y, command.x2 + offset.x, command.y2 + offset.y, command.x3 + offset.x, command.y3 + offset.y)
-                is PathCommand.ArcTo -> arcTo(
+                    cubicTo(
+                        command.x1 + offset.x,
+                        command.y1 + offset.y,
+                        command.x2 + offset.x,
+                        command.y2 + offset.y,
+                        command.x3 + offset.x,
+                        command.y3 + offset.y
+                    )
+
+                is PathCommand.ArcTo   -> arcTo(
                     Rect(
                         command.left + offset.x,
                         command.top + offset.y,
@@ -298,13 +323,14 @@ internal class MinecraftPath(
                     command.sweepAngleDegrees,
                     false,
                 )
-                is PathCommand.Close -> close()
+
+                is PathCommand.Close   -> close()
             }
         }
     }
 
     override fun close() {
-        commands.add(PathCommand.Close())
+        commands.add(PathCommand.Close)
         lastX = startX
         lastY = startY
     }
@@ -320,16 +346,18 @@ internal class MinecraftPath(
     override fun translate(offset: Offset) {
         for (i in commands.indices) {
             when (val c = commands[i]) {
-                is PathCommand.MoveTo -> commands[i] = PathCommand.MoveTo(c.x + offset.x, c.y + offset.y)
-                is PathCommand.LineTo -> commands[i] = PathCommand.LineTo(c.x + offset.x, c.y + offset.y)
-                is PathCommand.QuadTo -> commands[i] =
+                is PathCommand.MoveTo  -> commands[i] = PathCommand.MoveTo(c.x + offset.x, c.y + offset.y)
+                is PathCommand.LineTo  -> commands[i] = PathCommand.LineTo(c.x + offset.x, c.y + offset.y)
+                is PathCommand.QuadTo  -> commands[i] =
                     PathCommand.QuadTo(c.x1 + offset.x, c.y1 + offset.y, c.x2 + offset.x, c.y2 + offset.y)
+
                 is PathCommand.CubicTo -> commands[i] = PathCommand.CubicTo(
                     c.x1 + offset.x, c.y1 + offset.y,
                     c.x2 + offset.x, c.y2 + offset.y,
                     c.x3 + offset.x, c.y3 + offset.y,
                 )
-                else -> Unit
+
+                else                   -> Unit
             }
         }
     }
@@ -342,11 +370,11 @@ internal class MinecraftPath(
         var hasPoint = false
         for (command in commands) {
             val pts = when (command) {
-                is PathCommand.MoveTo -> listOf(command.x to command.y)
-                is PathCommand.LineTo -> listOf(command.x to command.y)
-                is PathCommand.QuadTo -> listOf(command.x1 to command.y1, command.x2 to command.y2)
+                is PathCommand.MoveTo  -> listOf(command.x to command.y)
+                is PathCommand.LineTo  -> listOf(command.x to command.y)
+                is PathCommand.QuadTo  -> listOf(command.x1 to command.y1, command.x2 to command.y2)
                 is PathCommand.CubicTo -> listOf(command.x1 to command.y1, command.x2 to command.y2, command.x3 to command.y3)
-                else -> emptyList()
+                else                   -> emptyList()
             }
             for ((x, y) in pts) {
                 minX = minOf(minX, x)
@@ -368,15 +396,17 @@ internal class MinecraftPath(
         val result = ArrayList<PathSegmentData>()
         for (command in commands) {
             when (command) {
-                is PathCommand.MoveTo -> result.add(PathSegmentData(Move, floatArrayOf(command.x, command.y)))
-                is PathCommand.LineTo -> result.add(PathSegmentData(Line, floatArrayOf(command.x, command.y)))
-                is PathCommand.QuadTo -> result.add(
+                is PathCommand.MoveTo  -> result.add(PathSegmentData(Move, floatArrayOf(command.x, command.y)))
+                is PathCommand.LineTo  -> result.add(PathSegmentData(Line, floatArrayOf(command.x, command.y)))
+                is PathCommand.QuadTo  -> result.add(
                     PathSegmentData(Quadratic, floatArrayOf(command.x1, command.y1, command.x2, command.y2))
                 )
+
                 is PathCommand.CubicTo -> result.add(
                     PathSegmentData(Cubic, floatArrayOf(command.x1, command.y1, command.x2, command.y2, command.x3, command.y3))
                 )
-                is PathCommand.ArcTo -> {
+
+                is PathCommand.ArcTo   -> {
                     // 圆弧近似为线段
                     val cx = (command.left + command.right) / 2f
                     val cy = (command.top + command.bottom) / 2f
@@ -389,10 +419,11 @@ internal class MinecraftPath(
                         val angle = startRad + sweepRad * i / steps
                         val px = cx + rx * cos(angle)
                         val py = cy + ry * sin(angle)
-                        result.add(PathSegmentData(Line, floatArrayOf(px.toFloat(), py.toFloat())))
+                        result.add(PathSegmentData(Line, floatArrayOf(px, py)))
                     }
                 }
-                is PathCommand.Close -> result.add(PathSegmentData(Close, floatArrayOf()))
+
+                is PathCommand.Close   -> result.add(PathSegmentData(Close, floatArrayOf()))
             }
         }
         return result
@@ -400,7 +431,7 @@ internal class MinecraftPath(
 
     private fun abs(v: Float): Float = if (v < 0) -v else v
 
-    internal data class PathSegmentData(val type: PathSegmentType, val points: FloatArray)
+    internal class PathSegmentData(val type: PathSegmentType, val points: FloatArray)
 
     internal enum class PathSegmentType { Move, Line, Quadratic, Cubic, Close }
 }
@@ -424,11 +455,11 @@ internal class MinecraftPathIterator(
         val segment = segments[index]
         index++
         val (type, weight) = when (segment.type) {
-            MinecraftPath.PathSegmentType.Move -> PathSegment.Type.Move to 0f
-            MinecraftPath.PathSegmentType.Line -> PathSegment.Type.Line to 0f
+            MinecraftPath.PathSegmentType.Move      -> PathSegment.Type.Move to 0f
+            MinecraftPath.PathSegmentType.Line      -> PathSegment.Type.Line to 0f
             MinecraftPath.PathSegmentType.Quadratic -> PathSegment.Type.Quadratic to 0f
-            MinecraftPath.PathSegmentType.Cubic -> PathSegment.Type.Cubic to 0f
-            MinecraftPath.PathSegmentType.Close -> PathSegment.Type.Close to 0f
+            MinecraftPath.PathSegmentType.Cubic     -> PathSegment.Type.Cubic to 0f
+            MinecraftPath.PathSegmentType.Close     -> PathSegment.Type.Close to 0f
         }
         return PathSegment(type, segment.points, weight)
     }
@@ -440,11 +471,11 @@ internal class MinecraftPathIterator(
             outPoints[offset + i] = segment.points[i]
         }
         return when (segment.type) {
-            MinecraftPath.PathSegmentType.Move -> PathSegment.Type.Move
-            MinecraftPath.PathSegmentType.Line -> PathSegment.Type.Line
+            MinecraftPath.PathSegmentType.Move      -> PathSegment.Type.Move
+            MinecraftPath.PathSegmentType.Line      -> PathSegment.Type.Line
             MinecraftPath.PathSegmentType.Quadratic -> PathSegment.Type.Quadratic
-            MinecraftPath.PathSegmentType.Cubic -> PathSegment.Type.Cubic
-            MinecraftPath.PathSegmentType.Close -> PathSegment.Type.Close
+            MinecraftPath.PathSegmentType.Cubic     -> PathSegment.Type.Cubic
+            MinecraftPath.PathSegmentType.Close     -> PathSegment.Type.Close
         }
     }
 }
@@ -543,7 +574,7 @@ internal class NativeColorFilter internal constructor(
     override fun equals(other: Any?): Boolean =
         other is NativeColorFilter && color == other.color && colorMatrix == other.colorMatrix
 
-    override fun hashCode(): Int = (color?.hashCode() ?: 0) * 31 + (colorMatrix?.hashCode() ?: 0)
+    override fun hashCode(): Int = color.hashCode() * 31 + colorMatrix.hashCode()
 }
 
 /** Minecraft 平台 Canvas:命令记录式,后续阶段由 MinecraftRenderContext 回放 */
@@ -732,7 +763,7 @@ internal class MinecraftCanvas internal constructor(
             concat(Matrix(command.matrix.copyOf()))
             command.clip?.let { clip ->
                 val rootClip = base.map(clip)
-                clipStack.addLast(currentClip?.let { it.intersect(rootClip) } ?: rootClip)
+                clipStack.addLast(currentClip?.intersect(rootClip) ?: rootClip)
             }
             val snapshot = command.paint
             if (snapshot != null) {
@@ -743,32 +774,40 @@ internal class MinecraftCanvas internal constructor(
                     strokeWidth = snapshot.strokeWidth,
                 )
                 when (command) {
-                    is DrawRectCommand ->
+                    is DrawRectCommand      ->
                         drawRect(command.left, command.top, command.right, command.bottom, paint)
+
                     is DrawRoundRectCommand ->
                         drawRoundRect(
                             command.left, command.top, command.right, command.bottom,
                             command.radiusX, command.radiusY, paint,
                         )
-                    is DrawOvalCommand ->
+
+                    is DrawOvalCommand      ->
                         drawOval(command.left, command.top, command.right, command.bottom, paint)
-                    is DrawCircleCommand ->
+
+                    is DrawCircleCommand    ->
                         drawCircle(Offset(command.centerX, command.centerY), command.radius, paint)
-                    is DrawArcCommand ->
+
+                    is DrawArcCommand       ->
                         drawArc(
                             command.left, command.top, command.right, command.bottom,
                             command.startAngle, command.sweepAngle, command.useCenter, paint,
                         )
-                    is DrawLineCommand ->
+
+                    is DrawLineCommand      ->
                         drawLine(
                             Offset(command.p1x, command.p1y),
                             Offset(command.p2x, command.p2y),
                             paint,
                         )
-                    is DrawPathCommand ->
+
+                    is DrawPathCommand      ->
                         drawPath(MinecraftPath(command.segments), paint)
-                    is DrawPointsCommand ->
+
+                    is DrawPointsCommand    ->
                         drawPoints(command.pointMode, command.points, paint)
+
                     is DrawImageRectCommand ->
                         drawImageRect(
                             command.image,
@@ -778,7 +817,8 @@ internal class MinecraftCanvas internal constructor(
                             IntSize(command.dstWidth, command.dstHeight),
                             paint,
                         )
-                    is DrawTextCommand -> Unit // 文本在 else 分支处理
+
+                    is DrawTextCommand      -> Unit // 文本在 else 分支处理
                 }
             } else if (command is DrawTextCommand) {
                 recordTextDraw(command.text, command.x, command.y, command.style)
@@ -796,7 +836,7 @@ internal class MinecraftCanvas internal constructor(
         drawCommands.add(command)
     }
 
-    private val matrixStack = ArrayDeque<androidx.compose.ui.graphics.Matrix>()
+    private val matrixStack = ArrayDeque<Matrix>()
 
     private val clipStack = ArrayDeque<Rect?>()
 
@@ -887,7 +927,7 @@ internal class MinecraftCanvas internal constructor(
         // 不同矩阵状态下的局部矩形不能直接相交(会得到退化矩形,如 336x0,
         // 导致 MC enableScissor 崩溃);统一换算为屏幕空间后相交才有效。
         val screen = Matrix(currentMatrix.values.copyOf()).map(Rect(left, top, right, bottom))
-        clipStack.addLast(currentClip?.let { it.intersect(screen) } ?: screen)
+        clipStack.addLast(currentClip?.intersect(screen) ?: screen)
     }
 
     override fun clipPath(path: Path, clipOp: ClipOp) {
