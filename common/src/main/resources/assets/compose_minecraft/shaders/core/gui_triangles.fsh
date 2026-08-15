@@ -40,11 +40,13 @@ void main() {
     if (color.a == 0.0) {
         discard;
     }
-    #if DEBUG_COVERAGE == 1
-    float debugValue = clamp(edgeCoverage * 0.5 + 0.5, 0.0, 1.0);
-    fragColor = vec4(debugValue, debugValue, debugValue, 1.0);
-    return;
-    #endif
+    // 调试:把 DEBUG_COVERAGE 改为 1,输出 coverage 灰度图
+    // (clamp(d*0.5+0.5) → 0 黑 / 0.5 中灰 / 1 白);验证后必须改回 0
+    if (DEBUG_COVERAGE > 0) {
+        float debugValue = clamp(edgeCoverage * 0.5 + 0.5, 0.0, 1.0);
+        fragColor = vec4(debugValue, debugValue, debugValue, 1.0);
+        return;
+    }
     // 有符号距离 → 覆盖率:轮廓上 0.5,内侧(≥1.5px) 1,外侧(≤-1.5px) 0。
     // 过渡带 smoothstep(-1.5aa, 1.5aa, d):±1.5px —— 比 ±1px(三档
     // 阶梯明显)更柔,比 ±2px(发糊)更锐的折中。

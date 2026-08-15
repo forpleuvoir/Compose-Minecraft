@@ -76,7 +76,7 @@ internal object MinecraftGuiTriangles {
 
     /**
      * 确保 pipeline 的 shader 已编译(幂等,只编译一次)。
-     * 必须在主线程、渲染上下文活跃时调用(与 [GameRenderer.preloadUiShader] 相同约束),
+     * 必须在主线程、渲染上下文活跃时调用(与 GameRenderer.preloadUiShader 相同约束),
      * 本平台由 [MinecraftRenderContext] 首次遇到几何命令时触发。
      */
     fun ensureCompiled() {
@@ -101,7 +101,7 @@ internal object MinecraftGuiTriangles {
  * 三角形网格 GUI 渲染元素。
  *
  * - 顶点:局部坐标(场景 px,密度 1)平铺的 [x, y] 三元组序列,每 3 个顶点一个
- *   三角形;几何变换由 [pose](命令矩阵的 2D 部分)在 GPU 端完成,与 [BlitRenderState] 一致;
+ *   三角形;几何变换由 [pose](命令矩阵的 2D 部分)在 GPU 端完成,与 BlitRenderState 一致;
  * - 颜色:统一 0xAARRGGBB(三角化器已把 Compose Color 与 Paint.alpha 折算好);
  * - coverage:与顶点一一对应的「到最近真实轮廓的有符号屏幕像素距离」
  *   (LineWidth 属性槽):外侧为负、轮廓上为 0、内侧为正;内部实心三角形为大数;

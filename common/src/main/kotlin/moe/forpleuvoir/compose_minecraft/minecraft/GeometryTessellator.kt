@@ -101,17 +101,6 @@ internal object GeometryTessellator {
             triangle(ax, ay, cx, cy, dx, dy)
         }
 
-        /** 实心凸多边形扇形(以 [cx, cy] 为中心,顶点序列 [points] 平铺 [x,y],闭合循环) */
-        fun fan(cx: Float, cy: Float, points: FloatArray) {
-            val n = points.size / 2
-            if (n < 3) return
-            for (j in 1..n) {
-                val a = (j - 1) % n
-                val b = j % n
-                triangle(cx, cy, points[a * 2], points[a * 2 + 1], points[b * 2], points[b * 2 + 1])
-            }
-        }
-
         /**
          * 轮廓边 (a→b) 的外扩 AA fringe:真实轮廓外 ~1 物理像素宽的带。
          * coverage:轮廓上 0 → fringe 外侧 -1(有符号屏幕像素距离)。
@@ -249,6 +238,7 @@ internal object GeometryTessellator {
         if (rx <= 0f || ry <= 0f || sweepAngleDeg == 0f) return
         val cx = (left + right) / 2f
         val cy = (top + bottom) / 2f
+        val start = startAngleDeg * PI / 180.0
         val sweep = sweepAngleDeg * PI / 180.0
         val segments = max(4, ceil(abs(sweep) / (2.0 * PI) * circleSegments(max(rx, ry), sink.aaScale)).toInt())
 
@@ -257,7 +247,7 @@ internal object GeometryTessellator {
                 // 扇形:中心 + 弧点(含首尾)闭合多边形;全部边(弧段 + 两条半径线)经 fanAA AA
                 val pts = FloatArray((segments + 2) * 2)
                 for (i in 0..segments) {
-                    val a = sweep * i / segments
+                    val a = start + sweep * i / segments
                     pts[i * 2] = cx + rx * cos(a).toFloat()
                     pts[i * 2 + 1] = cy + ry * sin(a).toFloat()
                 }
@@ -268,7 +258,7 @@ internal object GeometryTessellator {
                 // 弓形:弧点(含首尾)闭合多边形;全部边(弧段 + 弦)经 fanAA AA
                 val pts = FloatArray((segments + 1) * 2)
                 for (i in 0..segments) {
-                    val a = sweep * i / segments
+                    val a = start + sweep * i / segments
                     pts[i * 2] = cx + rx * cos(a).toFloat()
                     pts[i * 2 + 1] = cy + ry * sin(a).toFloat()
                 }
@@ -278,7 +268,7 @@ internal object GeometryTessellator {
             val h = effectiveWidth(strokeWidth) / 2f
             ring(
                 cx, cy, rx + h, ry + h, rx - h, ry - h,
-                0.0, sweep, segments, sink,
+                start, sweep, segments, sink,
             )
         }
     }
@@ -380,8 +370,8 @@ internal object GeometryTessellator {
     }
 
     /**
-     * 追加一个端点半圆到 [outline]:从 [sn] 方向(单位半宽法线,已含 h)经 [pe](指向带外,
-     * 单位)旋转到 -[sn]。[sn] 应为 ±(n·h),[pe] 应为 ∓u(与 -sn 同向半圆的顶点方向)。
+     * 追加一个端点半圆到 [outline]:从 sn 方向(单位半宽法线,已含 h)经 pe(指向带外,
+     * 单位)旋转到 -sn。sn 应为 ±(n·h),pe 应为 ∓u(与 -sn 同向半圆的顶点方向)。
      */
     private fun roundCapOutline(
         px: Float, py: Float,
@@ -654,7 +644,7 @@ internal object GeometryTessellator {
         }
     }
 
-    /** 顶点 [px, py] 处,边 (p→q) 的外侧单位法线(与径向 [anchor] 同向的候选) */
+    /** 顶点 [px, py] 处,边 (p→q) 的外侧单位法线(与径向锚点同向的候选) */
     private fun outerNormal(
         px: Float, py: Float, qx: Float, qy: Float,
         anchorX: Float, anchorY: Float,
@@ -1348,7 +1338,7 @@ internal object GeometryTessellator {
             val a = prev[i]
             val b = i
             val c = next[i]
-            if (isEar(a, b, c, orientation, qx, qy, prev, next, remaining)) {
+            if (isEar(a, b, c, orientation, qx, qy, next, remaining)) {
                 sink.triangleAA(qx[a], qy[a], values[a], qx[b], qy[b], values[b], qx[c], qy[c], values[c])
                 next[a] = c
                 prev[c] = a
@@ -1404,7 +1394,7 @@ internal object GeometryTessellator {
     private fun isEar(
         a: Int, b: Int, c: Int, orientation: Int,
         xs: FloatArray, ys: FloatArray,
-        prev: IntArray, next: IntArray,
+        next: IntArray,
         remaining: Int,
     ): Boolean {
         val cross = (xs[b] - xs[a]) * (ys[c] - ys[a]) - (ys[b] - ys[a]) * (xs[c] - xs[a])
