@@ -1,6 +1,7 @@
 package moe.forpleuvoir.compose_minecraft.dev
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,8 +10,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -57,14 +61,16 @@ fun ScrollTestDevScene() {
                     .fillMaxWidth()
                     .height(240.dp)
                     .background(Color(0xFF263238))
-                    .verticalScroll(scrollState)
+                    .verticalScroll(scrollState),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 repeat(40) { index ->
                     Row(
                         Modifier
                             .fillMaxWidth()
                             .height(22.dp)
-                            .background(if (index % 2 == 0) Color(0xFF37474F) else Color(0xFF2F3E46))
+                            .background(if (index % 2 == 0) Color(0xFF37474F) else Color(0xFF2F3E46), shape = RoundedCornerShape(12.dp)),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         McText(
                             "scroll item $index",

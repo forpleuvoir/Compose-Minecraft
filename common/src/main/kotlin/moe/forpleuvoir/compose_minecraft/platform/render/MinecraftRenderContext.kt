@@ -185,7 +185,6 @@ internal class MinecraftRenderContext {
                 colorArgb = paint.color.toArgb(paint.alpha),
                 scissor = scissor?.toScreenRectangle(),
                 vertices = triangleSink.toArray(),
-                coverage = triangleSink.toCoverageArray(),
             )
         )
     }

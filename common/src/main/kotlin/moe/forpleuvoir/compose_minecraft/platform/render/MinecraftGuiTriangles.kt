@@ -53,8 +53,8 @@ internal object MinecraftGuiTriangles {
      *
      * 顶点格式 POSITION_COLOR_LINE_WIDTH:LineWidth 属性承载「到最近真实轮廓的
      * 有符号屏幕像素距离」(coverage:外侧负、轮廓 0、内侧正),片元着色器
-     * 用 smoothstep(-0.5·fwidth(d), 0.5·fwidth(d), d) 做边缘抗锯齿,过渡带
-     * 恒约为 1 物理像素。
+     * 用 smoothstep(-1.0·fwidth(d), 1.0·fwidth(d), d) 做边缘抗锯齿,过渡带
+     * 恒约为 2 物理像素(跨轮廓两侧各 ±1px,与几何外扩/内缩深度 1px 匹配)。
      * 不注册进 RenderPipelines(neoForm 下 register 不可访问,渲染时
      * GuiRenderer 直接使用对象本身,无需注册表)。
      */
@@ -100,12 +100,13 @@ internal object MinecraftGuiTriangles {
 /**
  * 三角形网格 GUI 渲染元素。
  *
- * - 顶点:局部坐标(场景 px,密度 1)平铺的 [x, y] 三元组序列,每 3 个顶点一个
- *   三角形;几何变换由 [pose](命令矩阵的 2D 部分)在 GPU 端完成,与 BlitRenderState 一致;
+ * - 顶点:局部坐标(场景 px,密度 1)交错平铺的 [x, y, coverage] 三元组序列,
+ *   每 3 个顶点一个三角形;几何变换由 [pose](命令矩阵的 2D 部分)在 GPU 端
+ *   完成,与 BlitRenderState 一致;
  * - 颜色:统一 0xAARRGGBB(三角化器已把 Compose Color 与 Paint.alpha 折算好);
  * - coverage:与顶点一一对应的「到最近真实轮廓的有符号屏幕像素距离」
  *   (LineWidth 属性槽):外侧为负、轮廓上为 0、内侧为正;内部实心三角形为大数;
- *   片元着色器 smoothstep(-0.5·fwidth(d), 0.5·fwidth(d), d) 做约 1 物理像素的
+ *   片元着色器 smoothstep(-1.0·fwidth(d), 1.0·fwidth(d), d) 做约 2 物理像素的
  *   边缘抗锯齿过渡;
  * - bounds:局部包围盒经 pose 变换后与 scissor 求交 —— 供 GuiRenderer 的
  *   层级归并(findAppropriateNode)使用,非 null 是元素被接受的前提。
@@ -114,8 +115,8 @@ internal class GuiTriangleRenderState(
     val pose: Matrix3x2fc,
     val colorArgb: Int,
     val scissor: ScreenRectangle?,
+    /** 交错 [x, y, coverage] 平铺,每 3 个顶点一个三角形 */
     val vertices: FloatArray,
-    val coverage: FloatArray,
 ) : GuiElementRenderState {
 
     private val elementBounds: ScreenRectangle = computeBounds(pose, scissor, vertices)
@@ -130,14 +131,12 @@ internal class GuiTriangleRenderState(
 
     override fun buildVertices(vertexConsumer: VertexConsumer) {
         var i = 0
-        var c = 0
-        while (i + 1 < vertices.size) {
+        while (i + 2 < vertices.size) {
             vertexConsumer
                 .addVertexWith2DPose(pose, vertices[i], vertices[i + 1])
                 .setColor(colorArgb)
-                .setLineWidth(coverage[c])
-            i += 2
-            c++
+                .setLineWidth(vertices[i + 2])
+            i += 3
         }
     }
 
@@ -145,20 +144,20 @@ internal class GuiTriangleRenderState(
 
         /** 局部包围盒(floor/ceil 保守取整)→ pose 变换 → 与 scissor 求交 */
         fun computeBounds(pose: Matrix3x2fc, scissor: ScreenRectangle?, vertices: FloatArray): ScreenRectangle {
-            if (vertices.size < 6) return ScreenRectangle(0, 0, 0, 0)
+            if (vertices.size < 9) return ScreenRectangle(0, 0, 0, 0)
             var minX = Float.MAX_VALUE
             var minY = Float.MAX_VALUE
             var maxX = -Float.MAX_VALUE
             var maxY = -Float.MAX_VALUE
             var i = 0
-            while (i + 1 < vertices.size) {
+            while (i + 2 < vertices.size) {
                 val x = vertices[i]
                 val y = vertices[i + 1]
                 if (x < minX) minX = x
                 if (y < minY) minY = y
                 if (x > maxX) maxX = x
                 if (y > maxY) maxY = y
-                i += 2
+                i += 3
             }
             val local = ScreenRectangle(
                 kotlin.math.floor(minX).toInt(),
