@@ -182,6 +182,43 @@ build_project(rebuild=true)
   单字符宽度 > maxWidth 时内层 while 与外层 `start` 均不推进 → 无限添加空行 → OOM。
   已加防御(单字符强制占行并推进)。**遇到 OOM 优先怀疑这类"看似不会触发"的推进死循环**。
 
+### 3D 透视(rotationX/rotationY)绘制踩坑记录(T.15,双轴旋转案)
+
+- **绘制端 3D 透视不能只靠画布 2D 矩阵**:rotationX/rotationY 的透视投影无法用
+  2D 仿射表达,需在 GraphicsLayer.draw 3D 分支构建**行主序 4x4**(含透视分量)
+  的 `layer3D` 矩阵,渲染端对纯色几何做 CPU 顶点变换(`map3D`:命令矩阵 →
+  layer3D 透视除法 → 屏幕坐标三角形,实心无 AA)。文本/阴影/渐变无法透视纹理
+  校正,降级为 2D 仿射近似。
+- **`prepareTransformationMatrix` 的移植顺序必须与官方 AOSP 一致,但本平台
+  命中/绘制共用该函数时不能直接照搬官方顺序**:官方顺序 `T(-p)·Rz·S·T(t+p)·Ry·Rx·P`
+  (透视 P 最后右乘,2x2 干净)在**本平台的 map3D 链下旋转中心会偏移** —— 本平台
+  的 map3D 要求 layer3D 在中心点 w≈1(中心固定);早期移植把 `T(p+t)` 右乘在
+  P 之后,透视列耦合进 2x2,导致文本近似取 layer3D 对角时压缩值被污染
+  (rotationY=45/60/-45° 实测 1.10/0.98/0.31,期望 0.707/0.5/0.707,位置越靠右
+  污染越大)。**文本近似不要取 layer3D 的 2x2,改为由 GraphicsLayer 按
+  cos(rotationX/rotationY)×scale 直接计算干净缩放**。
+- **双轴旋转顺序(关键)**:旋转组合必须为**内旋 XYZ**(点先绕 X、再绕 Y、再绕 Z,
+  与 Android HWUI RenderNode 语义一致),即矩阵因子 `S·Rx·Ry·Rz`。若用外旋
+  `S·Rz·Ry·Rx`(点先 Z 再 Y 再 X),先设 rotationX 再设 rotationY 时,点实际
+  先被 Ry 旋转,X 反而最后生效 —— **第二个轴视觉反转**。注意 Matrix 的
+  rotateX/rotateY 是右乘、rotateZ 是左乘,Rz 需用显式 `timesAssign(Matrix().apply
+  { rotateZ(...) })` 收尾。
+- **文本 2x2 的转置陷阱(双轴剪切方向)**:文本近似矩阵经 `toMatrix3x2f` 提交
+  (交换 m01/m10 抵消 JOML 行主序,T.13)。要让最终 JOML 2x2 == 矩形 map3D
+  读到的 layer3D 2x2,`text2D` 必须按 **row-major 展平** `[m00, m01, m10, m11]`
+  传入,`with3D` 按列主序放置(`approx2D[0]=m00, [1]=m01, [4]=m10, [5]=m11`)。
+  用列主序展平则文本 2x2 被转置,双轴剪切方向与矩形相反(视觉 = 文字歪斜反向)。
+  单轴时 2x2 为对角矩阵,转置不变,不易察觉 —— **"单轴正常、双轴异常"时优先
+  怀疑 2x2 的行列语义(转置)**。
+- **双轴旋转的平行四边形是真实投影,不是 bug**:rotationX+rotationY 组合的 2x2
+  含剪切项 `sx·sy`(45° 时 0.5),投影本身近平行四边形(CSS perspective 同样如此);
+  文本近似保留该剪切(而非只取对角)才能与矩形形状一致,单轴时剪切为 0 自动退化。
+- **运行时探针验证(沿用 T.13 方法)**:`T15-PROBE` 打印矩形 4 角 + 中心经 map3D
+  后的屏幕坐标验证旋转中心固定;`T15-TEXTCMD` 打印文本 combine 矩阵的
+  m00/m10/m01/m11 与期望 cosθ 对比,快速定位污染/转置。双轴 XY 的剪切项
+  `m01=sx·sy`(row-major M 的 M01)是否正确是判断文本 2x2 转置的关键指纹。
+- **清理**:定位后移除 T15-* 调试打印与计数(debugProbeFrames 等)再提交。
+
 ## 已知限制
 
 - 文本输入:charTyped 已接通(经 typed KeyEvent 转发);IME 候选窗口由系统输入法负责,
