@@ -713,6 +713,8 @@ internal class MinecraftCanvas internal constructor(
         val x: Float,
         val y: Float,
         val style: Style,
+        /** 文本整体透明度 0..1(图层级 alpha 叠加,阶段 C 经颜色 alpha 通道应用) */
+        val alpha: Float = 1f,
     ) : DrawCommand {
         override val paint: PaintSnapshot? = null
     }
@@ -733,6 +735,7 @@ internal class MinecraftCanvas internal constructor(
         x: Float,
         y: Float,
         style: Style,
+        alpha: Float = 1f,
     ) {
         drawCommands.add(
             DrawTextCommand(
@@ -742,6 +745,7 @@ internal class MinecraftCanvas internal constructor(
                 x = x,
                 y = y,
                 style = style,
+                alpha = alpha,
             )
         )
     }
@@ -822,7 +826,12 @@ internal class MinecraftCanvas internal constructor(
                     is DrawTextCommand      -> Unit // 文本在 else 分支处理
                 }
             } else if (command is DrawTextCommand) {
-                recordTextDraw(command.text, command.x, command.y, command.style)
+                // 平台适配点:文本命令同样叠加图层级 alpha(经颜色 alpha 通道应用),
+                // 否则 graphicsLayer 的 alpha 对图层内文本不生效。
+                recordTextDraw(
+                    command.text, command.x, command.y, command.style,
+                    alpha = command.alpha * alphaMultiplier,
+                )
             }
             restore()
         }
@@ -879,18 +888,21 @@ internal class MinecraftCanvas internal constructor(
     }
 
     override fun rotate(degrees: Float) {
+        // 平台适配点:post-concat(右乘)M' = M * R,与 translate/scale/concat 一致(Skia 语义),
+        // 正角度顺时针(屏幕坐标 y 向下,对齐 Compose/Skia)。
+        // 注意变量名按真实含义命名:values[1]=m10, values[4]=m01(列主序)。
         val rad = degrees * PI.toFloat() / 180f
         val c = cos(rad)
         val s = sin(rad)
         val m = currentMatrix
         val m00 = m.values[0]
-        val m01 = m.values[1]
-        val m10 = m.values[4]
+        val m10 = m.values[1]
+        val m01 = m.values[4]
         val m11 = m.values[5]
-        m.values[0] = m00 * c + m10 * s
-        m.values[1] = m01 * c + m11 * s
-        m.values[4] = -m00 * s + m10 * c
-        m.values[5] = -m01 * s + m11 * c
+        m.values[0] = m00 * c + m01 * s
+        m.values[1] = m10 * c + m11 * s
+        m.values[4] = -m00 * s + m01 * c
+        m.values[5] = -m10 * s + m11 * c
     }
 
     override fun skew(sx: Float, sy: Float) {

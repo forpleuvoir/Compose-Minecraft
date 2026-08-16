@@ -754,6 +754,7 @@ private fun DrawContext.asDrawTransform(): DrawTransform =
         }
 
         override fun rotate(degrees: Float, pivot: Offset) {
+            // 平台适配点:post-concat 顺序(与官方 Skia 一致),绕 pivot 旋转
             this@asDrawTransform.canvas.apply {
                 translate(pivot.x, pivot.y)
                 rotate(degrees)
@@ -762,6 +763,7 @@ private fun DrawContext.asDrawTransform(): DrawTransform =
         }
 
         override fun scale(scaleX: Float, scaleY: Float, pivot: Offset) {
+            // 平台适配点:post-concat 顺序,绕 pivot 缩放
             this@asDrawTransform.canvas.apply {
                 translate(pivot.x, pivot.y)
                 scale(scaleX, scaleY)

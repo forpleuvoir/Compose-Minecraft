@@ -111,6 +111,8 @@ inline fun Canvas.withSaveLayer(bounds: Rect, paint: Paint, block: () -> Unit) {
  */
 fun Canvas.rotate(degrees: Float, pivotX: Float, pivotY: Float) {
     if (degrees == 0.0f) return
+    // 平台适配点:本平台 Canvas 变换为 post-concat,顺序与官方 Skia 一致,
+    // M' = T(p) * R * T(-p),旋转绕 (pivotX, pivotY) 进行。
     translate(pivotX, pivotY)
     rotate(degrees)
     translate(-pivotX, -pivotY)
@@ -142,6 +144,7 @@ fun Canvas.rotateRad(radians: Float, pivotX: Float = 0.0f, pivotY: Float = 0.0f)
  */
 fun Canvas.scale(sx: Float, sy: Float = sx, pivotX: Float, pivotY: Float) {
     if (sx == 1.0f && sy == 1.0f) return
+    // 平台适配点:post-concat 顺序,M' = T(p) * S * T(-p),缩放绕 (pivotX, pivotY)。
     translate(pivotX, pivotY)
     scale(sx, sy)
     translate(-pivotX, -pivotY)

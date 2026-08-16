@@ -19,6 +19,7 @@ package androidx.compose.ui.graphics.layer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.isUnspecified
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Canvas
@@ -417,12 +418,19 @@ class GraphicsLayer internal constructor() {
         }
         val recording = recordingCanvas ?: return
         // 阶段 C:应用图层变换后回放录制阶段记录的绘制命令。
-        // 第一版支持 translate/scale/rotationZ/alpha/clip;
-        // rotationX/rotationY(3D 透视)与 pivotOffset 暂不生效,后续阶段补齐。
+        // 支持 translate/scale/rotationZ/alpha/clip/pivot(transformOrigin);
+        // rotationX/rotationY(3D 透视)暂不生效,后续阶段补齐。
+        // 本平台 Canvas 变换为 post-concat(右乘),调用顺序即矩阵相乘顺序,
+        // 对齐官方 Skia 绘制语义 T(topLeft+translation) * T(pivot) * R * S * T(-pivot),
+        // 即 scale/rotationZ 绕 pivot 进行;pivot 未指定时默认图层中心。
+        val pivotX = if (pivotOffset.isUnspecified) size.width / 2f else pivotOffset.x
+        val pivotY = if (pivotOffset.isUnspecified) size.height / 2f else pivotOffset.y
         canvas.save()
         canvas.translate(topLeft.x.toFloat() + translationX, topLeft.y.toFloat() + translationY)
-        canvas.scale(scaleX, scaleY)
+        canvas.translate(pivotX, pivotY)
         canvas.rotate(rotationZ)
+        canvas.scale(scaleX, scaleY)
+        canvas.translate(-pivotX, -pivotY)
         if (clip) {
             // 平台适配点(T.9 修复):translate 之后画布已处于图层局部坐标系,
             // 裁剪矩形必须是局部 (0, 0, size);此前误用 topLeft 绝对坐标,

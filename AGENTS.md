@@ -114,6 +114,32 @@ build_project(rebuild=true)
   见 `InputWithModifiers`),键码为 GLFW 值(经 `InputConstants` 抽象),Compose `Key`
   为 AWT VK 编码;桥接层只做映射,不直接绑定 LWJGL/AWT 类型。
 
+### 矩阵/旋转调试踩坑记录(T.13 旋转中心"公转"案)
+
+- **MC 26.2 运行时 JOML 的 pose 乘法是"行主序"**:`org.joml.Matrix3x2f.transformPosition`
+  实测按 `x' = m00*x + m10*y + m20` 计算(标准列主序应为 `x' = m00*x + m01*y + m20`)。
+  向 MC 提交 pose 时若按列主序直接构造 `Matrix3x2f(values[0], values[4], values[1], ...)`,
+  2x2 旋转矩阵会被**转置** → 旋转方向反转,且绕 pivot 旋转时**中心随角度摆动**
+  (幅度 `2·|sinθ|·|p|`),视觉表现为"旋转中心偏移 / 公转 / 被抛起"。
+  修复:提交前交换 m01/m10,即 `Matrix3x2f(values[0], values[1], values[4], values[5], values[12], values[13])`
+  (见 `MinecraftRenderContext.toMatrix3x2f`,T.13)。纯缩放/平移不受影响(对角矩阵转置不变),
+  所以**"只有旋转异常、缩放平移都正常"时优先怀疑 pose 的 2x2 行列语义**。
+- **不要只信源码与数学推导,用运行时探针验证依赖库行为**:本案例命令矩阵正确
+  (612 帧文本中心恒定)、MC 源码也"标准",但实际渲染错误,最终靠**运行时打印
+  JOML 的 transformPosition 实测值**才定位(标准应得 (10,21),实测 (10,19))。
+  排查"旋转中心不对"时:① 多帧采样命令矩阵,算中心轨迹(恒定 ≠ 视觉正确,
+  只证明命令层);② 在渲染提交端加一次性探针直接调用依赖库的矩阵乘法打印结果。
+- **旋转中心的判断方法**:绕中心旋转时,参考点(画在 pivot 的固定标记)不动、
+  元素绕它转;若参考点随元素移动 = 中心错误。区分"观感"与"真实偏移"用**短元素**
+  (40px 方块/单字符 "A")实验——短元素绕中心几乎无可见移动,若仍大幅运动必是渲染问题。
+- **GraphicsLayer.draw 变换为 post-concat**(与 Skia 一致,顺序
+  `T(topLeft+translation) * T(pivot) * R * S * T(-pivot)`),pivot 未指定时默认图层中心;
+  命中测试矩阵 `prepareTransformationMatrix` 与绘制矩阵的旋转中心不同是官方既有行为,
+  不要"统一"它们。
+- **computeLines 死循环(T.12,已修复)**:`MinecraftTextLayout.computeLines` 换行逻辑中,
+  单字符宽度 > maxWidth 时内层 while 与外层 `start` 均不推进 → 无限添加空行 → OOM。
+  已加防御(单字符强制占行并推进)。**遇到 OOM 优先怀疑这类"看似不会触发"的推进死循环**。
+
 ## 已知限制
 
 - 文本输入:charTyped 已接通(经 typed KeyEvent 转发);IME 候选窗口由系统输入法负责,

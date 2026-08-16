@@ -165,6 +165,22 @@ internal class MinecraftTextLayout(
                     var lastSpace = -1
                     // 前缀宽度用 MC 字形度量判定换行(行尾 `\n` 不计入换行判定与行宽)
                     val contentEnd = if (nl == -1) segEnd else nl
+                    // 平台适配点(T.12 修复):单字符宽度超过 maxWidth 时,原内层 while
+                    // 不推进(end == start),外层 start 也原地踏步 -> 无限添加空行 -> OOM。
+                    // 防御:单字符强制占一行并推进。
+                    if (start < contentEnd) {
+                        val chWidth = font.width(text.substring(start, start + 1))
+                        if (chWidth > maxWidth) {
+                            result.add(
+                                MinecraftTextLine(
+                                    start, start + 1,
+                                    chWidth.toFloat(),
+                                )
+                            )
+                            start++
+                            continue
+                        }
+                    }
                     while (end < contentEnd &&
                         font.width(text.substring(start, end + 1)) <= maxWidth
                     ) {

@@ -303,13 +303,18 @@ internal class MinecraftRenderContext {
      */
     private fun text(command: DrawTextCommand, scissor: Rect?): GuiTextRenderState {
         val font = Minecraft.getInstance().font
+        // 平台适配点:文本颜色 alpha 通道承载图层级透明度(样式色无 alpha 概念,
+        // TextColor.value 为 0xRRGGBB)。MC 字形颜色按 0xAARRGGBB 位模式消费。
+        val baseColor = command.style.color?.value?.or(0xFF000000.toInt()) ?: 0xFFFFFFFF.toInt()
+        val alphaByte = (command.alpha * 255f).roundToInt().coerceIn(0, 255)
+        val color = (baseColor and 0x00FFFFFF) or (alphaByte shl 24)
         return GuiTextRenderState(
             font,
             Language.getInstance().getVisualOrder(command.style.toComponent(command.text)),
             command.matrix.toMatrix3x2f(),
             command.x.roundToInt(),
             command.y.roundToInt(),
-            command.style.color?.value?.or(0xFF000000.toInt()) ?: 0xFFFFFFFF.toInt(),
+            color,
             0, // backgroundColor:对齐 MC 原生,无背景
             false, // dropShadow:对齐 MC 原生,不画阴影
             false, // includeEmpty
@@ -360,9 +365,15 @@ internal class MinecraftRenderContext {
      * androidx Matrix.values 为列主序:values[0]=m00, values[1]=m10, values[4]=m01,
      * values[5]=m11, values[12]=m20, values[13]=m21;
      * JOML 构造器参数序 (m00, m01, m10, m11, m20, m21),注意顺序不同。
+     *
+     * 平台适配点(T.13 修复):MC 26.2 运行时打包的 JOML,`transformPosition` 为
+     * **行主序**实现(x' = m00·x + m10·y + m20,实测见运行时探针),与标准列主序
+     * (x' = m00·x + m01·y + m20)相反。若按列主序直接传入,2x2 旋转矩阵会被
+     * **转置**:旋转方向反转,且绕 pivot 旋转时中心随角度摆动(幅度 2·|sinθ|·|p|,
+     * 表现为"公转"观感)。因此传入时交换 m01/m10(即对 2x2 预转置),抵消其行主序行为。
      */
     private fun FloatArray.toMatrix3x2f(): Matrix3x2f =
-        Matrix3x2f(this[0], this[4], this[1], this[5], this[12], this[13])
+        Matrix3x2f(this[0], this[1], this[4], this[5], this[12], this[13])
 
     private fun Rect.toScreenRectangle(): ScreenRectangle = ScreenRectangle(
         left.roundToInt(),

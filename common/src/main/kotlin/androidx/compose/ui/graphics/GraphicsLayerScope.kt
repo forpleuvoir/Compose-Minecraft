@@ -28,7 +28,6 @@ import androidx.compose.ui.layout.PlacementScopeMarker
 import androidx.compose.ui.platform.LocalGraphicsContext
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import kotlin.js.JsName
 
 /** Default camera distance for all layers */
 const val DefaultCameraDistance = 8.0f

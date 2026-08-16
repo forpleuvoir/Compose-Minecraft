@@ -62,6 +62,12 @@ fun MinecraftDevSceneContent() {
                 subtitle = "圆/椭圆/弧/圆角矩形/线/Path/点,填充与描边",
                 onClick = { ComposeScreen.open { GeometryDevScene() } },
             )
+
+            DevMenuButton(
+                title = "旋转专项测试 (Rotation)",
+                subtitle = "长文本/方块绕中心无限旋转,红十字/红点中心参考",
+                onClick = { ComposeScreen.open { RotationTestDevScene() } },
+            )
         }
     }
 }
