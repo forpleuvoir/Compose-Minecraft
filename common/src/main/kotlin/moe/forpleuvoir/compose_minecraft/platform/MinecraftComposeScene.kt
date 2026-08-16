@@ -1,6 +1,7 @@
 package moe.forpleuvoir.compose_minecraft.platform
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.MinecraftCanvas
@@ -10,14 +11,18 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.platform.PlatformContext
+import androidx.compose.ui.platform.PlatformTextInputMethodRequest
 import androidx.compose.ui.scene.CanvasLayersComposeScene
 import androidx.compose.ui.scene.ComposeScene
 import androidx.compose.ui.scene.PointerEventResult
+import androidx.compose.ui.text.input.PlatformTextInputService
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
 import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderContext
+import moe.forpleuvoir.compose_minecraft.platform.textinput.MinecraftTextInputService
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalCharFilter
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.state.gui.GuiRenderState
@@ -49,12 +54,33 @@ class MinecraftComposeScene(
      */
     private val charFilter = AtomicReference<(Int) -> Boolean>({ true })
 
+    /** 平台文本输入服务(IME Service):桥接 MC TextInputManager 与 Compose 编辑缓冲 */
+    internal val textInputService = MinecraftTextInputService()
+
     private val scene: ComposeScene = CanvasLayersComposeScene(
         density = Density(1f),
         size = IntSize(width.coerceAtLeast(1), height.coerceAtLeast(1)),
         // 主线程驱动:MC 的 extract/render 都在主线程,recompose 同步刷新
         coroutineContext = Dispatchers.Unconfined,
-        platformContext = PlatformContext.Empty(),
+        platformContext = object : PlatformContext.Empty() {
+            // 注入 MC IME 服务(替代 EmptyPlatformTextInputService 默认值)
+            @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+            override val textInputService: PlatformTextInputService
+                get() = this@MinecraftComposeScene.textInputService
+
+            // 新版 API 会话(BasicTextField(state)):绑定 request 的 onEditCommand/value,
+            // 使 preedit 事件能写入编辑缓冲;会话取消时解绑(IME 停止由 RootNodeOwner 的
+            // textInputService.stopInput() 负责)
+            @OptIn(ExperimentalComposeUiApi::class)
+            override suspend fun startInputMethod(request: PlatformTextInputMethodRequest): Nothing {
+                this@MinecraftComposeScene.textInputService.bindRequest(request)
+                try {
+                    awaitCancellation()
+                } finally {
+                    this@MinecraftComposeScene.textInputService.unbindRequest(request)
+                }
+            }
+        },
         // MC 每帧都会调用 render(),无需额外 invalidate 调度
         invalidate = {},
     )

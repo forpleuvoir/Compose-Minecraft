@@ -12,12 +12,14 @@ import androidx.compose.ui.input.pointer.PointerType
 import moe.forpleuvoir.compose_minecraft.platform.ComposeInputBridge.scrollDelta
 import moe.forpleuvoir.compose_minecraft.platform.ComposeInputBridge.toCompose
 import moe.forpleuvoir.compose_minecraft.platform.ComposeInputBridge.toPointerKeyboardModifiers
+import com.mojang.blaze3d.platform.InputConstants
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.CharacterEvent
 import net.minecraft.client.input.KeyEvent as MCKeyEvent
 import net.minecraft.client.input.MouseButtonEvent
+import net.minecraft.client.input.PreeditEvent
 import net.minecraft.network.chat.Component
 
 /**
@@ -31,7 +33,11 @@ import net.minecraft.network.chat.Component
  *   场景坐标 = GUI 单位(密度 1),无需换算;
  * - 生命周期:[removed] 时关闭场景(任何被替换/关闭路径都会触发)。
  *
- * 尚未支持:双击、Popup/Dialog 焦点层级、IME preedit 组合态提示(候选窗口由系统输入法负责)。
+ * IME 支持(实施计划 mc-ime-service-plan.md):[preeditUpdated] 把系统输入法组合态
+ * (preedit)转发到 Compose 编辑缓冲(下划线组合文本);[charTyped] 保持提交文本上屏
+ * 并通知 service 计数(组合结束时定位光标)。
+ *
+ * 尚未支持:双击、Popup/Dialog 焦点层级、IME 候选窗(由系统输入法负责)。
  */
 class ComposeScreen(
     content: @Composable () -> Unit,
@@ -114,12 +120,28 @@ class ComposeScreen(
 
     // ── 键盘输入(阶段 F)──────────────────────────────────────
 
-    override fun keyPressed(event: MCKeyEvent): Boolean =
-        composeScene.sendKeyEvent(event.toCompose(KeyEventType.KeyDown)) ||
+    /**
+     * 键盘按下转发到 Compose。
+     *
+     * IME 组合态例外:组合期间 Backspace/Delete/Esc 由系统输入法处理(缩短/清除组合串、
+     * 取消组合),这里直接消费、不进入 Compose 文本处理——否则 Compose 的退格会删除组合
+     * 文本并清除组合区,导致后续 preedit 更新在错误位置重新插入组合文本(与官方桌面 AWT
+     * 组合期间按键不达应用的行为一致)。
+     */
+    override fun keyPressed(event: MCKeyEvent): Boolean {
+        if (composeScene.textInputService.isComposing && event.key in IME_COMPOSITION_KEYS) {
+            return true
+        }
+        return composeScene.sendKeyEvent(event.toCompose(KeyEventType.KeyDown)) ||
             super.keyPressed(event)
+    }
 
-    override fun keyReleased(event: MCKeyEvent): Boolean =
-        composeScene.sendKeyEvent(event.toCompose(KeyEventType.KeyUp)) || super.keyReleased(event)
+    override fun keyReleased(event: MCKeyEvent): Boolean {
+        if (composeScene.textInputService.isComposing && event.key in IME_COMPOSITION_KEYS) {
+            return true
+        }
+        return composeScene.sendKeyEvent(event.toCompose(KeyEventType.KeyUp)) || super.keyReleased(event)
+    }
 
     /**
      * 文本输入(计划 I.1):MC 字符上屏(含中文输入法上屏)→ Compose typed KeyEvent。
@@ -128,18 +150,32 @@ class ComposeScreen(
      * codePoint 字段(KeyEvent.isTypedEvent → TextFieldKeyEventHandler 插入文本),
      * 因此这里把 [CharacterEvent.codepoint] 直接构造成 typed 事件转发,无需 TextInputService。
      * 转发前先经 [LocalCharFilter](默认全放行,由业务方覆盖)。
+     *
+     * IME 提交语义:系统输入法的提交文本也经此路径上屏(MC GLFW 分支先触发字符回调再
+     * 触发 preedit null),组合期间先通知 service 计数(组合结束时用于定位光标)。
      */
     @OptIn(InternalComposeUiApi::class)
     override fun charTyped(event: CharacterEvent): Boolean {
         if (!composeScene.isCharAccepted(event.codepoint)) {
             return false
         }
+        composeScene.textInputService.onCharTyped(event.codepoint)
         val typedEvent = ComposeKeyEvent(
             key = Key.Unknown,
             type = KeyEventType.KeyDown,
             codePoint = event.codepoint,
         )
         return composeScene.sendKeyEvent(typedEvent)
+    }
+
+    /**
+     * IME 组合态(preedit)转发(实施计划 §3.2/§4-3):系统输入法的组合串变化(含提交/取消
+     * 后的 null)转发到 [MinecraftTextInputService.onPreeditChanged],由 service 转换为
+     * Compose EditCommand 写入编辑缓冲(下划线组合文本/组合区清理/光标定位)。
+     */
+    override fun preeditUpdated(event: PreeditEvent?): Boolean {
+        composeScene.textInputService.onPreeditChanged(event)
+        return true
     }
 
     // ── 生命周期 ─────────────────────────────────────────────
@@ -158,6 +194,16 @@ class ComposeScreen(
     }
 
     companion object {
+        /**
+         * IME 组合期间由系统输入法处理的键(GLFW 键码):
+         * Backspace/Delete 缩短或清除组合串,Esc 取消组合。
+         */
+        private val IME_COMPOSITION_KEYS = intArrayOf(
+            InputConstants.KEY_BACKSPACE,
+            InputConstants.KEY_DELETE,
+            InputConstants.KEY_ESCAPE,
+        )
+
         /** 打开一个 Compose 屏幕(等价于原版 minecraft.gui.setScreen) */
         fun open(content: @Composable () -> Unit) {
             Minecraft.getInstance().gui.setScreen(ComposeScreen(content))
