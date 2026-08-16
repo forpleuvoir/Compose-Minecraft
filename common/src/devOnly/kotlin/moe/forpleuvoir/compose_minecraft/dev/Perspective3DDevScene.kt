@@ -30,12 +30,13 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
 /**
- * 3D 透视专项测试屏幕(T.15):验证 graphicsLayer rotationX/rotationY 的绘制端。
+ * 3D 透视专项测试屏幕(T.15):验证 graphicsLayer rotationX/rotationY/rotationZ 的绘制端。
  *
  * 布局:全屏居中,元素少,避免溢出。
  * - 青色方块:滑块控制 rotationX(绕水平轴);
  * - 紫色方块:滑块控制 rotationY(绕垂直轴);
- * - 橙色方块:滑块同时控制 rotationX + rotationY(双轴 3D);
+ * - 橙色方块:两个滑块分别控制 rotationX + rotationY(双轴 3D);
+ * - 绿色方块:三个滑块分别控制 rotationX + rotationY + rotationZ(三轴);
  * - 每个方块外层画固定红十字参考(不随 3D 旋转,验证旋转中心);
  * - 滑块范围 -90° ~ 90°,可拖动或点击轨道任意位置。
  */
@@ -45,6 +46,9 @@ fun Perspective3DDevScene() {
     var rotY by remember { mutableStateOf(0f) }
     var rotXYX by remember { mutableStateOf(0f) }
     var rotXYY by remember { mutableStateOf(0f) }
+    var rotXYZX by remember { mutableStateOf(0f) }
+    var rotXYZY by remember { mutableStateOf(0f) }
+    var rotXYZZ by remember { mutableStateOf(0f) }
 
     Box(
         Modifier
@@ -63,13 +67,13 @@ fun Perspective3DDevScene() {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             BasicText(
-                "3D 透视测试 (T.15):rotationX / rotationY",
+                "3D 透视测试 (T.15):rotationX / rotationY / rotationZ",
                 style = Style.EMPTY.withColor(Color.White).withBold(true),
             )
 
             Row(
                 Modifier.padding(top = 24.dp),
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(48.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(20.dp),
             ) {
                 AngleBox(
                     label = "X",
@@ -90,41 +94,71 @@ fun Perspective3DDevScene() {
                     rotationX = rotXYX,
                     rotationY = rotXYY,
                 )
+                AngleBox(
+                    label = "XYZ",
+                    labelColor = Color.White,
+                    boxColor = Color(0xFF66BB6A),
+                    rotationX = rotXYZX,
+                    rotationY = rotXYZY,
+                    rotationZ = rotXYZZ,
+                )
             }
 
             // ── 滑块行 ──
             Row(
                 Modifier.padding(top = 16.dp),
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(48.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(20.dp),
             ) {
                 AngleSlider(
                     value = rotX,
                     onValueChange = { rotX = it },
-                    modifier = Modifier.width(160.dp),
+                    modifier = Modifier.width(120.dp),
                 )
                 AngleSlider(
                     value = rotY,
                     onValueChange = { rotY = it },
-                    modifier = Modifier.width(160.dp),
+                    modifier = Modifier.width(120.dp),
                 )
                 // XY 方块:两个滑块分别控制 rotationX / rotationY
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     AngleSlider(
                         value = rotXYX,
                         onValueChange = { rotXYX = it },
-                        modifier = Modifier.width(160.dp),
+                        modifier = Modifier.width(120.dp),
                     )
                     AngleSlider(
                         value = rotXYY,
                         onValueChange = { rotXYY = it },
-                        modifier = Modifier.width(160.dp).padding(top = 4.dp),
+                        modifier = Modifier.width(120.dp).padding(top = 4.dp),
+                    )
+                }
+                // XYZ 方块:三个滑块分别控制 rotationX / rotationY / rotationZ
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    AngleSlider(
+                        value = rotXYZX,
+                        onValueChange = { rotXYZX = it },
+                        modifier = Modifier.width(120.dp),
+                    )
+                    AngleSlider(
+                        value = rotXYZY,
+                        onValueChange = { rotXYZY = it },
+                        modifier = Modifier.width(120.dp).padding(top = 4.dp),
+                    )
+                    AngleSlider(
+                        value = rotXYZZ,
+                        onValueChange = { rotXYZZ = it },
+                        modifier = Modifier.width(120.dp).padding(top = 4.dp),
                     )
                 }
             }
 
+            // 固定宽度:角度文本内容随拖动变化,若不固定宽度会导致整个居中的
+            // Column 宽度重排,所有元素横向抖动(实测现象)。
             BasicText(
-                "rotationX=$rotX° rotationY=$rotY° rotationXY-X=$rotXYX° rotationXY-Y=$rotXYY°",
-                modifier = Modifier.padding(top = 12.dp),
+                "rX=$rotX° rY=$rotY° | XY-X=$rotXYX° XY-Y=$rotXYY° | XYZ-X=$rotXYZX° XYZ-Y=$rotXYZY° XYZ-Z=$rotXYZZ°",
+                modifier = Modifier
+                    .padding(top = 12.dp)
+                    .width(620.dp),
                 style = Style.EMPTY.withColor(Color(0xFFFFD54F)),
             )
             BasicText(
@@ -153,6 +187,7 @@ private fun AngleBox(
     boxColor: Color,
     rotationX: Float = 0f,
     rotationY: Float = 0f,
+    rotationZ: Float = 0f,
 ) {
     Box(
         Modifier
@@ -175,6 +210,7 @@ private fun AngleBox(
             .graphicsLayer {
                 this.rotationX = rotationX
                 this.rotationY = rotationY
+                this.rotationZ = rotationZ
             }
             .background(boxColor),
     ) {
