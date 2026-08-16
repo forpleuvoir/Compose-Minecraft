@@ -55,6 +55,12 @@ internal class MinecraftRenderContext {
     /** 三角化输出缓冲(每帧复用,避免分配) */
     private val triangleSink = GeometryTessellator.Sink()
 
+    /** T.15 运行时探针计数(临时) */
+    private var debugProbeFrames = 0
+
+    /** T.15 文本 pose 诊断计数(临时) */
+    private var debugTextPoseFrames = 0
+
     /**
      * 三角化结果缓存:按「命令几何内容 + aaScale + Paint 参数」指纹复用顶点数组。
      * 重复图形(相同内容与缩放)命中缓存直接复用,不再每帧重新三角化;
@@ -71,6 +77,12 @@ internal class MinecraftRenderContext {
         val guiScale = windowState.guiScale
 
         for (command in canvas.commands()) {
+            // T.15:3D 命令(图层 rotationX/rotationY,携带行主序含透视的 layer3D)
+            // 走 CPU 顶点透视变换路径(纯色几何 → 屏幕三角形,实心无 AA)。
+            if (command.layer3D != null) {
+                render3D(renderState, command, guiScale)
+                continue
+            }
             // 平台适配点(T.9 兜底):MC 的 enableScissor 对 "宽高 <= 0" 直接抛
             // IllegalArgumentException("Scissor size must be >0")。两个来源:
             // 1. 退化裁剪(空、反转、NaN、亚像素高度)—— 用四舍五入后的整数尺寸判定;
@@ -209,6 +221,203 @@ internal class MinecraftRenderContext {
     }
 
     /**
+     * 3D 命令提交(T.15):CPU 顶点透视变换。
+     *
+     * 图层 rotationX/rotationY 的 3D 透视无法用 MC 的 2D GUI 管线表达,因此
+     * 在 CPU 端完成:局部几何(三角化/四边形)的每个顶点先经命令矩阵
+     * (列主序 2D)变换到图层空间,再经 [DrawCommand.layer3D](行主序 4x4,
+     * 含透视)变换到屏幕空间(含透视除法 w)。输出屏幕坐标三角形,
+     * pose = identity,coverage = OPAQUE(3D 下关闭抗锯齿,实心填充)。
+     *
+     * 语义对齐:与命中测试(GraphicsLayerOwnerLayer.updateMatrix →
+     * prepareTransformationMatrix)使用同一矩阵构建逻辑(见 GraphicsLayer.draw
+     * 3D 分支),绘制与命中一致。
+     *
+     * 防御:w <= 0(图元在相机后方)的顶点丢弃,对应三角形跳过。
+     */
+    private fun render3D(renderState: GuiRenderState, command: DrawCommand, guiScale: Int) {
+        val layer3D = command.layer3D ?: return
+        val m2 = command.matrix
+        val paint = command.paint ?: return
+        val colorArgb = paint.color.toArgb(paint.alpha)
+        var output = FloatArray(384)
+        var count = 0
+
+        /** 追加一个 3D 变换后的三角形;返回 false 表示任一顶点在相机后方 */
+        fun emitTriangle(ax: Float, ay: Float, bx: Float, by: Float, cx: Float, cy: Float) {
+            val pa = map3D(m2, layer3D, ax, ay) ?: return
+            val pb = map3D(m2, layer3D, bx, by) ?: return
+            val pc = map3D(m2, layer3D, cx, cy) ?: return
+            if (count + 9 > output.size) output = output.copyOf(output.size * 2)
+            output[count] = pa[0]; output[count + 1] = pa[1]; output[count + 2] = OPAQUE_COVERAGE
+            output[count + 3] = pb[0]; output[count + 4] = pb[1]; output[count + 5] = OPAQUE_COVERAGE
+            output[count + 6] = pc[0]; output[count + 7] = pc[1]; output[count + 8] = OPAQUE_COVERAGE
+            count += 9
+        }
+
+        // 矩形 / 退化圆角矩形:4 角 → 2 三角形
+        fun quad(left: Float, top: Float, right: Float, bottom: Float) {
+            emitTriangle(left, top, right, top, right, bottom)
+            emitTriangle(left, top, right, bottom, left, bottom)
+        }
+
+        fun tessellated(tessellate: (GeometryTessellator.Sink) -> Unit) {
+            triangleSink.aaScale = matrixScale(m2) * guiScale
+            triangleSink.clear()
+            tessellate(triangleSink)
+            if (triangleSink.vertexCount < 3) return
+            val src = triangleSink.toArray()
+            var i = 0
+            while (i + 2 < src.size) {
+                val pa = map3D(m2, layer3D, src[i], src[i + 1])
+                val pb = map3D(m2, layer3D, src[i + 3], src[i + 4])
+                val pc = map3D(m2, layer3D, src[i + 6], src[i + 7])
+                if (pa != null && pb != null && pc != null) {
+                    if (count + 9 > output.size) output = output.copyOf(output.size * 2)
+                    output[count] = pa[0]; output[count + 1] = pa[1]; output[count + 2] = OPAQUE_COVERAGE
+                    output[count + 3] = pb[0]; output[count + 4] = pb[1]; output[count + 5] = OPAQUE_COVERAGE
+                    output[count + 6] = pc[0]; output[count + 7] = pc[1]; output[count + 8] = OPAQUE_COVERAGE
+                    count += 9
+                }
+                i += 9
+            }
+        }
+
+        when (command) {
+            is DrawRectCommand -> {
+                // T.15 运行时探针(临时):打印矩形 4 角与中心变换后的屏幕坐标,
+                // 验证旋转中心(AGENTS.md T.13:参考点不动 = 中心对)
+                if (debugProbeFrames < 30) {
+                    debugProbeFrames++
+                    val cx = (command.left + command.right) / 2f
+                    val cy = (command.top + command.bottom) / 2f
+                    val tl = map3D(m2, layer3D, command.left, command.top)
+                    val tr = map3D(m2, layer3D, command.right, command.top)
+                    val bl = map3D(m2, layer3D, command.left, command.bottom)
+                    val br = map3D(m2, layer3D, command.right, command.bottom)
+                    val c = map3D(m2, layer3D, cx, cy)
+                    println(
+                        "[T15-PROBE] rect=(${command.left},${command.top},${command.right},${command.bottom}) " +
+                            "center=$cx,$cy -> ${c?.get(0) ?: "null"},${c?.get(1) ?: "null"} | " +
+                            "tl=${tl?.let { "${it[0]},${it[1]}" } ?: "null"} " +
+                            "tr=${tr?.let { "${it[0]},${it[1]}" } ?: "null"} " +
+                            "bl=${bl?.let { "${it[0]},${it[1]}" } ?: "null"} " +
+                            "br=${br?.let { "${it[0]},${it[1]}" } ?: "null"}"
+                    )
+                    // 打印 layer3D 与 m2 矩阵
+                    println(
+                        "[T15-MATRIX] m2=[${m2[0]},${m2[4]},${m2[12]};${m2[1]},${m2[5]},${m2[13]}] " +
+                            "layer3D=[${layer3D[0]},${layer3D[4]},${layer3D[12]};${layer3D[1]},${layer3D[5]},${layer3D[13]};" +
+                            "p3=${layer3D[3]},${layer3D[7]},${layer3D[15]}]"
+                    )
+                }
+                quad(command.left, command.top, command.right, command.bottom)
+            }
+            is DrawRoundRectCommand ->
+                if (command.radiusX <= 1f && command.radiusY <= 1f) {
+                    quad(command.left, command.top, command.right, command.bottom)
+                } else {
+                    tessellated { sink ->
+                        GeometryTessellator.roundRect(
+                            command.left, command.top, command.right, command.bottom,
+                            command.radiusX, command.radiusY,
+                            fill = paint.style == PaintingStyle.Fill,
+                            strokeWidth = paint.strokeWidth,
+                            sink = sink,
+                        )
+                    }
+                }
+            is DrawOvalCommand -> tessellated { sink ->
+                GeometryTessellator.oval(
+                    command.left, command.top, command.right, command.bottom,
+                    fill = paint.style == PaintingStyle.Fill,
+                    strokeWidth = paint.strokeWidth,
+                    sink = sink,
+                )
+            }
+            is DrawCircleCommand -> tessellated { sink ->
+                GeometryTessellator.circle(
+                    command.centerX, command.centerY, command.radius,
+                    fill = paint.style == PaintingStyle.Fill,
+                    strokeWidth = paint.strokeWidth,
+                    sink = sink,
+                )
+            }
+            is DrawArcCommand -> tessellated { sink ->
+                GeometryTessellator.arc(
+                    command.left, command.top, command.right, command.bottom,
+                    command.startAngle, command.sweepAngle, command.useCenter,
+                    fill = paint.style == PaintingStyle.Fill,
+                    strokeWidth = paint.strokeWidth,
+                    sink = sink,
+                )
+            }
+            is DrawLineCommand -> tessellated { sink ->
+                GeometryTessellator.line(
+                    command.p1x, command.p1y, command.p2x, command.p2y,
+                    command.paint.strokeWidth,
+                    command.paint.strokeCap,
+                    sink = sink,
+                )
+            }
+            is DrawPathCommand -> tessellated { sink ->
+                GeometryTessellator.path(
+                    command.segments,
+                    fill = paint.style == PaintingStyle.Fill,
+                    strokeWidth = paint.strokeWidth,
+                    cap = paint.strokeCap,
+                    sink = sink,
+                )
+            }
+            is DrawPointsCommand -> tessellated { sink ->
+                GeometryTessellator.points(
+                    command.pointMode, command.points,
+                    command.paint.strokeWidth,
+                    command.paint.strokeCap,
+                    sink = sink,
+                )
+            }
+            else -> return // 文本/阴影/渐变在记录端已降级为 2D 近似,不会到这里
+        }
+
+        if (count >= 9) {
+            MinecraftGuiTriangles.ensureCompiled()
+            renderState.addGuiElement(
+                GuiTriangleRenderState(
+                    pose = IDENTITY_MATRIX,
+                    colorArgb = colorArgb,
+                    scissor = null,
+                    vertices = output.copyOf(count),
+                )
+            )
+        }
+    }
+
+    /**
+     * 命令矩阵(列主序 2D)→ 图层空间,再经 layer3D(行主序 4x4,透视除法)
+     * → 屏幕空间。返回 null 表示顶点在相机后方(w <= 0)。
+     */
+    private fun map3D(m2: FloatArray, layer3D: FloatArray, x: Float, y: Float): FloatArray? {
+        val x1 = m2[0] * x + m2[4] * y + m2[12]
+        val y1 = m2[1] * x + m2[5] * y + m2[13]
+        val w = layer3D[3] * x1 + layer3D[7] * y1 + layer3D[15]
+        if (w <= 0f) return null
+        val iw = 1f / w
+        return floatArrayOf(
+            iw * (layer3D[0] * x1 + layer3D[4] * y1 + layer3D[12]),
+            iw * (layer3D[1] * x1 + layer3D[5] * y1 + layer3D[13]),
+        )
+    }
+
+    private companion object {
+        /** 3D 实心填充 coverage 大数(关闭抗锯齿,与 GeometryTessellator.OPAQUE 同值) */
+        const val OPAQUE_COVERAGE = 1e4f
+
+        /** 3D 顶点已是屏幕坐标,pose = identity */
+        val IDENTITY_MATRIX: Matrix3x2f = Matrix3x2f()
+    }
+
+    /**
      * 三角化一条几何命令并作为 [GuiTriangleRenderState] 提交。
      * 空几何(三角化结果无顶点)自动跳过;pipeline 首次使用时懒编译。
      * coverage 的屏幕像素距离按「矩阵最大轴缩放 × guiScale」换算。
@@ -343,6 +552,15 @@ internal class MinecraftRenderContext {
         val baseColor = command.style.color?.value?.or(0xFF000000.toInt()) ?: 0xFFFFFFFF.toInt()
         val alphaByte = (command.alpha * 255f).roundToInt().coerceIn(0, 255)
         val color = (baseColor and 0x00FFFFFF) or (alphaByte shl 24)
+        // T.15 诊断(临时):渲染端最终收到的文本 pose
+        if (debugTextPoseFrames < 200) {
+            debugTextPoseFrames++
+            val m = command.matrix
+            println(
+                "[T15-TEXTPOSE] text='${command.text}' x=${command.x} y=${command.y} " +
+                    "m00=${m[0]} m10=${m[1]} m01=${m[4]} m11=${m[5]} m20=${m[12]} m21=${m[13]}"
+            )
+        }
         return GuiTextRenderState(
             font,
             Language.getInstance().getVisualOrder(command.style.toComponent(command.text)),

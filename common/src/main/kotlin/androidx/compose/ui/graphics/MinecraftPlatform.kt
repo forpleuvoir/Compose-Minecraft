@@ -582,6 +582,12 @@ internal class MinecraftCanvas internal constructor(
     internal val image: ImageBitmap? = null,
 ) : Canvas {
 
+    /** T.15 诊断计数(临时):文本命令参数打印帧数 */
+    private var debugTextCmdFrames = 0
+
+    /** T.15 诊断计数(临时):replayFrom 文本分支打印帧数 */
+    private var debugReplayTextFrames = 0
+
     // ─────────────────────────────────────────────────────────────────────────
     // 绘制命令模型
     //
@@ -608,6 +614,19 @@ internal class MinecraftCanvas internal constructor(
 
         /** 绘制参数快照;文本命令为 null(文本使用独立字段) */
         val paint: PaintSnapshot?
+
+        /**
+         * 图层级 3D 变换矩阵(行主序 4x4,含透视分量;null = 普通 2D 命令)。
+         *
+         * 平台适配点(T.15):GraphicsLayer 的 rotationX/rotationY(3D 透视)无法用
+         * 2D 画布矩阵表达,由 [GraphicsLayer.draw] 3D 分支构建行主序 4x4 矩阵后
+         * 经 [MinecraftCanvas.replayFrom3D] 附加到纯色几何命令;
+         * 渲染端 [moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderContext]
+         * 检测到非 null 时走 CPU 顶点透视变换路径。
+         * 文本/阴影/渐变命令在 [MinecraftCanvas.with3D] 中已降级为 2D 仿射近似,
+         * 本字段恒为 null。
+         */
+        val layer3D: FloatArray? get() = null
     }
 
     class DrawRectCommand(
@@ -618,6 +637,7 @@ internal class MinecraftCanvas internal constructor(
         val top: Float,
         val right: Float,
         val bottom: Float,
+        override val layer3D: FloatArray? = null,
     ) : DrawCommand
 
     class DrawRoundRectCommand(
@@ -630,6 +650,7 @@ internal class MinecraftCanvas internal constructor(
         val bottom: Float,
         val radiusX: Float,
         val radiusY: Float,
+        override val layer3D: FloatArray? = null,
     ) : DrawCommand
 
     class DrawOvalCommand(
@@ -640,6 +661,7 @@ internal class MinecraftCanvas internal constructor(
         val top: Float,
         val right: Float,
         val bottom: Float,
+        override val layer3D: FloatArray? = null,
     ) : DrawCommand
 
     class DrawCircleCommand(
@@ -649,6 +671,7 @@ internal class MinecraftCanvas internal constructor(
         val centerX: Float,
         val centerY: Float,
         val radius: Float,
+        override val layer3D: FloatArray? = null,
     ) : DrawCommand
 
     class DrawArcCommand(
@@ -662,6 +685,7 @@ internal class MinecraftCanvas internal constructor(
         val startAngle: Float,
         val sweepAngle: Float,
         val useCenter: Boolean,
+        override val layer3D: FloatArray? = null,
     ) : DrawCommand
 
     class DrawLineCommand(
@@ -672,6 +696,7 @@ internal class MinecraftCanvas internal constructor(
         val p1y: Float,
         val p2x: Float,
         val p2y: Float,
+        override val layer3D: FloatArray? = null,
     ) : DrawCommand
 
     class DrawPathCommand(
@@ -680,6 +705,7 @@ internal class MinecraftCanvas internal constructor(
         override val paint: PaintSnapshot,
         /** 路径的扁平化段数据(与 [MinecraftPath.segments] 一致) */
         val segments: List<MinecraftPath.PathSegmentData>,
+        override val layer3D: FloatArray? = null,
     ) : DrawCommand
 
     class DrawPointsCommand(
@@ -688,6 +714,7 @@ internal class MinecraftCanvas internal constructor(
         override val paint: PaintSnapshot,
         val pointMode: PointMode,
         val points: List<Offset>,
+        override val layer3D: FloatArray? = null,
     ) : DrawCommand
 
     class DrawImageRectCommand(
@@ -877,6 +904,106 @@ internal class MinecraftCanvas internal constructor(
                     strokeWidth = snapshot.strokeWidth,
                     strokeCap = snapshot.strokeCap,
                 )
+                if (command.layer3D != null) {
+                    // T.15 修复:3D 命令(带 layer3D)必须**透传** layer3D。
+                    // 嵌套图层时,子图层 3D 命令先进入父图层录制画布,父图层
+                    // drawLayer 经 replayFrom 回放;若走 drawXxx 重新构造会丢失
+                    // layer3D(变成普通 2D 命令),渲染端 render3D 永不触发
+                    // (表现为方块位置错乱/跑左上角)。
+                    // 此处直接构造带 layer3D 的新命令:
+                    // - 矩阵 = **原始命令矩阵**(局部→录制画布,不叠加当前画布矩阵),
+                    //   因为渲染端 map3D 链是「局部 → 命令矩阵 → layer3D → 屏幕」;
+                    // - layer3D = 原 layer3D 右乘当前画布矩阵(父级/场景变换,行主序化),
+                    //   保证嵌套层级正确(命令矩阵只负责局部,父级变换全进 layer3D);
+                    // - clip = 换算后的根空间裁剪。
+                    val paintSnap = paint.snapshot()
+                    val clipNow = currentClip
+                    val origM = command.matrix
+                    // 当前画布矩阵(列主序 2D)→ 行主序 4x4,右乘进 layer3D
+                    val baseRow = Matrix().apply {
+                        values[0] = base.values[0]
+                        values[1] = base.values[4]
+                        values[4] = base.values[1]
+                        values[5] = base.values[5]
+                        values[10] = 1f
+                        values[12] = base.values[12]
+                        values[13] = base.values[13]
+                        values[15] = 1f
+                    }
+                    val layer3DWithBase = Matrix(Array(16) { i -> command.layer3D!![i] }.toFloatArray())
+                        .apply { timesAssign(baseRow) }
+                        .values
+                    when (command) {
+                        is DrawRectCommand -> record(
+                            DrawRectCommand(
+                                origM, clipNow, paintSnap,
+                                command.left, command.top, command.right, command.bottom,
+                                layer3D = layer3DWithBase,
+                            )
+                        )
+                        is DrawRoundRectCommand -> record(
+                            DrawRoundRectCommand(
+                                origM, clipNow, paintSnap,
+                                command.left, command.top, command.right, command.bottom,
+                                command.radiusX, command.radiusY,
+                                layer3D = layer3DWithBase,
+                            )
+                        )
+                        is DrawOvalCommand -> record(
+                            DrawOvalCommand(
+                                origM, clipNow, paintSnap,
+                                command.left, command.top, command.right, command.bottom,
+                                layer3D = layer3DWithBase,
+                            )
+                        )
+                        is DrawCircleCommand -> record(
+                            DrawCircleCommand(
+                                origM, clipNow, paintSnap,
+                                command.centerX, command.centerY, command.radius,
+                                layer3D = layer3DWithBase,
+                            )
+                        )
+                        is DrawArcCommand -> record(
+                            DrawArcCommand(
+                                origM, clipNow, paintSnap,
+                                command.left, command.top, command.right, command.bottom,
+                                command.startAngle, command.sweepAngle, command.useCenter,
+                                layer3D = layer3DWithBase,
+                            )
+                        )
+                        is DrawLineCommand -> record(
+                            DrawLineCommand(
+                                origM, clipNow, paintSnap,
+                                command.p1x, command.p1y, command.p2x, command.p2y,
+                                layer3D = layer3DWithBase,
+                            )
+                        )
+                        is DrawPathCommand -> record(
+                            DrawPathCommand(
+                                origM, clipNow, paintSnap, command.segments,
+                                layer3D = layer3DWithBase,
+                            )
+                        )
+                        is DrawPointsCommand -> record(
+                            DrawPointsCommand(
+                                origM, clipNow, paintSnap,
+                                command.pointMode, command.points,
+                                layer3D = layer3DWithBase,
+                            )
+                        )
+                        is DrawImageRectCommand -> drawImageRect(
+                            command.image,
+                            IntOffset(command.srcOffsetX, command.srcOffsetY),
+                            IntSize(command.srcWidth, command.srcHeight),
+                            IntOffset(command.dstOffsetX, command.dstOffsetY),
+                            IntSize(command.dstWidth, command.dstHeight),
+                            paint,
+                        )
+                        is DrawTextCommand -> Unit // 文本在 else 分支处理
+                        is DrawGradientRectCommand -> Unit // 渐变矩形在 else 分支处理
+                        is DrawShadowCommand -> Unit // 阴影在 else 分支处理
+                    }
+                } else
                 when (command) {
                     is DrawRectCommand      ->
                         drawRect(command.left, command.top, command.right, command.bottom, paint)
@@ -927,6 +1054,16 @@ internal class MinecraftCanvas internal constructor(
                     is DrawShadowCommand    -> Unit // 阴影在 else 分支处理
                 }
             } else if (command is DrawTextCommand) {
+                // T.15 诊断(临时):replayFrom 文本分支的 currentMatrix
+                if (debugReplayTextFrames < 20) {
+                    debugReplayTextFrames++
+                    val cm = currentMatrix.values
+                    println(
+                        "[T15-REPLAYTEXT] '${command.text}' cmdM20=${command.matrix[12]} cmdM21=${command.matrix[13]} " +
+                            "curM00=${cm[0]} curM10=${cm[1]} curM01=${cm[4]} curM11=${cm[5]} " +
+                            "curM20=${cm[12]} curM21=${cm[13]}"
+                    )
+                }
                 // 平台适配点:文本命令同样叠加图层级 alpha(经颜色 alpha 通道应用),
                 // 否则 graphicsLayer 的 alpha 对图层内文本不生效。
                 recordTextDraw(
@@ -950,6 +1087,155 @@ internal class MinecraftCanvas internal constructor(
         }
     }
 
+    /**
+     * 3D 版回放(T.15):把 [source] 的绘制命令回放到本画布,并附加图层级
+     * 3D 变换 [layer3D](行主序 4x4,含透视分量)。
+     *
+     * 纯色几何命令(矩形/圆角/圆/椭圆/弧/线/路径/点)携带 [layer3D],
+     * 渲染端经 CPU 顶点透视变换展开(真 3D 透视);
+     * 文本/阴影/渐变命令无法透视纹理校正,降级为 2D 仿射近似
+     * (矩阵 = 命令矩阵 × layer3D 的 2D 部分,不携带 layer3D)。
+     * 图片命令保持原样(第一版不支持图片渲染)。
+     */
+    internal fun replayFrom3D(source: MinecraftCanvas, layer3D: FloatArray, alphaMultiplier: Float = 1f) {
+        for (command in source.commands()) {
+            val converted = command.with3D(layer3D, alphaMultiplier)
+            if (converted != null) {
+                record(converted)
+            }
+        }
+    }
+
+    /**
+     * 把 [layer3D](行主序 4x4,含透视)附加到命令上(T.15)。
+     *
+     * - 纯色几何:原样拷贝,携带 [layer3D],渲染端走 CPU 透视顶点变换
+     *   (父画布矩阵已由 GraphicsLayer.draw 右乘进 layer3D);
+     * - 文本/阴影/渐变:降级为 2D 仿射近似 —— 矩阵 = 命令矩阵 × layer3D 的
+     *   2D 部分(列主序化;layer3D 已含父画布矩阵,故不再左乘),不携带 layer3D;
+     * - 图片:返回 null(第一版不支持图片渲染,3D 下同样跳过)。
+     */
+    private fun DrawCommand.with3D(
+        layer3D: FloatArray,
+        alphaMultiplier: Float,
+    ): DrawCommand? {
+        // approx2D 取 layer3D 的 2D 部分,但**只保留对角缩放、去掉剪切项**:
+        //   x' = layer3D[0]*x;  y' = layer3D[5]*y
+        // 剪切项(layer3D[1]/layer3D[4])来自 3D 旋转的透视耦合,会让文本
+        // 平行四边形化(倾斜),视觉上像"多了一个轴的旋转"(用户反馈)。
+        // 文本是 2D 近似,去掉剪切只保留压缩,视觉更干净(压缩方向仍正确:
+        // rotationX → y 压缩,rotationY → x 压缩,XY → 双轴压缩)。
+        val approx2D = floatArrayOf(
+            layer3D[0], 0f, 0f, 0f,
+            0f, layer3D[5], 0f, 0f,
+            0f, 0f, 1f, 0f,
+            layer3D[12], layer3D[13], 0f, 1f,
+        )
+        fun combine(m: FloatArray): FloatArray {
+            // 2x2 部分:approx2D × m 的 2x2(文本随图层变换压扁/剪切,2D 近似)。
+            // m 是纯平移(2x2 = 单位),故 2x2 = approx2D 的 2x2。
+            val r0 = approx2D[0] * m[0] + approx2D[4] * m[1]
+            val r1 = approx2D[1] * m[0] + approx2D[5] * m[1]
+            val r4 = approx2D[0] * m[4] + approx2D[4] * m[5]
+            val r5 = approx2D[1] * m[4] + approx2D[5] * m[5]
+            // 平移部分(T.15 修复):文本位置 = layer3D 对「m 平移点(文本在图层内
+            // 的位置)」的**透视映射**(与矩形 map3D 同一公式、含 w 除法)。
+            // 此前用 approx2D(纯 2D,无透视)算平移,双轴旋转(rotationX+rotationY)
+            // 下透视 w 变化大,文本位置偏离矩形(视觉 = 文本到处飞/飞出方块)。
+            // 用 layer3D 透视映射后,文本位置精确贴住矩形中心(形状仍为 2D 近似)。
+            val tx = m[12]
+            val ty = m[13]
+            val w = layer3D[3] * tx + layer3D[7] * ty + layer3D[15]
+            val iw = if (w > 0f) 1f / w else 0f
+            val px = iw * (layer3D[0] * tx + layer3D[4] * ty + layer3D[12])
+            val py = iw * (layer3D[1] * tx + layer3D[5] * ty + layer3D[13])
+            return floatArrayOf(
+                r0, r1, 0f, 0f,
+                r4, r5, 0f, 0f,
+                0f, 0f, 1f, 0f,
+                px, py, 0f, 1f,
+            )
+        }
+        // 纯色几何 3D 分支:图层 alpha(alphaMultiplier)叠加进 paint 快照
+        // (与原 replayFrom 的 MinecraftPaint(alpha = snapshot.alpha * alphaMultiplier)
+        // 语义一致;渲染端 render3D 直接消费 paint.alpha)。
+        // 纯色几何命令的 paint 恒非空(接口约定);文本/阴影/渐变不走此分支。
+        fun paint3D(): PaintSnapshot {
+            val p = paint ?: return PaintSnapshot(Color.Black, 1f, PaintingStyle.Fill, 0f, StrokeCap.Butt)
+            return if (alphaMultiplier == 1f) p else PaintSnapshot(
+                color = p.color,
+                alpha = p.alpha * alphaMultiplier,
+                style = p.style,
+                strokeWidth = p.strokeWidth,
+                strokeCap = p.strokeCap,
+            )
+        }
+        return when (this) {
+            is DrawRectCommand -> DrawRectCommand(
+                matrix, clip, paint3D(), left, top, right, bottom,
+                layer3D = layer3D,
+            )
+            is DrawRoundRectCommand -> DrawRoundRectCommand(
+                matrix, clip, paint3D(), left, top, right, bottom, radiusX, radiusY,
+                layer3D = layer3D,
+            )
+            is DrawOvalCommand -> DrawOvalCommand(
+                matrix, clip, paint3D(), left, top, right, bottom,
+                layer3D = layer3D,
+            )
+            is DrawCircleCommand -> DrawCircleCommand(
+                matrix, clip, paint3D(), centerX, centerY, radius,
+                layer3D = layer3D,
+            )
+            is DrawArcCommand -> DrawArcCommand(
+                matrix, clip, paint3D(), left, top, right, bottom,
+                startAngle, sweepAngle, useCenter,
+                layer3D = layer3D,
+            )
+            is DrawLineCommand -> DrawLineCommand(
+                matrix, clip, paint3D(), p1x, p1y, p2x, p2y,
+                layer3D = layer3D,
+            )
+            is DrawPathCommand -> DrawPathCommand(
+                matrix, clip, paint3D(), segments,
+                layer3D = layer3D,
+            )
+            is DrawPointsCommand -> DrawPointsCommand(
+                matrix, clip, paint3D(), pointMode, points,
+                layer3D = layer3D,
+            )
+            is DrawTextCommand -> {
+                // T.15 诊断(临时):文本录制时的 x/y 与命令矩阵
+                if (debugTextCmdFrames < 20) {
+                    debugTextCmdFrames++
+                    println(
+                        "[T15-TEXTCMD] text='$text' x=$x y=$y " +
+                            "m00=${matrix[0]} m10=${matrix[1]} m01=${matrix[4]} m11=${matrix[5]} " +
+                            "m20=${matrix[12]} m21=${matrix[13]}"
+                    )
+                    val c = combine(matrix)
+                    println(
+                        "[T15-TEXTCMD] combine: m00=${c[0]} m10=${c[1]} m01=${c[4]} m11=${c[5]} " +
+                            "m20=${c[12]} m21=${c[13]}"
+                    )
+                }
+                DrawTextCommand(
+                    combine(matrix), clip, text, x, y, style,
+                    alpha = alpha * alphaMultiplier,
+                )
+            }
+            is DrawGradientRectCommand -> DrawGradientRectCommand(
+                combine(matrix), clip, left, top, right, bottom,
+                topColorArgb, bottomColorArgb,
+            )
+            is DrawShadowCommand -> DrawShadowCommand(
+                combine(matrix), clip, left, top, right, bottom,
+                elevation, offsetX, offsetY, cornerRadius, pathSegments,
+            )
+            is DrawImageRectCommand -> null
+        }
+    }
+
     private fun snapshot(): FloatArray = currentMatrix.values.copyOf()
 
     private fun Paint.snapshot(): PaintSnapshot =
@@ -968,7 +1254,8 @@ internal class MinecraftCanvas internal constructor(
         clipStack.addLast(null)
     }
 
-    private val currentMatrix: Matrix get() = matrixStack.last()
+    /** 当前矩阵(画布矩阵栈顶)。T.15:3D 分支需读取父画布矩阵(场景变换)。 */
+    internal val currentMatrix: Matrix get() = matrixStack.last()
 
     private val currentClip: Rect? get() = clipStack.last()
 

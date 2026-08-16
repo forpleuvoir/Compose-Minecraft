@@ -68,6 +68,12 @@ fun MinecraftDevSceneContent() {
                 subtitle = "长文本/方块绕中心无限旋转,红十字/红点中心参考",
                 onClick = { ComposeScreen.open { RotationTestDevScene() } },
             )
+
+            DevMenuButton(
+                title = "3D 透视测试 (Perspective 3D)",
+                subtitle = "rotationX/rotationY 3D 透视,点击方块切换角度",
+                onClick = { ComposeScreen.open { Perspective3DDevScene() } },
+            )
         }
     }
 }

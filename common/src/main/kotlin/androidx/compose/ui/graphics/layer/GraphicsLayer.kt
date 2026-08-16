@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.MinecraftCanvas
 import androidx.compose.ui.graphics.MinecraftImageBitmap
 import androidx.compose.ui.graphics.MinecraftPath
@@ -37,6 +38,8 @@ import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.isIdentity
+import androidx.compose.ui.graphics.prepareTransformationMatrix
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -449,34 +452,92 @@ class GraphicsLayer internal constructor() {
         val recording = recordingCanvas ?: return
         // 阶段 C:应用图层变换后回放录制阶段记录的绘制命令。
         // 支持 translate/scale/rotationZ/alpha/clip/pivot(transformOrigin);
-        // rotationX/rotationY(3D 透视)暂不生效,后续阶段补齐。
+        // rotationX/rotationY(3D 透视)T.15 补齐:命中测试端早已用
+        // prepareTransformationMatrix(含透视)计算,此处绘制端同语义实现。
         // 本平台 Canvas 变换为 post-concat(右乘),调用顺序即矩阵相乘顺序,
         // 对齐官方 Skia 绘制语义 T(topLeft+translation) * T(pivot) * R * S * T(-pivot),
         // 即 scale/rotationZ 绕 pivot 进行;pivot 未指定时默认图层中心。
         val pivotX = if (pivotOffset.isUnspecified) size.width / 2f else pivotOffset.x
         val pivotY = if (pivotOffset.isUnspecified) size.height / 2f else pivotOffset.y
+        // T.15:rotationX/rotationY 非零 → 3D 透视路径(行主序 4x4,含透视分量)。
+        // 3D 变换无法用画布 2D 矩阵表达,全部收进 layer3D 矩阵:
+        // 渲染端 map3D 的链为「局部 → 命令矩阵 → layer3D → 屏幕」,
+        // 因此 layer3D 必须包含完整「图层局部 → 屏幕」变换(含 topLeft+translation)。
+        val has3D = !rotationX.isNearZero() || !rotationY.isNearZero()
         canvas.save()
-        canvas.translate(topLeft.x.toFloat() + translationX, topLeft.y.toFloat() + translationY)
-        canvas.translate(pivotX, pivotY)
-        canvas.rotate(rotationZ)
-        canvas.scale(scaleX, scaleY)
-        canvas.translate(-pivotX, -pivotY)
-        if (clip) {
-            // 平台适配点(T.9 修复):translate 之后画布已处于图层局部坐标系,
-            // 裁剪矩形必须是局部 (0, 0, size);此前误用 topLeft 绝对坐标,
-            // 导致 clipToBounds 图层(如 BasicTextField 文本/光标)整体被裁剪消失。
-            canvas.clipRect(
-                0f,
-                0f,
-                size.width.toFloat(),
-                size.height.toFloat(),
-            )
+        if (has3D) {
+            // T.15 修复(旋转中心):layer3D **直接复用 prepareTransformationMatrix**
+            // (与命中测试 GraphicsLayerOwnerLayer.updateMatrix 完全同一矩阵语义),
+            // 保证「渲染的旋转中心 == 点击命中的区域」。此前手写构建顺序与官方
+            // 不一致,导致渲染旋转中心偏移而命中正确(AGENTS.md T.13 同类问题)。
+            // 官方构建(Matrices.kt):
+            //   T(-pivot) * Rz·Ry·Rx·S * [P] * T(pivot+translation)
+            // 再附加 topLeft(图层在父坐标系的位置,命中测试的坐标已含 topLeft,
+            // 绘制端需单独平移)。
+            val layer3D = Matrix().apply {
+                prepareTransformationMatrix(
+                    matrix = this,
+                    pivotX = pivotX,
+                    pivotY = pivotY,
+                    translationX = translationX,
+                    translationY = translationY,
+                    rotationX = rotationX,
+                    rotationY = rotationY,
+                    rotationZ = rotationZ,
+                    scaleX = scaleX,
+                    scaleY = scaleY,
+                    cameraDistance = cameraDistance,
+                )
+                // 附加 topLeft:图层位置(与 2D 路径 canvas.translate(topLeft) 对齐)
+                translate(topLeft.x.toFloat(), topLeft.y.toFloat())
+            }
+            // T.15 修复:父画布矩阵(场景变换,列主序 2D)必须参与合成。
+            // 2D 路径经 replayFrom 的 concat 叠加;3D 路径的 map3D 链是
+            // 「局部 → 命令矩阵 → layer3D → 屏幕」,因此把父画布矩阵行主序化
+            // 右乘进 layer3D(点先图层变换,再场景变换)。
+            val parent = canvas.currentMatrix
+            if (!parent.isIdentity()) {
+                val parentRow = Matrix().apply {
+                    // 列主序 2D values:[m00,m10,m01,m11,m20,m21](0,1,4,5,12,13)
+                    // → 行主序 4x4 values:[m00,m01,m10,m11,1,m20,m21,1](0,1,4,5,10,12,13,15)
+                    values[0] = parent.values[0]
+                    values[1] = parent.values[4]
+                    values[4] = parent.values[1]
+                    values[5] = parent.values[5]
+                    values[10] = 1f
+                    values[12] = parent.values[12]
+                    values[13] = parent.values[13]
+                    values[15] = 1f
+                }
+                layer3D.timesAssign(parentRow)
+            }
+            // 3D 下 clip:渲染端 render3D 忽略 scissor(透视四边形无法轴对齐裁剪),
+            // 此处不设画布裁剪;记录命令自带的 clip 在渲染端同样不使用。
+            drawShadow(canvas)
+            canvas.replayFrom3D(recording, layer3D.values, alphaMultiplier = alpha)
+        } else {
+            canvas.translate(topLeft.x.toFloat() + translationX, topLeft.y.toFloat() + translationY)
+            canvas.translate(pivotX, pivotY)
+            canvas.rotate(rotationZ)
+            canvas.scale(scaleX, scaleY)
+            canvas.translate(-pivotX, -pivotY)
+            if (clip) {
+                // 平台适配点(T.9 修复):translate 之后画布已处于图层局部坐标系,
+                // 裁剪矩形必须是局部 (0, 0, size);此前误用 topLeft 绝对坐标,
+                // 导致 clipToBounds 图层(如 BasicTextField 文本/光标)整体被裁剪消失。
+                canvas.clipRect(
+                    0f,
+                    0f,
+                    size.width.toFloat(),
+                    size.height.toFloat(),
+                )
+            }
+            // 平台适配点(T.14):阴影 —— 基于 outline 的多层伪模糊(无离屏/无 Skia 模糊)。
+            // 在内容之前绘制,随图层变换;偏移向下,内层深外层浅。
+            // Path outline(Outline.Generic)阴影后续阶段补齐。
+            drawShadow(canvas)
+            canvas.replayFrom(recording, alphaMultiplier = alpha)
         }
-        // 平台适配点(T.14):阴影 —— 基于 outline 的多层伪模糊(无离屏/无 Skia 模糊)。
-        // 在内容之前绘制,随图层变换;偏移向下,内层深外层浅。
-        // Path outline(Outline.Generic)阴影后续阶段补齐。
-        drawShadow(canvas)
-        canvas.replayFrom(recording, alphaMultiplier = alpha)
         canvas.restore()
     }
 
@@ -545,7 +606,12 @@ class GraphicsLayer internal constructor() {
 
         /** 渐变中段 alpha 占最内层的比例(渐变保底方案用) */
         const val SHADOW_MID_ALPHA_FACTOR = 0.35f
+
+        /** 与官方 Matrices.kt 一致的近零判定(rotationX/rotationY 3D 门限) */
+        private const val NON_ZERO_EPSILON = 0.001f
     }
+
+    private fun Float.isNearZero(): Boolean = kotlin.math.abs(this) <= NON_ZERO_EPSILON
 }
 
 /**
