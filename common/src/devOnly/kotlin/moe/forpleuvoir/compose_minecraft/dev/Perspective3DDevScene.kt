@@ -1,13 +1,15 @@
 package moe.forpleuvoir.compose_minecraft.dev
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,6 +22,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
@@ -29,16 +33,18 @@ import net.minecraft.network.chat.Style
  * 3D 透视专项测试屏幕(T.15):验证 graphicsLayer rotationX/rotationY 的绘制端。
  *
  * 布局:全屏居中,元素少,避免溢出。
- * - 青色方块:点击在 0° / 45° / 60° / -45° 间切换 rotationX(绕水平轴);
- * - 紫色方块:点击切换 rotationY(绕垂直轴);
- * - 两个方块外层各画固定红十字参考(不随 3D 旋转,验证旋转中心);
- * - 底部说明文字提示当前角度与 3D 语义。
+ * - 青色方块:滑块控制 rotationX(绕水平轴);
+ * - 紫色方块:滑块控制 rotationY(绕垂直轴);
+ * - 橙色方块:滑块同时控制 rotationX + rotationY(双轴 3D);
+ * - 每个方块外层画固定红十字参考(不随 3D 旋转,验证旋转中心);
+ * - 滑块范围 -90° ~ 90°,可拖动或点击轨道任意位置。
  */
 @Composable
 fun Perspective3DDevScene() {
     var rotX by remember { mutableStateOf(0f) }
     var rotY by remember { mutableStateOf(0f) }
-    var rotXY by remember { mutableStateOf(0f) }
+    var rotXYX by remember { mutableStateOf(0f) }
+    var rotXYY by remember { mutableStateOf(0f) }
 
     Box(
         Modifier
@@ -65,127 +71,66 @@ fun Perspective3DDevScene() {
                 Modifier.padding(top = 24.dp),
                 horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(48.dp),
             ) {
-                // ── rotationX:绕水平轴旋转(垂直压扁 + 透视)──
-                Box(
-                    Modifier
-                        .size(100.dp)
-                        // 固定红十字参考(外层,不随旋转)
-                        .drawBehind {
-                            drawLine(
-                                color = Color.Red,
-                                start = Offset(size.width / 2f, 0f),
-                                end = Offset(size.width / 2f, size.height),
-                                strokeWidth = 1f,
-                            )
-                            drawLine(
-                                color = Color.Red,
-                                start = Offset(0f, size.height / 2f),
-                                end = Offset(size.width, size.height / 2f),
-                                strokeWidth = 1f,
-                            )
-                        }
-                        .graphicsLayer { rotationX = rotX }
-                        .background(Color(0xFF26C6DA))
-                        .clickable {
-                            rotX = when (rotX) {
-                                0f -> 45f
-                                45f -> 60f
-                                60f -> -45f
-                                else -> 0f
-                            }
-                        },
-                ) {
-                    BasicText(
-                        "X",
-                        modifier = Modifier.align(Alignment.Center),
-                        style = Style.EMPTY.withColor(Color.Black).withBold(true),
-                    )
-                }
+                AngleBox(
+                    label = "X",
+                    labelColor = Color.Black,
+                    boxColor = Color(0xFF26C6DA),
+                    rotationX = rotX,
+                )
+                AngleBox(
+                    label = "Y",
+                    labelColor = Color.White,
+                    boxColor = Color(0xFFAB47BC),
+                    rotationY = rotY,
+                )
+                AngleBox(
+                    label = "XY",
+                    labelColor = Color.White,
+                    boxColor = Color(0xFFFF7043),
+                    rotationX = rotXYX,
+                    rotationY = rotXYY,
+                )
+            }
 
-                // ── rotationY:绕垂直轴旋转(水平压扁 + 透视)──
-                Box(
-                    Modifier
-                        .size(100.dp)
-                        .drawBehind {
-                            drawLine(
-                                color = Color.Red,
-                                start = Offset(size.width / 2f, 0f),
-                                end = Offset(size.width / 2f, size.height),
-                                strokeWidth = 1f,
-                            )
-                            drawLine(
-                                color = Color.Red,
-                                start = Offset(0f, size.height / 2f),
-                                end = Offset(size.width, size.height / 2f),
-                                strokeWidth = 1f,
-                            )
-                        }
-                        .graphicsLayer { rotationY = rotY }
-                        .background(Color(0xFFAB47BC))
-                        .clickable {
-                            rotY = when (rotY) {
-                                0f -> 45f
-                                45f -> 60f
-                                60f -> -45f
-                                else -> 0f
-                            }
-                        },
-                ) {
-                    BasicText(
-                        "Y",
-                        modifier = Modifier.align(Alignment.Center),
-                        style = Style.EMPTY.withColor(Color.White).withBold(true),
+            // ── 滑块行 ──
+            Row(
+                Modifier.padding(top = 16.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(48.dp),
+            ) {
+                AngleSlider(
+                    value = rotX,
+                    onValueChange = { rotX = it },
+                    modifier = Modifier.width(160.dp),
+                )
+                AngleSlider(
+                    value = rotY,
+                    onValueChange = { rotY = it },
+                    modifier = Modifier.width(160.dp),
+                )
+                // XY 方块:两个滑块分别控制 rotationX / rotationY
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    AngleSlider(
+                        value = rotXYX,
+                        onValueChange = { rotXYX = it },
+                        modifier = Modifier.width(160.dp),
                     )
-                }
-
-                // ── rotationX + rotationY:双轴同时旋转(斜向 3D)──
-                Box(
-                    Modifier
-                        .size(100.dp)
-                        .drawBehind {
-                            drawLine(
-                                color = Color.Red,
-                                start = Offset(size.width / 2f, 0f),
-                                end = Offset(size.width / 2f, size.height),
-                                strokeWidth = 1f,
-                            )
-                            drawLine(
-                                color = Color.Red,
-                                start = Offset(0f, size.height / 2f),
-                                end = Offset(size.width, size.height / 2f),
-                                strokeWidth = 1f,
-                            )
-                        }
-                        .graphicsLayer {
-                            rotationX = rotXY
-                            rotationY = rotXY
-                        }
-                        .background(Color(0xFFFF7043))
-                        .clickable {
-                            rotXY = when (rotXY) {
-                                0f -> 45f
-                                45f -> 60f
-                                60f -> -45f
-                                else -> 0f
-                            }
-                        },
-                ) {
-                    BasicText(
-                        "XY",
-                        modifier = Modifier.align(Alignment.Center),
-                        style = Style.EMPTY.withColor(Color.White).withBold(true),
+                    AngleSlider(
+                        value = rotXYY,
+                        onValueChange = { rotXYY = it },
+                        modifier = Modifier.width(160.dp).padding(top = 4.dp),
                     )
                 }
             }
 
             BasicText(
-                "点击方块切换角度:0° → 45° → 60° → -45°",
-                modifier = Modifier.padding(top = 20.dp),
+                "rotationX=$rotX° rotationY=$rotY° rotationXY-X=$rotXYX° rotationXY-Y=$rotXYY°",
+                modifier = Modifier.padding(top = 12.dp),
                 style = Style.EMPTY.withColor(Color(0xFFFFD54F)),
             )
             BasicText(
-                "rotationX=$rotX° rotationY=$rotY° rotationXY=$rotXY°",
-                style = Style.EMPTY.withColor(Color(0xFFFFD54F)),
+                "拖动滑块或点击轨道设置角度(-90° ~ 90°)",
+                modifier = Modifier.padding(top = 4.dp),
+                style = Style.EMPTY.withColor(Color(0xFF90A4AE)),
             )
             BasicText(
                 "红十字不随方块移动 = 绕自身中心旋转;背景为真透视,文字为 2D 仿射近似",
@@ -198,4 +143,100 @@ fun Perspective3DDevScene() {
             )
         }
     }
+}
+
+/** 带红十字参考的 3D 旋转方块 */
+@Composable
+private fun AngleBox(
+    label: String,
+    labelColor: Color,
+    boxColor: Color,
+    rotationX: Float = 0f,
+    rotationY: Float = 0f,
+) {
+    Box(
+        Modifier
+            .size(100.dp)
+            // 固定红十字参考(外层,不随旋转)
+            .drawBehind {
+                drawLine(
+                    color = Color.Red,
+                    start = Offset(size.width / 2f, 0f),
+                    end = Offset(size.width / 2f, size.height),
+                    strokeWidth = 1f,
+                )
+                drawLine(
+                    color = Color.Red,
+                    start = Offset(0f, size.height / 2f),
+                    end = Offset(size.width, size.height / 2f),
+                    strokeWidth = 1f,
+                )
+            }
+            .graphicsLayer {
+                this.rotationX = rotationX
+                this.rotationY = rotationY
+            }
+            .background(boxColor),
+    ) {
+        BasicText(
+            label,
+            modifier = Modifier.align(Alignment.Center),
+            style = Style.EMPTY.withColor(labelColor).withBold(true),
+        )
+    }
+}
+
+/**
+ * 简单角度滑块(-90° ~ 90°):点击轨道任意位置或拖动设置角度。
+ * 轨道带 -90/-45/0/45/90 刻度,滑块头为黄色圆点。
+ */
+@Composable
+private fun AngleSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var trackWidth by remember { mutableStateOf(1f) }
+    Box(
+        modifier
+            .height(24.dp)
+            .onSizeChanged { trackWidth = it.width.toFloat().coerceAtLeast(1f) }
+            .drawBehind {
+                val y = size.height / 2f
+                // 轨道
+                drawLine(
+                    color = Color(0xFF455A64),
+                    start = Offset(0f, y),
+                    end = Offset(size.width, y),
+                    strokeWidth = 3f,
+                )
+                // 刻度
+                for (deg in intArrayOf(-90, -45, 0, 45, 90)) {
+                    val x = (deg + 90) / 180f * size.width
+                    drawLine(
+                        color = Color(0xFF78909C),
+                        start = Offset(x, y - 4f),
+                        end = Offset(x, y + 4f),
+                        strokeWidth = 1f,
+                    )
+                }
+                // 滑块头
+                val x = (value + 90) / 180f * size.width
+                drawCircle(
+                    color = Color(0xFFFFD54F),
+                    radius = 6f,
+                    center = Offset(x, y),
+                )
+            }
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        onValueChange(((offset.x / trackWidth) * 180f - 90f).coerceIn(-90f, 90f))
+                    },
+                    onDrag = { change, _ ->
+                        onValueChange(((change.position.x / trackWidth) * 180f - 90f).coerceIn(-90f, 90f))
+                    },
+                )
+            },
+    )
 }

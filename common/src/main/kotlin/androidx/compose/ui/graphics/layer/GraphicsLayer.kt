@@ -514,21 +514,44 @@ class GraphicsLayer internal constructor() {
             // 3D 下 clip:渲染端 render3D 忽略 scissor(透视四边形无法轴对齐裁剪),
             // 此处不设画布裁剪;记录命令自带的 clip 在渲染端同样不使用。
             drawShadow(canvas)
-            // T.15 修复(文本近似缩放):文本的 2D 压缩**不能**取 layer3D 的 2x2
-            // 对角(layer3D[0]/layer3D[5])—— 该对角被「透视列 × 平移」耦合污染
-            // (prepareTransformationMatrix 的 T(p+t) 右乘 + 嵌套透传 parentRow
+            // T.15 修复(文本近似 2x2):文本的 2D 线性部分**不能**取 layer3D 的
+            // 2x2 对角(layer3D[0]/layer3D[5])—— 该对角被「透视列 × 平移」耦合
+            // 污染(prepareTransformationMatrix 的 T(p+t) 右乘 + 嵌套透传 parentRow
             // 右乘都会把第 3 列的透视分量混入 2x2),污染量与方块屏幕位置相关:
             // X 方块(屏幕左侧)污染小 → 文本"看起来对";Y 方块(更右侧)污染大
             // → rotationY=45° 时 m00=1.10(反向放大)、60° 时 0.98(几乎不压缩)、
             // -45° 时 0.31(严重压缩),均与 cosθ(0.707/0.5/0.707)明显不符。
-            // 文本近似的正确缩放 = 绕各轴的 cos(角度) × scale:
-            //   rotationX → y 方向压缩 cos(rotationX) × scaleY
-            //   rotationY → x 方向压缩 cos(rotationY) × scaleX
+            // 正确做法:文本 2x2 = 图层旋转缩放组合的**干净线性部分**,与官方
+            // 2D 路径同一构建链 T(pivot)·S·Rz·Ry·Rx·T(-pivot)(2x2 不受平移
+            // 影响,即 S·Rz·Ry·Rx 的 2x2):
+            // - 单轴旋转(rotationX 或 rotationY)时退化为对角 cosθ × scale;
+            // - 双轴(rotationX+rotationY)时 Ry·Rx 组合含真实剪切项 sy·sx
+            //   (45° 时 0.5),矩形(纯色 3D 投影)本身会平行四边形化,文本保留
+            //   该剪切才能与矩形形状一致 —— 此前只取对角导致 XY 文本"不对"。
             // 位置仍由 with3D 的 layer3D 透视映射计算(贴住矩形),不受影响。
-            val degToRad = (kotlin.math.PI / 180.0).toFloat()
-            val textScaleX = scaleX * kotlin.math.cos(rotationY * degToRad)
-            val textScaleY = scaleY * kotlin.math.cos(rotationX * degToRad)
-            canvas.replayFrom3D(recording, layer3D.values, textScaleX, textScaleY, alphaMultiplier = alpha)
+            val clean2D = Matrix().apply {
+                reset()
+                translate(pivotX, pivotY)
+                scale(scaleX, scaleY)
+                // 与 prepareTransformationMatrix 同步的内旋顺序(点先 X 再 Y 再 Z)
+                rotateX(rotationX)
+                rotateY(rotationY)
+                timesAssign(Matrix().apply { rotateZ(rotationZ) })
+                translate(-pivotX, -pivotY)
+            }
+            // 文本 2x2 传参按 **row-major 展平** [m00, m01, m10, m11](T.15 修复):
+            // 渲染端 with3D 按列主序直接放置(approx2D[0]=m00, [1]=m01, [4]=m10,
+            // [5]=m11),再经 toMatrix3x2f 交换 m01/m10(抵消 MC JOML 行主序
+            // transformPosition,见 AGENTS.md T.13),最终 JOML 2x2 = clean2D 2x2,
+            // 文本剪切方向与矩形 map3D(直接读 layer3D row-major)完全一致。
+            // 若用列主序展平,文本 2x2 会被转置,双轴旋转的剪切方向与矩形相反
+            // (视觉 = 文字歪斜方向反了)。单轴旋转时 2x2 为对角矩阵,不受影响。
+            // 位置仍由 with3D 的 layer3D 透视映射计算(贴住矩形),不受影响。
+            val text2D = floatArrayOf(
+                clean2D[0, 0], clean2D[0, 1],
+                clean2D[1, 0], clean2D[1, 1],
+            )
+            canvas.replayFrom3D(recording, layer3D.values, text2D, alphaMultiplier = alpha)
         } else {
             canvas.translate(topLeft.x.toFloat() + translationX, topLeft.y.toFloat() + translationY)
             canvas.translate(pivotX, pivotY)

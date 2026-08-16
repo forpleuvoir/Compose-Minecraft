@@ -1097,19 +1097,20 @@ internal class MinecraftCanvas internal constructor(
      * (矩阵 = 命令矩阵 × layer3D 的 2D 部分,不携带 layer3D)。
      * 图片命令保持原样(第一版不支持图片渲染)。
      *
-     * [textScaleX]/[textScaleY] 是文本 2D 近似的干净缩放(T.15 修复):
-     * 由 GraphicsLayer 按 cos(rotationY)×scaleX / cos(rotationX)×scaleY 计算,
-     * 不经 layer3D(其 2x2 对角被透视耦合污染,见 GraphicsLayer.draw 注释)。
+     * [text2D] 是文本 2D 近似的干净线性部分(row-major 展平 [m00, m01, m10, m11],
+     * T.15 修复):由 GraphicsLayer 按 S·Rx·Ry·Rz(内旋)的 2x2 计算
+     * (单轴退化为 cosθ × scale 对角,双轴含真实剪切),配合 with3D 的列主序
+     * 放置与 toMatrix3x2f 的 m01/m10 交换,最终 JOML 2x2 = clean2D 2x2,
+     * 文本剪切方向与矩形 map3D 一致(详见 GraphicsLayer.draw 注释)。
      */
     internal fun replayFrom3D(
         source: MinecraftCanvas,
         layer3D: FloatArray,
-        textScaleX: Float = 1f,
-        textScaleY: Float = 1f,
+        text2D: FloatArray = floatArrayOf(1f, 0f, 0f, 1f),
         alphaMultiplier: Float = 1f,
     ) {
         for (command in source.commands()) {
-            val converted = command.with3D(layer3D, textScaleX, textScaleY, alphaMultiplier)
+            val converted = command.with3D(layer3D, text2D, alphaMultiplier)
             if (converted != null) {
                 record(converted)
             }
@@ -1127,23 +1128,24 @@ internal class MinecraftCanvas internal constructor(
      */
     private fun DrawCommand.with3D(
         layer3D: FloatArray,
-        textScaleX: Float,
-        textScaleY: Float,
+        text2D: FloatArray,
         alphaMultiplier: Float,
     ): DrawCommand? {
-        // approx2D 的 2x2 只保留对角缩放、去掉剪切项:
-        //   x' = textScaleX*x;  y' = textScaleY*y
-        // 缩放由 GraphicsLayer 按 cos(rotationX/rotationY)×scale 直接计算
-        // (T.15 修复):layer3D 的 2x2 对角(layer3D[0]/layer3D[5])被透视列与
-        // 平移的耦合污染(随方块屏幕位置变化,Y 方块 45°/60°/-45° 实测
-        // 0.707/0.5/0.707 期望值被污染成 1.10/0.98/0.31),不能用作文本压缩。
-        // 剪切项同样丢弃(3D 旋转的透视耦合会让文本平行四边形化,视觉上像
-        // "多了一个轴的旋转",用户反馈)。
-        // 文本是 2D 近似,压缩方向仍与 3D 语义一致:
-        // rotationX → y 压缩,rotationY → x 压缩,XY → 双轴压缩。
+        // approx2D 的 2x2 = 图层旋转缩放组合的干净线性部分,由 GraphicsLayer
+        // 按 S·Rx·Ry·Rz(内旋,点先 X 再 Y 再 Z)计算并以 **row-major 展平**
+        // [m00, m01, m10, m11] 传入 [text2D](T.15 修复):
+        // - 此处按列主序放置(approx2D[0]=m00, [1]=m01, [4]=m10, [5]=m11),
+        //   渲染端 toMatrix3x2f 交换 m01/m10 后,JOML 2x2 = clean2D 2x2,
+        //   文本剪切方向与矩形 map3D(直接读 layer3D row-major)一致;
+        // - layer3D 的 2x2 对角(layer3D[0]/layer3D[5])被透视列与平移的
+        //   耦合污染(随方块屏幕位置变化,Y 方块 45°/60°/-45° 实测期望
+        //   0.707/0.5/0.707 被污染成 1.10/0.98/0.31),不能用作文本压缩;
+        // - 双轴(rotationX+rotationY)时 Rx·Ry 组合含真实剪切项 sx·sy,
+        //   与矩形(纯色 3D 投影)的平行四边形化一致。
+        // 位置由 layer3D 透视映射计算(combine 内),不受 2x2 影响。
         val approx2D = floatArrayOf(
-            textScaleX, 0f, 0f, 0f,
-            0f, textScaleY, 0f, 0f,
+            text2D[0], text2D[1], 0f, 0f,
+            text2D[2], text2D[3], 0f, 0f,
             0f, 0f, 1f, 0f,
             layer3D[12], layer3D[13], 0f, 1f,
         )

@@ -39,11 +39,22 @@ fun prepareTransformationMatrix(
 ) {
     matrix.reset()
     matrix.translate(x = -pivotX, y = -pivotY)
+    // T.15 修复(双轴旋转方向):旋转组合改为**内旋 XYZ**(点先绕 X、再绕 Y、
+    // 再绕 Z,与 Android HWUI RenderNode 语义一致)。
+    // 此前顺序为 S·Rz·Ry·Rx(点先 Z 再 Y 再 X 的外旋):先设 rotationX 再设
+    // rotationY 时,点实际先被 Ry 旋转再被 Rx 旋转 —— 用户先转的轴(X)反而
+    // 最后生效,第二个轴(Y)看起来方向反转(用户实测反馈)。
+    // 内旋后点应用顺序 = 属性设置直觉:先 rotationX 先生效,rotationY 次之。
+    //
+    // 构建方式说明:Matrix.rotateX/rotateY 为右乘(M·Rx / M·Ry),
+    // Matrix.rotateZ 为左乘(Rz·M),因此 Rz 无法直接加入右乘链,
+    // 用显式 timesAssign(右乘 Rz 矩阵)收尾。
     matrix *= Matrix().apply {
-        rotateZ(rotationZ)
-        rotateY(rotationY)
-        rotateX(rotationX)
-        scale(scaleX, scaleY)
+        reset()
+        scale(scaleX, scaleY)   // S
+        rotateX(rotationX)      // S·Rx
+        rotateY(rotationY)      // S·Rx·Ry
+        timesAssign(Matrix().apply { rotateZ(rotationZ) })  // S·Rx·Ry·Rz
     }
     // Perspective transform should be applied only in case of rotations to avoid
     // multiply application in hierarchies.
