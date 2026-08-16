@@ -514,7 +514,21 @@ class GraphicsLayer internal constructor() {
             // 3D 下 clip:渲染端 render3D 忽略 scissor(透视四边形无法轴对齐裁剪),
             // 此处不设画布裁剪;记录命令自带的 clip 在渲染端同样不使用。
             drawShadow(canvas)
-            canvas.replayFrom3D(recording, layer3D.values, alphaMultiplier = alpha)
+            // T.15 修复(文本近似缩放):文本的 2D 压缩**不能**取 layer3D 的 2x2
+            // 对角(layer3D[0]/layer3D[5])—— 该对角被「透视列 × 平移」耦合污染
+            // (prepareTransformationMatrix 的 T(p+t) 右乘 + 嵌套透传 parentRow
+            // 右乘都会把第 3 列的透视分量混入 2x2),污染量与方块屏幕位置相关:
+            // X 方块(屏幕左侧)污染小 → 文本"看起来对";Y 方块(更右侧)污染大
+            // → rotationY=45° 时 m00=1.10(反向放大)、60° 时 0.98(几乎不压缩)、
+            // -45° 时 0.31(严重压缩),均与 cosθ(0.707/0.5/0.707)明显不符。
+            // 文本近似的正确缩放 = 绕各轴的 cos(角度) × scale:
+            //   rotationX → y 方向压缩 cos(rotationX) × scaleY
+            //   rotationY → x 方向压缩 cos(rotationY) × scaleX
+            // 位置仍由 with3D 的 layer3D 透视映射计算(贴住矩形),不受影响。
+            val degToRad = (kotlin.math.PI / 180.0).toFloat()
+            val textScaleX = scaleX * kotlin.math.cos(rotationY * degToRad)
+            val textScaleY = scaleY * kotlin.math.cos(rotationX * degToRad)
+            canvas.replayFrom3D(recording, layer3D.values, textScaleX, textScaleY, alphaMultiplier = alpha)
         } else {
             canvas.translate(topLeft.x.toFloat() + translationX, topLeft.y.toFloat() + translationY)
             canvas.translate(pivotX, pivotY)

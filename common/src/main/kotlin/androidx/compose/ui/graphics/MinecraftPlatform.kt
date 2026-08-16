@@ -1096,10 +1096,20 @@ internal class MinecraftCanvas internal constructor(
      * 文本/阴影/渐变命令无法透视纹理校正,降级为 2D 仿射近似
      * (矩阵 = 命令矩阵 × layer3D 的 2D 部分,不携带 layer3D)。
      * 图片命令保持原样(第一版不支持图片渲染)。
+     *
+     * [textScaleX]/[textScaleY] 是文本 2D 近似的干净缩放(T.15 修复):
+     * 由 GraphicsLayer 按 cos(rotationY)×scaleX / cos(rotationX)×scaleY 计算,
+     * 不经 layer3D(其 2x2 对角被透视耦合污染,见 GraphicsLayer.draw 注释)。
      */
-    internal fun replayFrom3D(source: MinecraftCanvas, layer3D: FloatArray, alphaMultiplier: Float = 1f) {
+    internal fun replayFrom3D(
+        source: MinecraftCanvas,
+        layer3D: FloatArray,
+        textScaleX: Float = 1f,
+        textScaleY: Float = 1f,
+        alphaMultiplier: Float = 1f,
+    ) {
         for (command in source.commands()) {
-            val converted = command.with3D(layer3D, alphaMultiplier)
+            val converted = command.with3D(layer3D, textScaleX, textScaleY, alphaMultiplier)
             if (converted != null) {
                 record(converted)
             }
@@ -1117,17 +1127,23 @@ internal class MinecraftCanvas internal constructor(
      */
     private fun DrawCommand.with3D(
         layer3D: FloatArray,
+        textScaleX: Float,
+        textScaleY: Float,
         alphaMultiplier: Float,
     ): DrawCommand? {
-        // approx2D 取 layer3D 的 2D 部分,但**只保留对角缩放、去掉剪切项**:
-        //   x' = layer3D[0]*x;  y' = layer3D[5]*y
-        // 剪切项(layer3D[1]/layer3D[4])来自 3D 旋转的透视耦合,会让文本
-        // 平行四边形化(倾斜),视觉上像"多了一个轴的旋转"(用户反馈)。
-        // 文本是 2D 近似,去掉剪切只保留压缩,视觉更干净(压缩方向仍正确:
-        // rotationX → y 压缩,rotationY → x 压缩,XY → 双轴压缩)。
+        // approx2D 的 2x2 只保留对角缩放、去掉剪切项:
+        //   x' = textScaleX*x;  y' = textScaleY*y
+        // 缩放由 GraphicsLayer 按 cos(rotationX/rotationY)×scale 直接计算
+        // (T.15 修复):layer3D 的 2x2 对角(layer3D[0]/layer3D[5])被透视列与
+        // 平移的耦合污染(随方块屏幕位置变化,Y 方块 45°/60°/-45° 实测
+        // 0.707/0.5/0.707 期望值被污染成 1.10/0.98/0.31),不能用作文本压缩。
+        // 剪切项同样丢弃(3D 旋转的透视耦合会让文本平行四边形化,视觉上像
+        // "多了一个轴的旋转",用户反馈)。
+        // 文本是 2D 近似,压缩方向仍与 3D 语义一致:
+        // rotationX → y 压缩,rotationY → x 压缩,XY → 双轴压缩。
         val approx2D = floatArrayOf(
-            layer3D[0], 0f, 0f, 0f,
-            0f, layer3D[5], 0f, 0f,
+            textScaleX, 0f, 0f, 0f,
+            0f, textScaleY, 0f, 0f,
             0f, 0f, 1f, 0f,
             layer3D[12], layer3D[13], 0f, 1f,
         )
