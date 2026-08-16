@@ -21,7 +21,8 @@ Agent 的 IDE 工具集中以 `mcp__idea__*` 前缀暴露。**所有代码阅读
 | 文件树 / 目录结构 | `mcp__idea__list_directory_tree` |
 
 > 例外:批量文件操作(如删除、移动多个文件)可回退到 shell;但**所有构建操作
-> 必须通过 IDEA MCP 或 Gradle 完成**,禁止绕过构建直接手改产物。
+> 必须通过 IDEA MCP 完成**,禁止使用 `gradlew` shell / IDE 终端跑 Gradle 任务,
+> 禁止绕过构建直接手改产物。
 
 ## 项目概述
 
@@ -30,7 +31,8 @@ Agent 的 IDE 工具集中以 `mcp__idea__*` 前缀暴露。**所有代码阅读
 - **无 Skia / Skiko / Desktop / Material**:所有绘制进入 Minecraft 当前帧的
   `GuiRenderState`(与 Vulkan/OpenGL 渲染后端无关);
 - **原版 `Screen` 桥接**:Compose 场景通过 `net.minecraft.client.gui.screens.Screen`
-  挂入 Minecraft(无 mixin、无帧钩子、无 loader 事件);
+  挂入 Minecraft(无帧钩子 mixin、无渲染注入 mixin、无 loader 事件;
+  仅 StyleAccessor 只读字段 mixin,见 `common/src/main/.../mixin/StyleAccessor.java`);
 - **场景密度固定 1**:1dp == 1 GUI 单位,坐标无需换算;
 - **文字**:MC Font 度量统一,行高 9px 固定,`fontSize` 第一版被忽略;
 - **发布 JAR 内嵌完整 Compose 运行时**(约 4000+ 个 `androidx.compose.*` 类),
@@ -42,7 +44,7 @@ Agent 的 IDE 工具集中以 `mcp__idea__*` 前缀暴露。**所有代码阅读
 buildSrc/                      # Gradle 约定插件(multiloader-common / multiloader-loader)
 common/                        # 平台核心(单模块)
   src/main/kotlin/
-    moe/forpleuvoir/compose_minecraft/minecraft/   # 自有代码:Screen 桥接、场景宿主、渲染上下文
+    moe/forpleuvoir/compose_minecraft/platform/     # 自有代码:Screen 桥接、场景宿主、渲染上下文
     androidx/compose/**                            # 从 CMP 1.11 移植的运行时源码(expect/actual 剥离)
   src/devOnly/kotlin/           # dev 测试代码(dev scene),仅 Fabric dev run 生效
 fabric/                        # Fabric loader 模块(includeInternal 内嵌依赖)
@@ -51,18 +53,28 @@ neoforge/                      # NeoForge loader 模块(jarJar 内嵌依赖,无 
 
 ## 构建与运行
 
-```bash
-# 完整构建(必须使用完整 build;单任务会漏编译 devOnly)
-gradlew build :common:compileDevOnlyKotlin
+> **所有构建/编译验证一律通过 IDEA MCP 的 `mcp__idea__build_project` 完成,
+> 绝不使用 `gradlew` shell 命令或 IDE 终端跑 Gradle 任务。**
+> Agent 需要在构建章节处理 Gradle 任务时,用 `build_project` 触发 IDE 的
+> Gradle 集成(支持 `filesToRebuild` 指定文件做增量验证 / `rebuild=true` 全量构建)。
 
-# 打包发布 JAR
-gradlew :fabric:jar :neoforge:jar
+```
+# 完整构建(必须全量 build;单任务会漏编译 devOnly)
+build_project(rebuild=true)
 
-# 或统一输出到 modJar/<mc>/<version>/
-gradlew buildAllModJar
+# 指定文件增量验证(如只验 devOnly 改动)
+build_project(filesToRebuild=[common/src/devOnly/.../*.kt, ...])
+
+# 打包发布 JAR:经 build_project 全量构建触发各 loader 的 jar 任务
+# (IDE 构建 = Gradle build,产物在 fabric/build/libs、neoforge/build/libs)
+build_project(rebuild=true)
+
+# 统一输出到 modJar/<mc>/<version>/:由全量构建后 Gradle 任务产出
+# (AGENTS 不再手写 shell,由 build_project 触发)
 ```
 
-- **dev 测试统一在 Fabric 端**(`Compose-Minecraft [:fabric:runClient]` run configuration);
+- **dev 测试统一在 Fabric 端**(`Compose-Minecraft [:fabric:runClient]` run configuration,
+  经 `mcp__idea__execute_run_configuration` 调用,**不经终端**);
   NeoForge(ModDevGradle)不支持 devOnly 源码集,只做发布构建;
 - dev scene(`MinecraftDevSceneContent`)在主菜单自动打开,用于验证渲染/输入/焦点;
 - 首次运行 runClient 较慢(Gradle 预热),确认 java 进程存在即可。

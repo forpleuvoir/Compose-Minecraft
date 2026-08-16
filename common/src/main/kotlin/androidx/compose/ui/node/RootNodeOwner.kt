@@ -26,7 +26,6 @@ import androidx.compose.runtime.retain.RetainedValuesStore
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.ComposeUiFlags
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.SessionMutex
@@ -63,7 +62,6 @@ import androidx.compose.ui.input.rotary.RotaryScrollEvent
 import androidx.compose.ui.layout.RootMeasurePolicy
 import androidx.compose.ui.layout.RulerProviderModifierElement
 import androidx.compose.ui.modifier.ModifierLocalManager
-import androidx.compose.ui.platform.DefaultAccessibilityManager
 import androidx.compose.ui.platform.DefaultHapticFeedback
 import androidx.compose.ui.platform.DelegatingSoftwareKeyboardController
 import androidx.compose.ui.platform.GraphicsLayerOwnerLayer
@@ -75,7 +73,6 @@ import androidx.compose.ui.platform.PlatformTextInputSessionScope
 import androidx.compose.ui.platform.PlatformWindowInsets
 import androidx.compose.ui.platform.PlatformWindowInsetsProviderNode
 import androidx.compose.ui.platform.createPlatformClipboard
-import androidx.compose.ui.platform.createPlatformClipboardManager
 import androidx.compose.ui.platform.setLightingInfo
 import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftGraphicsContext
 import androidx.compose.ui.scene.ComposeScene
@@ -100,9 +97,6 @@ import androidx.compose.ui.unit.round
 import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastMaxOfOrDefault
 import androidx.compose.ui.util.trace
-import androidx.compose.ui.viewinterop.InteropPointerInputModifier
-import androidx.compose.ui.viewinterop.InteropView
-import androidx.compose.ui.viewinterop.pointerInteropFilter
 import kotlin.coroutines.CoroutineContext
 import kotlin.math.max
 import kotlin.math.min
@@ -347,20 +341,6 @@ internal class RootNodeOwner(
         return _owner.focusOwner.dispatchRotaryEvent(event)
     }
 
-    /**
-     * Perform hit test and return the [InteropView] associated with the resulting
-     * [PointerInputModifierNode] node in case it is a [Modifier.pointerInteropFilter],
-     * otherwise null.
-     */
-    fun hitTestInteropView(position: Offset): InteropView? {
-        val result = HitTestResult()
-        owner.root.hitTest(position, result, isInLayer = true)
-
-        val last = result.lastOrNull() as? BackwardsCompatNode
-        val node = last?.element as? InteropPointerInputModifier
-        return node?.interopView
-    }
-
     private fun isInBounds(localPosition: Offset): Boolean =
         size?.toRect()?.contains(localPosition) ?: true
 
@@ -394,8 +374,8 @@ internal class RootNodeOwner(
                 platformContext.parentFocusManager.clearFocus(true)
             }
 
-            // onMoveFocusInterop's purpose is to move focus inside embed interop views.
-            // Another logic is used in our child-interop views (SwingPanel, etc)
+            // moveFocusInChildren 用于将焦点移入内嵌平台视图(interop);MC 平台无内嵌视图,
+            // 恒不移动焦点。
             override fun moveFocusInChildren(focusDirection: FocusDirection) = false
 
             override fun getEmbeddedViewFocusRect(): Rect? = null
@@ -435,9 +415,7 @@ internal class RootNodeOwner(
         override val rootForTest get() = this@RootNodeOwner.rootForTest
         override val hapticFeedBack = DefaultHapticFeedback()
         override val inputModeManager get() = platformContext.inputModeManager
-        override val clipboardManager = createPlatformClipboardManager()
         override val clipboard = createPlatformClipboard()
-        override val accessibilityManager = DefaultAccessibilityManager()
         override val graphicsContext get() = this@RootNodeOwner.graphicsContext
         override val textToolbar get() = platformContext.textToolbar
         @Suppress("DEPRECATION")
@@ -648,11 +626,6 @@ internal class RootNodeOwner(
             layoutNodes[layoutNode.semanticsId] = layoutNode
         }
 
-        @InternalComposeUiApi
-        override fun onInteropViewLayoutChange(view: InteropView) {
-            // TODO dispatch platform re-layout
-        }
-
         override fun calculatePositionInWindow(localPosition: Offset): Offset =
             platformContext.convertLocalToWindowPosition(localPosition)
 
@@ -821,13 +794,6 @@ internal class RootNodeOwner(
 
         // TODO https://youtrack.jetbrains.com/issue/COMPOSE-1258/Implement-PlatformRootForTest.accessitiblity-functions
 
-        @ExperimentalComposeUiApi
-        override fun forceAccessibilityForTesting(enable: Boolean) {
-        }
-
-        @ExperimentalComposeUiApi
-        override fun setAccessibilityEventBatchIntervalMillis(intervalMillis: Long) {
-        }
     }
 
     private inner class PointerIconServiceImpl : PointerIconService {

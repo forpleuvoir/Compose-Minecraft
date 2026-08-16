@@ -16,19 +16,9 @@
 
 package androidx.compose.ui.platform
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.HostDefaultKey
-import androidx.compose.runtime.HostDefaultProvider
-import androidx.compose.runtime.InternalComposeApi
-import androidx.compose.runtime.LocalHostDefaultProvider
-import androidx.compose.runtime.ProvidedValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.InternalComposeUiApi
-import androidx.navigationevent.NavigationEventDispatcherOwner
 import androidx.savedstate.compose.LocalSavedStateRegistryOwner
 
 /**
@@ -52,24 +42,17 @@ val LocalPlatformWindowInsets = staticCompositionLocalOf<PlatformWindowInsets> {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Scene 组合局部(移植自 CMP ui-desktop 的 CompositionLocals.skiko.kt)
-//
-// LocalInternalNavigationEventDispatcherOwner / LocalCompatNavigationEventDispatcherOwner
-// 定义在 DefaultNavigationEventDispatcherOwner.kt(platform 包内),本文件不再重复。
 // ─────────────────────────────────────────────────────────────────────────────
 
 private val PlatformArchitectureComponentsOwner.values: Array<ProvidedValue<*>>
     get() {
-        val providedValues = mutableListOf(
+        val providedValues = mutableListOf<ProvidedValue<*>>(
             androidx.lifecycle.compose.LocalLifecycleOwner provides lifecycleOwner,
-            LocalInternalNavigationEventDispatcherOwner provides navigationEventDispatcherOwner,
-            LocalCompatNavigationEventDispatcherOwner provides navigationEventDispatcherOwner,
             LocalSavedStateRegistryOwner provides savedStateRegistryOwner,
         )
-        viewModelStoreOwner?.let { providedValues.add(LocalInternalViewModelStoreOwner provides it) }
         return providedValues.toTypedArray()
     }
 
-@OptIn(InternalComposeApi::class)
 @Composable
 internal fun ProvidePlatformCompositionLocals(
     vararg values: ProvidedValue<*>,
@@ -84,8 +67,7 @@ internal fun ProvidePlatformCompositionLocals(
         )
     }
     DisposableEffect(platformContext) {
-        val registry = saveableStateRegistry
-        onDispose { registry.dispose() }
+        onDispose { saveableStateRegistry.dispose() }
     }
 
     // TODO: CMP-9752 完整实现 HostDefaultProvider 后再对齐

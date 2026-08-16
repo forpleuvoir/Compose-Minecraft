@@ -60,15 +60,8 @@ internal fun FocusTargetNode.performRequestFocus(): Boolean {
     // Request owner focus if it doesn't already have focus.
     @OptIn(ExperimentalComposeUiApi::class)
     if (ComposeUiFlags.isBypassUnfocusableComposeViewEnabled) {
-        if (
-            // If the previous focus target is a non-interop view, then the owner already has focus.
-            previousActiveNode?.isInteropViewHost != false &&
-                // If the focus target gaining focus is an interop view, don't request owner focus.
-                !isInteropViewHost
-        ) {
-            // Don't grant focus if requesting owner focus failed.
-            if (!requestOwnerFocus()) return false
-        }
+        // MC 平台无 interop view:上一焦点目标恒非 interop,恒需请求 owner focus。
+        if (!requestOwnerFocus()) return false
     } else {
         if (previousActiveNode == null && !requestOwnerFocus()) {
             return false // Don't grant focus if requesting owner focus failed
@@ -167,9 +160,9 @@ internal fun FocusTargetNode.performRequestFocus(): Boolean {
         }
     }
 
-    @OptIn(ExperimentalComposeUiApi::class, InternalComposeUiApi::class)
-    if (ComposeUiFlags.isViewFocusFixEnabled && requireLayoutNode().getInteropView() == null) {
-        // This isn't an AndroidView, so we should be focused on this ComposeView
+    // MC 平台无 interop view,聚焦后请求 owner focus 即可
+    @OptIn(ExperimentalComposeUiApi::class)
+    if (ComposeUiFlags.isViewFocusFixEnabled) {
         requestOwnerFocus(FocusDirection.Next, null)
     }
 

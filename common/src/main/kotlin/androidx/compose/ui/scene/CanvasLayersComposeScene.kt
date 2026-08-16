@@ -53,14 +53,13 @@ import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastForEachReversed
 import androidx.compose.ui.util.fastLastOrNull
-import androidx.compose.ui.viewinterop.InteropView
 import androidx.compose.ui.window.getDialogScrimBlendMode
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 
 /**
- * Constructs a multi-layer [ComposeScene] using the specified parameters. Unlike
- * [PlatformLayersComposeScene], this version implement [ComposeSceneContext] itself and keeps
+ * Constructs a multi-layer [ComposeScene] using the specified parameters. Unlike the
+ * platform-layers variant, this version implements [ComposeSceneContext] itself and keeps
  * track of the added layers on its own in order to render (and also divide input among them)
  * everything on a single canvas.
  *
@@ -220,17 +219,6 @@ private class CanvasLayersComposeSceneImpl(
             { compositionLocalContext },
             content = content
         )
-    }
-
-    override fun hitTestInteropView(position: Offset): InteropView? {
-        forEachLayerReversed { layer ->
-            if (layer.contains(position)) {
-                return layer.owner.hitTestInteropView(position)
-            } else if (layer == focusedLayer) {
-                return null
-            }
-        }
-        return mainOwner.hitTestInteropView(position)
     }
 
     override fun processPointerInputEvent(event: PointerInputEvent): PointerEventResult {

@@ -7,9 +7,10 @@ import net.neoforged.fml.loading.FMLEnvironment
 @Mod("compose_minecraft")
 class NeoforgeMod {
     init {
-        // 仅客户端:注册帧渲染回调 + 加载 devOnly 初始化服务。
-        // 帧渲染不依赖事件,统一由通用 Java mixin(GuiRendererMixin,common 共享)
-        // 注入 GuiRenderer.render() 驱动;mixin 配置见 neoforge.mods.toml 的 [[mixins]]。
+        // 仅客户端:经 MinecraftClientSetup.initialize() 加载 devOnly 初始化服务
+        // (ServiceLoader)。渲染不经事件/mixin —— Compose 场景经 ComposeScreen 的
+        // extractRenderState 每帧驱动(见 AGENTS.md「无帧钩子 mixin、无渲染注入 mixin」）。
+        // mixin 配置见 neoforge.mods.toml 的 [[mixins]],只有 StyleAccessor。
         if (FMLEnvironment.getDist().isClient) {
             MinecraftClientSetup.initialize()
         }

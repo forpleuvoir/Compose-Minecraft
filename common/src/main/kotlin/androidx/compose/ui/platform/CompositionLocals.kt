@@ -50,9 +50,6 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.LifecycleOwner
 
-/** The CompositionLocal to provide communication with platform accessibility service. */
-val LocalAccessibilityManager = staticCompositionLocalOf<AccessibilityManager?> { null }
-
 /**
  * The CompositionLocal that can be used to trigger autofill actions. Eg.
  * [Autofill.requestAutofillForNode].
@@ -84,14 +81,6 @@ val LocalAutofillTree =
  */
 val LocalAutofillManager =
     staticCompositionLocalOf<AutofillManager?> { noLocalProvidedFor("LocalAutofillManager") }
-
-/** The CompositionLocal to provide communication with platform clipboard service. */
-@Deprecated(
-    "Use LocalClipboard instead which supports suspend functions",
-    ReplaceWith("LocalClipboard", "androidx.compose.ui.platform.LocalClipboard"),
-)
-val LocalClipboardManager =
-    staticCompositionLocalOf<ClipboardManager> { noLocalProvidedFor("LocalClipboardManager") }
 
 /** The CompositionLocal to provide communication with platform clipboard service. */
 val LocalClipboard = staticCompositionLocalOf<Clipboard> { noLocalProvidedFor("LocalClipboard") }
@@ -185,7 +174,15 @@ val LocalTextToolbar =
     staticCompositionLocalOf<TextToolbar> { noLocalProvidedFor("LocalTextToolbar") }
 
 /** The CompositionLocal to provide functionality related to URL, e.g. open URI. */
-val LocalUriHandler = staticCompositionLocalOf<UriHandler> { noLocalProvidedFor("LocalUriHandler") }
+/** The CompositionLocal to provide communication with platform URL handling. 默认空操作(Minecraft 平台未接入 URI 跳转)。 */
+val LocalUriHandler = staticCompositionLocalOf<UriHandler> { NoOpUriHandler }
+
+/** 空操作 [UriHandler](Minecraft 平台第一版不处理外部 URI)。 */
+internal object NoOpUriHandler : UriHandler {
+    override fun openUri(uri: String) {
+        //TODO 第一版不处理外部 URI
+    }
+}
 
 /** The CompositionLocal that provides the ViewConfiguration. */
 val LocalViewConfiguration =
@@ -230,15 +227,12 @@ val LocalCursorBlinkEnabled: ProvidableCompositionLocal<Boolean> = staticComposi
 @Composable
 internal fun ProvideCommonCompositionLocals(
     owner: Owner,
-    uriHandler: UriHandler,
     content: @Composable () -> Unit,
 ) {
     CompositionLocalProvider(
-        LocalAccessibilityManager provides owner.accessibilityManager,
         LocalAutofill provides owner.autofill,
         LocalAutofillManager provides owner.autofillManager,
         LocalAutofillTree provides owner.autofillTree,
-        LocalClipboardManager provides owner.clipboardManager,
         LocalClipboard provides owner.clipboard,
         LocalDensity provides owner.density,
         LocalFocusManager provides owner.focusOwner,
@@ -251,7 +245,6 @@ internal fun ProvideCommonCompositionLocals(
         LocalTextInputService provides owner.textInputService,
         LocalSoftwareKeyboardController provides owner.softwareKeyboardController,
         LocalTextToolbar provides owner.textToolbar,
-        LocalUriHandler provides uriHandler,
         LocalViewConfiguration provides owner.viewConfiguration,
         LocalWindowInfo provides owner.windowInfo,
         LocalPointerIconService provides owner.pointerIconService,

@@ -272,11 +272,7 @@ internal class FocusOwnerImpl(
     ): Boolean {
         // First check to see if the focus should move within child Views
         @OptIn(ExperimentalComposeUiApi::class)
-        if (
-            ComposeUiFlags.isViewFocusFixEnabled ||
-                (ComposeUiFlags.isBypassUnfocusableComposeViewEnabled &&
-                    activeFocusTargetNode?.isInteropViewHost == true)
-        ) {
+        if (ComposeUiFlags.isViewFocusFixEnabled) {
             if (platformFocusOwner.moveFocusInChildren(focusDirection)) {
                 return true
             }
@@ -519,22 +515,6 @@ internal class FocusOwnerImpl(
 
         rootFocusNode.visitSubtree(Nodes.FocusTarget) {
             if (it.isAttached && it.fetchFocusProperties().canFocus) {
-                return true
-            }
-        }
-        return false
-    }
-
-    override fun hasNonInteropFocusableContent(): Boolean {
-        if (!rootFocusNode.isAttached) return false
-
-        rootFocusNode.visitSubtree(Nodes.FocusTarget) {
-            if (!it.isAttached) {
-                return@visitSubtree
-            }
-            val focusProperties = it.fetchFocusProperties()
-            @OptIn(ExperimentalComposeUiApi::class)
-            if (it.isAttached && !it.isInteropViewHost && focusProperties.canFocus) {
                 return true
             }
         }

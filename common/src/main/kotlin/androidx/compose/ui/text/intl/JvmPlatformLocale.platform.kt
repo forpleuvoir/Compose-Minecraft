@@ -16,30 +16,27 @@
 
 package androidx.compose.ui.text.intl
 
+import moe.forpleuvoir.compose_minecraft.platform.text.isMcLanguageRtl
+import moe.forpleuvoir.compose_minecraft.platform.text.mcLanguageCodeToLocale
+
+/**
+ * 平台 Locale 适配点(Minecraft):语言跟随 MC 游戏设置
+ * (`Minecraft.getInstance().options.languageCode`),不是 JVM 系统默认。
+ * 玩家在游戏内更改语言后,`LocaleList.current` 随之返回新语言。
+ */
 internal fun createPlatformLocaleDelegate() = object : PlatformLocaleDelegate {
     override val current: LocaleList
-        get() = LocaleList(listOf(Locale(java.util.Locale.getDefault())))
+        get() = LocaleList(listOf(Locale(mcLanguageCodeToLocale())))
 }
 
-/** 平台底层 Locale 对象(Minecraft 平台为 JVM java.util.Locale) */
+/** 平台底层 Locale 对象(Minecraft 平台为按 MC 游戏语言映射的 java.util.Locale) */
 internal val Locale.platformLocale: java.util.Locale
     get() = javaLocale
 
 /**
  * 判断该 Locale 是否为 RTL(从右到左)书写方向。
  *
- * 替代原 AWT ComponentOrientation 判断:直接按标准 RTL 语言列表匹配,
- * 不引入任何 AWT/desktop 依赖。
+ * 平台适配点:以 MC 语言包元数据为准(`Language.isDefaultRightToLeft`),
+ * 替代原 AWT ComponentOrientation / 硬编码语言列表,不引入任何 AWT/desktop 依赖。
  */
-internal fun Locale.isRtl(): Boolean = platformLocale.language in RtlLanguages
-
-/** 标准 RTL 语言代码(ISO 639-1) */
-private val RtlLanguages = setOf(
-    "ar", // 阿拉伯语
-    "dv", // 迪维希语
-    "fa", // 波斯语
-    "he", // 希伯来语
-    "ps", // 普什图语
-    "ur", // 乌尔都语
-    "yi", // 意第绪语
-)
+internal fun Locale.isRtl(): Boolean = isMcLanguageRtl()

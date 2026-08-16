@@ -19,8 +19,16 @@ package androidx.compose.ui.platform
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 
-// TODO(demin): implement HapticFeedback
+/**
+ * MC 平台 HapticFeedback 实现:无触觉硬件,空实现(平台适配点)。
+ *
+ * 注意:该链路是**活的**(Clickable 长按、文本选区手柄等官方行为会调用
+ * [performHapticFeedback]),但 MC 没有震动硬件,调用不会产生任何物理反馈。
+ * 保留空实现以维持官方语义 —— 不要移除,移除会破坏移植源码与官方的对应性。
+ * (原注释 TODO(demin) 已由平台适配点说明替代。)
+ */
 internal class DefaultHapticFeedback : HapticFeedback {
     override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) {
+        // 无触觉硬件:反馈调用按官方语义发生,但没有任何物理效果
     }
 }

@@ -141,12 +141,6 @@ internal interface FocusOwner : FocusManager {
     fun hasFocusableContent(): Boolean
 
     /**
-     * Searches the hierarchy and returns true if we have focusable compose content (Ignores
-     * embedded views tha are focusable).
-     */
-    fun hasNonInteropFocusableContent(): Boolean
-
-    /**
      * Dispatches a key event through the compose hierarchy.
      *
      * When an embedded subview has focus, we call onPreviewKeyEvents for all the parents, and then

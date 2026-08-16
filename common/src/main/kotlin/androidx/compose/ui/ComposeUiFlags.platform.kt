@@ -18,11 +18,7 @@ package androidx.compose.ui
 
 import kotlin.jvm.JvmField
 
-internal object SkikoComposeUiFlags {
-    @Suppress("MutableBareField")
-    @JvmField
-    var useLegacyRenderNodeLayers: Boolean = false
-
+internal object MinecraftComposeUiFlags {
     @Suppress("MutableBareField")
     @JvmField
     var isClearFocusOnMouseDownEnabled: Boolean = false
@@ -37,21 +33,12 @@ internal object SkikoComposeUiFlags {
 }
 
 /**
- * Use legacy (pre 1.8) render node layers for cases without
- * [androidx.compose.ui.graphics.layer.GraphicsLayer]. `false` by default.
- *
- * Note that it's a temporary flag for compatibility purposes, it will be removed in the future.
- */
-@ExperimentalComposeUiApi
-var ComposeUiFlags.useLegacyRenderNodeLayers by SkikoComposeUiFlags::useLegacyRenderNodeLayers
-
-/**
  * This flag enables clearing focus on mouse down by default.
  *
  * More granular control is available in the various platform-specific entry points.
  */
 @ExperimentalComposeUiApi
-var ComposeUiFlags.isClearFocusOnMouseDownEnabled by SkikoComposeUiFlags::isClearFocusOnMouseDownEnabled
+var ComposeUiFlags.isClearFocusOnMouseDownEnabled by MinecraftComposeUiFlags::isClearFocusOnMouseDownEnabled
 
 /**
  * When enabled the [androidx.compose.ui.window.Dialog] appear and disappear with animation.
@@ -59,7 +46,7 @@ var ComposeUiFlags.isClearFocusOnMouseDownEnabled by SkikoComposeUiFlags::isClea
  * Note that it's a temporary flag, it will be removed in the future.
  */
 @ExperimentalComposeUiApi
-var ComposeUiFlags.isDialogAnimationEnabled by SkikoComposeUiFlags::isDialogAnimationEnabled
+var ComposeUiFlags.isDialogAnimationEnabled by MinecraftComposeUiFlags::isDialogAnimationEnabled
 
 /**
  * Enable WindowInsets rulers:
@@ -76,4 +63,4 @@ var ComposeUiFlags.isDialogAnimationEnabled by SkikoComposeUiFlags::isDialogAnim
  * * `SafeContentRulers`
  */
 @ExperimentalComposeUiApi
-var ComposeUiFlags.areWindowInsetsRulersEnabled by SkikoComposeUiFlags::areWindowInsetsRulersEnabled
+var ComposeUiFlags.areWindowInsetsRulersEnabled by MinecraftComposeUiFlags::areWindowInsetsRulersEnabled

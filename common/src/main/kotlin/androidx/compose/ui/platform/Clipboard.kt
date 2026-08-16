@@ -28,7 +28,7 @@ interface Clipboard {
      *
      * Calling this function on Android will access the Clipboard's contents, and the first time it
      * happens this will trigger a warning that says "App pasted from Clipboard". Use
-     * [nativeClipboard] and `primaryClipDescription` on Android to circumvent this issue if you are
+     * `primaryClipDescription` on Android to circumvent this issue if you are
      * only interested in querying what is available in the clipboard.
      */
     suspend fun getClipEntry(): ClipEntry?
@@ -40,7 +40,19 @@ interface Clipboard {
      *   null to clear the clipboard.
      */
     suspend fun setClipEntry(clipEntry: ClipEntry?)
-
-    /** Returns the native clipboard that exposes the full functionality of platform clipboard. */
-    val nativeClipboard: NativeClipboard
 }
+
+/** Platform specific protocol that expresses an item in the native Clipboard. */
+class ClipEntry(
+    val clipMetadata: ClipMetadata,
+    val text: String? = null,
+) {
+    /** 便捷构造:纯文本条目 */
+    constructor(text: String) : this(ClipMetadata(), text)
+}
+
+/**
+ * Platform specific protocol that describes an item in the native Clipboard. This object should not
+ * contain any actual piece of data.
+ */
+class ClipMetadata

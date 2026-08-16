@@ -16,7 +16,6 @@
 
 package androidx.compose.ui.platform
 
-import androidx.compose.ui.text.AnnotatedString
 import net.minecraft.client.Minecraft
 
 /**
@@ -30,25 +29,15 @@ import net.minecraft.client.Minecraft
 internal object MinecraftClipboard {
     fun readText(): String? =
         runCatching {
-            Minecraft.getInstance().keyboardHandler.getClipboard().ifEmpty { null }
+            Minecraft.getInstance().keyboardHandler.clipboard.ifEmpty { null }
         }.getOrNull()
 
     fun writeText(text: String) {
         // KeyboardHandler.setClipboard 仅写入非空文本(空串由 MC 侧忽略)
         if (text.isNotEmpty()) {
-            runCatching { Minecraft.getInstance().keyboardHandler.setClipboard(text) }
+            runCatching { Minecraft.getInstance().keyboardHandler.clipboard = text }
         }
     }
-}
-
-@Suppress("DEPRECATION")
-internal fun createPlatformClipboardManager(): ClipboardManager = object : ClipboardManager {
-    override fun setText(annotatedString: AnnotatedString) {
-        MinecraftClipboard.writeText(annotatedString.text)
-    }
-
-    override fun getText(): AnnotatedString? =
-        MinecraftClipboard.readText()?.let { AnnotatedString(it) }
 }
 
 internal fun createPlatformClipboard(): Clipboard = object : Clipboard {
@@ -60,9 +49,4 @@ internal fun createPlatformClipboard(): Clipboard = object : Clipboard {
             MinecraftClipboard.writeText(clipEntry.text.orEmpty())
         }
     }
-
-    override val nativeClipboard: NativeClipboard
-        get() = throw UnsupportedOperationException(
-            "Minecraft 平台不提供 NativeClipboard(仅纯文本,经 MC KeyboardHandler)"
-        )
 }

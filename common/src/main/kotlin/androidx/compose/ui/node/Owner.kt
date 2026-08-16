@@ -35,7 +35,6 @@ import androidx.compose.ui.input.pointer.PositionCalculator
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.PlacementScope
 import androidx.compose.ui.modifier.ModifierLocalManager
-import androidx.compose.ui.platform.AccessibilityManager
 import androidx.compose.ui.platform.Clipboard
 import androidx.compose.ui.platform.PlatformTextInputSessionScope
 import androidx.compose.ui.platform.SoftwareKeyboardController
@@ -50,7 +49,6 @@ import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.viewinterop.InteropView
 import kotlin.coroutines.CoroutineContext
 
 /**
@@ -80,19 +78,11 @@ internal interface Owner : PositionCalculator {
      */
     val inputModeManager: InputModeManager
 
-    /** Provide clipboard manager to the user. Use the Android version of clipboard manager. */
-    val clipboardManager: @Suppress("Deprecation") androidx.compose.ui.platform.ClipboardManager
-
     /**
      * Provide clipboard manager with suspend function to the user. Use the Android version of
      * clipboard manager.
      */
     val clipboard: Clipboard
-
-    /**
-     * Provide accessibility manager to the user. Use the Android version of accessibility manager.
-     */
-    val accessibilityManager: AccessibilityManager
 
     /**
      * Provide access to a GraphicsContext instance used to create GraphicsLayers for providing
@@ -302,13 +292,6 @@ internal interface Owner : PositionCalculator {
      * attached.
      */
     fun onPostLayoutNodeReused(layoutNode: LayoutNode, oldSemanticsId: Int) {}
-
-    /**
-     * The position and/or size of an interop view (typically, an android.view.View) has changed. On
-     * Android, this schedules view tree layout observer callback to be invoked for the underlying
-     * platform view hierarchy.
-     */
-    @InternalComposeUiApi fun onInteropViewLayoutChange(view: InteropView)
 
     val measureIteration: Long
 

@@ -17,17 +17,9 @@
 package androidx.compose.ui.platform
 
 import androidx.compose.ui.InternalComposeUiApi
-import androidx.lifecycle.HasDefaultViewModelProviderFactory
 import androidx.lifecycle.Lifecycle.State
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
-import androidx.lifecycle.SAVED_STATE_REGISTRY_OWNER_KEY
-import androidx.lifecycle.SavedStateViewModelFactory
-import androidx.lifecycle.VIEW_MODEL_STORE_OWNER_KEY
-import androidx.lifecycle.ViewModelStore
-import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.viewmodel.CreationExtras
-import androidx.lifecycle.viewmodel.MutableCreationExtras
 import androidx.navigationevent.NavigationEventDispatcher
 import androidx.navigationevent.NavigationEventDispatcherOwner
 import androidx.savedstate.SavedState
@@ -43,7 +35,6 @@ import androidx.savedstate.savedState
 interface PlatformArchitectureComponentsOwner {
     val lifecycleOwner: LifecycleOwner
     val navigationEventDispatcherOwner: NavigationEventDispatcherOwner
-    val viewModelStoreOwner: ViewModelStoreOwner?
     val savedStateRegistryOwner: SavedStateRegistryOwner
 }
 
@@ -56,28 +47,21 @@ class DefaultArchitectureComponentsOwner(
     enforceMainThread: Boolean = true
 ) : PlatformArchitectureComponentsOwner,
     LifecycleOwner,
-    ViewModelStoreOwner,
-    HasDefaultViewModelProviderFactory,
     NavigationEventDispatcherOwner,
     SavedStateRegistryOwner {
     override val lifecycleOwner get() = this
     override val navigationEventDispatcherOwner get() = this
-    override val viewModelStoreOwner get() = this
     override val savedStateRegistryOwner get() = this
     override val lifecycle = if (enforceMainThread) {
         LifecycleRegistry(this)
     } else {
         LifecycleRegistry.createUnsafe(this)
     }
-    override val viewModelStore = ViewModelStore()
     override val navigationEventDispatcher = NavigationEventDispatcher()
 
     private val savedStateController = SavedStateRegistryController.create(this)
     override val savedStateRegistry: SavedStateRegistry
         get() = savedStateController.savedStateRegistry
-
-    override val defaultViewModelProviderFactory = SavedStateViewModelFactory()
-    override val defaultViewModelCreationExtras = defaultViewModelCreationExtras(this, this)
 
     init {
         savedStateController.performAttach()
@@ -92,16 +76,5 @@ class DefaultArchitectureComponentsOwner(
 
     fun setLifecycleState(state: State) {
         lifecycle.currentState = state
-        if (state == State.DESTROYED) {
-            viewModelStore.clear()
-        }
     }
-}
-
-internal fun defaultViewModelCreationExtras(
-    savedStateRegistryOwner: SavedStateRegistryOwner,
-    viewModelStoreOwner: ViewModelStoreOwner
-): CreationExtras = MutableCreationExtras().also {
-    it[SAVED_STATE_REGISTRY_OWNER_KEY] = savedStateRegistryOwner
-    it[VIEW_MODEL_STORE_OWNER_KEY] = viewModelStoreOwner
 }

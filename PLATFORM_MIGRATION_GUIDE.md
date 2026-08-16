@@ -11,7 +11,8 @@
 - **无 Skia / Skiko / Desktop / Material**:所有绘制直接进入 Minecraft 当前帧的
   `GuiRenderState`(Vulkan/OpenGL 渲染后端无关,天然双后端支持);
 - **原版 `Screen` 桥接**:Compose 场景通过 `net.minecraft.client.gui.screens.Screen`
-  挂入 Minecraft,渲染、输入、生命周期全部走原版屏幕机制(无 mixin、无帧钩子);
+  挂入 Minecraft,渲染、输入、生命周期全部走原版屏幕机制(无帧钩子 mixin、
+  无渲染注入 mixin;仅 StyleAccessor 只读字段 mixin);
 - **密度 1**:场景坐标 = Minecraft GUI 单位,`1dp == 1 GUI 单位`。
 
 | 属性 | 值 |
@@ -123,9 +124,9 @@ ComposeScreen.open {
 |---|---|---|
 | **Material 全家**(Button/TextField/Card/Theme…) | 未移植 | 用基础组件 + `background`/`border`/`clickable` 自绘 |
 | 官方 `Text` 组件 | 未移植(依赖缺失的 `LocalTextStyle`) | 用 `BasicText(text, style = TextStyle(color = ...))` |
-| `TextField` / IME 文本输入 | 源码在,但输入链路未接通(`charTyped` 未转发) | 等待平台后续阶段;暂时自绘 + 键盘事件处理 |
+| `TextField` / IME 文本输入 | 字符输入已接通(charTyped);IME 组合态提示未实现 | 中文输入法上屏可用;组合态 preedit 待后续(见 `mc-ime-service-plan.md`) |
 | `Popup` / `Dialog` / `DropdownMenu` | 未移植 | 用全屏 Screen 或自定义定位绘制 |
-| 剪贴板 `ClipboardManager` | 空实现 | 等待平台扩展 |
+| 剪贴板 | 已接通(经 MC `KeyboardHandler`,纯文本) | `LocalClipboard.current` 读写文本 |
 | 指针图标 `PointerIcon` | 空实现 | 无 |
 | 动画库 `animation` / `material3` 动效 | 未经受控验证 | 先验证再使用 |
 | 远程图片/自定义字体加载 | 未移植(`FontFamily.Resolver` 未接通) | 仅用 MC 内置字体与 CPU 位图 |

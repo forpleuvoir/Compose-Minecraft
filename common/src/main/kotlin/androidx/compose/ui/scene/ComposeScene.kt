@@ -46,8 +46,6 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.viewinterop.InteropView
-import androidx.compose.ui.viewinterop.pointerInteropFilter
 
 /**
  * Represents a static [CompositionLocal] key for a [ComposeScene] in Jetpack Compose.
@@ -69,7 +67,6 @@ internal val LocalComposeScene = staticCompositionLocalOf<ComposeScene?> { null 
  * third-party users for integrating Compose into other platforms, it does not come
  * with any guarantee of stability.
  *
- * @see PlatformLayersComposeScene
  * @see CanvasLayersComposeScene
  */
 @InternalComposeUiApi
@@ -282,14 +279,6 @@ sealed interface ComposeScene : AutoCloseable {
         horizontalScrollPixels: Float,
         timeMillis: Long = currentTimeMillis(),
     ): Boolean
-
-    /**
-     * Perform hit test and return the [InteropView] associated with the resulting node
-     * in case it has a [Modifier.pointerInteropFilter], otherwise return null.
-     * @param position The position of the hit test.
-     * @return The [InteropView] associated with the resulting node in case there is any, or null.
-     */
-    fun hitTestInteropView(position: Offset): InteropView?
 
     /**
      * Run the [block] in a coroutine with a [androidx.compose.runtime.MonotonicFrameClock] instance

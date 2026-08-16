@@ -54,7 +54,6 @@ import androidx.compose.ui.util.trace
 
 internal class FocusTargetNode(
     focusability: Focusability = Focusability.Always,
-    val isInteropViewHost: Boolean = false,
     private val onFocusChange: ((previous: FocusState, current: FocusState) -> Unit)? = null,
     private val onDispatchEventsCompleted: ((FocusTargetNode) -> Unit)? = null,
 ) :
@@ -188,18 +187,8 @@ internal class FocusTargetNode(
                     focusDirection = Exit,
                 )
 
-                if (isInteropViewHost) {
-                    // Move focus to the AndroidComposeView, so that we can safely remove the
-                    // embedded view without triggering initial focus. We can safely move focus to
-                    // the host view even when we don't have focusable composables because we know
-                    // that this action will be followed by a call to restoreDefaultFocus after
-                    // onEndApplyChanges (The embedded view has a focus target associated with it,
-                    // and detaching that focus target will schedule a call to restoreDefaultFocus).
-                    focusOwner.requestOwnerFocus(
-                        focusDirection = null,
-                        previouslyFocusedRect = null,
-                    )
-                }
+                // MC 平台无 interop view:不需要把焦点移回宿主(官方此处为
+                // isInteropViewHost 分支,MC 下恒不成立)。
 
                 // We don't clear the owner's focus yet, because this could trigger an initial
                 // focus scenario after the focus is cleared. Instead, we schedule invalidation
@@ -209,14 +198,7 @@ internal class FocusTargetNode(
                 focusOwner.scheduleInvalidationForOwner()
             }
             ActiveParent -> {
-                val focusOwner = requireOwner().focusOwner
-                if (findActiveFocusNode()?.isInteropViewHost == true) {
-                    focusOwner.requestOwnerFocus(
-                        focusDirection = null,
-                        previouslyFocusedRect = null,
-                    )
-                    focusOwner.scheduleInvalidationForOwner()
-                }
+                // MC 平台无 interop view:官方此处 isInteropViewHost 分支恒不成立。
             }
             Inactive -> {}
         }

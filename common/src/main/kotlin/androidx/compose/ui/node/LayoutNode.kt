@@ -63,8 +63,6 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.viewinterop.InteropView
-import androidx.compose.ui.viewinterop.InteropViewFactoryHolder
 
 /** Enable to log changes to the LayoutNode tree. This logging is quite chatty. */
 private const val DebugChanges = false
@@ -92,7 +90,6 @@ internal class LayoutNode(
     LayoutInfo,
     SemanticsInfo,
     ComposeUiNode,
-    InteroperableComposeUiNode,
     Owner.OnLayoutCompletedListener {
 
     // Params managed by RectManager start:
@@ -240,15 +237,6 @@ internal class LayoutNode(
     /** The view system [Owner]. This `null` until [attach] is called */
     internal var owner: Owner? = null
         private set
-
-    /**
-     * The [InteropViewFactoryHolder] associated with this node, which is used to instantiate and
-     * manage platform View instances that are hosted in Compose.
-     */
-    internal var interopViewFactoryHolder: InteropViewFactoryHolder? = null
-
-    @InternalComposeUiApi
-    override fun getInteropView(): InteropView? = interopViewFactoryHolder?.getInteropView()
 
     /**
      * Returns true if this [LayoutNode] currently has an [LayoutNode.owner]. Semantically, this
@@ -1454,7 +1442,6 @@ internal class LayoutNode(
 
     override fun onReuse() {
         requirePrecondition(isAttached) { "onReuse is only expected on attached node" }
-        interopViewFactoryHolder?.onReuse()
         subcompositionsState?.onReuse()
         isCurrentlyCalculatingSemanticsConfiguration = false
         if (isDeactivated) {
@@ -1483,7 +1470,6 @@ internal class LayoutNode(
     }
 
     override fun onDeactivate() {
-        interopViewFactoryHolder?.onDeactivate()
         subcompositionsState?.onDeactivate()
         isDeactivated = true
         resetModifierState()
@@ -1496,7 +1482,6 @@ internal class LayoutNode(
     }
 
     override fun onRelease() {
-        interopViewFactoryHolder?.onRelease()
         subcompositionsState?.onRelease()
         forEachCoordinatorIncludingInner { it.onRelease() }
     }

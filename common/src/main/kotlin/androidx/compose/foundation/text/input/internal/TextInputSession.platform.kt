@@ -104,7 +104,7 @@ internal suspend fun PlatformTextInputSession.platformSpecificTextInputSession(
         fun unclippedTextOffsetInRoot() = layoutState.textLayoutNodeCoordinates?.positionInRoot()
 
         startInputMethod(
-            SkikoPlatformTextInputMethodRequest(
+            MinecraftPlatformTextInputMethodRequest(
                 value = { state.untransformedText.toTextFieldValue() },
                 state = state::untransformedText.asTextEditorState(),
                 imeOptions = imeOptions,
@@ -231,7 +231,7 @@ private fun TextEditingScope(buffer: TextFieldBuffer) = object : TextEditingScop
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
-internal data class SkikoPlatformTextInputMethodRequest(
+internal data class MinecraftPlatformTextInputMethodRequest(
     override val value: () -> TextFieldValue,
     override val state: TextEditorState,
     override val imeOptions: ImeOptions,

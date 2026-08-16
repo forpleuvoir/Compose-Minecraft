@@ -117,7 +117,7 @@ internal fun createLegacyPlatformTextInputServiceAdapter():
             imeOptions: ImeOptions,
             onEditCommand: (List<EditCommand>) -> Unit,
             onImeActionPerformed: (ImeAction) -> Unit
-        ): SkikoPlatformTextInputMethodRequest {
+        ): MinecraftPlatformTextInputMethodRequest {
             val textEditorState = object : TextEditorState {
                 override val selection: TextRange get() = textFieldValue.selection
                 override val composition: TextRange? get() = textFieldValue.composition
@@ -135,7 +135,7 @@ internal fun createLegacyPlatformTextInputServiceAdapter():
                 }
             }
 
-            return SkikoPlatformTextInputMethodRequest(
+            return MinecraftPlatformTextInputMethodRequest(
                 value = { textFieldValue },
                 state = textEditorState,
                 imeOptions = imeOptions,
