@@ -378,15 +378,16 @@ internal object GeometryTessellator {
         val pts = simplifyPolygon(ptsIn, sink.aaScale)
         val n = pts.size / 2
         if (n < 3) return
-        val area2 = signedArea2(pts, n)
-        if (abs(area2) < 1e-6f) return
-        val orientation = if (area2 >= 0f) 1 else -1
-
+        // 自交检测优先:自交对称图形(如蝴蝶结 X 形)的有向面积恰好为 0,
+        // 若先用面积判定退化会被直接丢弃 —— 先查 crossings,非空走 splitFill
         val crossings = findCrossings(pts, n)
         if (crossings.isNotEmpty()) {
             splitFill(pts, n, crossings, sink)
             return
         }
+        val area2 = signedArea2(pts, n)
+        if (abs(area2) < 1e-6f) return
+        val orientation = if (area2 >= 0f) 1 else -1
 
         val w = 1.5f / sink.aaScale
         val outer = offsetPolygon(pts, n, w, orientation)
@@ -503,6 +504,161 @@ internal object GeometryTessellator {
             i = next[i]
         }
         // 收尾:剩余环兜底输出(coverage ≥ 1.5px 饱和,不产生垃圾视觉)
+        var idx = i
+        var count = 0
+        while (count < remaining - 2) {
+            val a = prev[idx]
+            val b = idx
+            val c = next[idx]
+            sink.triangle(
+                xs[a], ys[a], trueDist(xs[a], ys[a]),
+                xs[b], ys[b], trueDist(xs[b], ys[b]),
+                xs[c], ys[c], trueDist(xs[c], ys[c]),
+            )
+            next[a] = c
+            prev[c] = a
+            idx = c
+            count++
+        }
+    }
+
+    // ── 阴影网格(平台扩展,GPU 距离场软阴影)──────────────────────────────
+
+    /**
+     * 软阴影网格(平台扩展,参照 Skia SkShadowUtils 的"形状模糊"语义):
+     * 覆盖「轮廓外扩 [blurPx](≈3σ,模糊衰减区)+ 本体内部」,顶点 coverage =
+     * 到轮廓真实距离 × [norm](norm = 1/(σ√2),片元插值后由 gui_shadow
+     * 片元着色器的 erfc 高斯解析解转 alpha:轮廓 0 → 0.5,外部衰减,内部饱和)。
+     *
+     * 结构(与 [fillPolygon] 三环同构,仅外扩宽度与归一化不同):
+     * 1. 外扩带:轮廓 0 → 膨胀轮廓 [blurPx](×norm);
+     * 2. 内缩带:轮廓 0 → 收缩轮廓 +1.5(×norm);
+     * 3. 内部填充:trueDist × norm(饱和)。
+     * 自交路径暂不支持(直接返回空,阴影缺失可接受,与填充的 EvenOdd
+     * 切分不同 —— 阴影是模糊的,低优先级)。
+     */
+    fun shadowFill(points: FloatArray, blurPx: Float, norm: Float, sink: Sink) {
+        val pts = simplifyPolygon(points, sink.aaScale)
+        val n = pts.size / 2
+        if (n < 3) return
+        val area2 = signedArea2(pts, n)
+        if (abs(area2) < 1e-6f) return
+        val orientation = if (area2 >= 0f) 1 else -1
+        if (findCrossings(pts, n).isNotEmpty()) return
+
+        val outer = offsetPolygon(pts, n, blurPx, orientation)
+        val inner = offsetPolygon(pts, n, -1.5f, orientation)
+
+        // 1. 外扩带:轮廓 0 → 膨胀轮廓 -blurPx(外部为负距离,×norm;
+        //    shader alpha = 0.5·(1+erf(d')) 在负距离衰减 → 外部柔和过渡)
+        for (i in 0 until n) {
+            val j = (i + 1) % n
+            val ax = pts[i * 2]; val ay = pts[i * 2 + 1]
+            val bx = pts[j * 2]; val by = pts[j * 2 + 1]
+            val ox = outer[i * 2]; val oy = outer[i * 2 + 1]
+            val px = outer[j * 2]; val py = outer[j * 2 + 1]
+            sink.triangle(ax, ay, 0f, bx, by, 0f, px, py, -blurPx * norm)
+            sink.triangle(ax, ay, 0f, px, py, -blurPx * norm, ox, oy, -blurPx * norm)
+        }
+        // 2. 内缩带:轮廓 0 → 收缩轮廓 +1.5(归一化,饱和区)
+        for (i in 0 until n) {
+            val j = (i + 1) % n
+            val ax = pts[i * 2]; val ay = pts[i * 2 + 1]
+            val bx = pts[j * 2]; val by = pts[j * 2 + 1]
+            val ix = inner[i * 2]; val iy = inner[i * 2 + 1]
+            val qx = inner[j * 2]; val qy = inner[j * 2 + 1]
+            sink.triangle(ax, ay, 0f, bx, by, 0f, qx, qy, 1.5f * norm)
+            sink.triangle(ax, ay, 0f, qx, qy, 1.5f * norm, ix, iy, 1.5f * norm)
+        }
+        // 3. 内部填充:trueDist × norm(饱和)
+        fillShadowInner(inner, n, pts, n, sink, norm)
+    }
+
+    /** 阴影内部填充(凸 → 形心扇形 / 凹 → 耳切),coverage = trueDist × norm */
+    private fun fillShadowInner(inner: FloatArray, m: Int, orig: FloatArray, on: Int, sink: Sink, norm: Float) {
+        val innerArea = signedArea2(inner, m)
+        val origArea = signedArea2(orig, on)
+        if (innerArea * origArea <= 0f) return
+
+        fun trueDist(x: Float, y: Float): Float {
+            var best = Float.MAX_VALUE
+            for (i in 0 until on) {
+                val j = (i + 1) % on
+                val d = distToSegment(x, y, orig[i * 2], orig[i * 2 + 1], orig[j * 2], orig[j * 2 + 1])
+                if (d < best) best = d
+            }
+            return best * sink.aaScale * norm
+        }
+
+        if (isConvex(inner, m)) {
+            var ccx = 0f
+            var ccy = 0f
+            for (i in 0 until m) {
+                ccx += inner[i * 2]
+                ccy += inner[i * 2 + 1]
+            }
+            ccx /= m
+            ccy /= m
+            val dc = trueDist(ccx, ccy)
+            for (i in 0 until m) {
+                val j = (i + 1) % m
+                sink.triangle(
+                    inner[i * 2], inner[i * 2 + 1], trueDist(inner[i * 2], inner[i * 2 + 1]),
+                    inner[j * 2], inner[j * 2 + 1], trueDist(inner[j * 2], inner[j * 2 + 1]),
+                    ccx, ccy, dc,
+                )
+            }
+        } else {
+            earClipShadowInner(inner, m, orig, on, sink, norm)
+        }
+    }
+
+    /** 阴影内缩轮廓(凹)耳切填充:coverage = trueDist × norm */
+    private fun earClipShadowInner(inner: FloatArray, m: Int, orig: FloatArray, on: Int, sink: Sink, norm: Float) {
+        val innerArea = signedArea2(inner, m)
+        val orientation = if (innerArea >= 0f) 1 else -1
+
+        fun trueDist(x: Float, y: Float): Float {
+            var best = Float.MAX_VALUE
+            for (i in 0 until on) {
+                val j = (i + 1) % on
+                val d = distToSegment(x, y, orig[i * 2], orig[i * 2 + 1], orig[j * 2], orig[j * 2 + 1])
+                if (d < best) best = d
+            }
+            return best * sink.aaScale * norm
+        }
+
+        val xs = FloatArray(m)
+        val ys = FloatArray(m)
+        for (i in 0 until m) {
+            xs[i] = inner[i * 2]
+            ys[i] = inner[i * 2 + 1]
+        }
+        val prev = IntArray(m)
+        val next = IntArray(m)
+        for (i in 0 until m) {
+            prev[i] = (i - 1 + m) % m
+            next[i] = (i + 1) % m
+        }
+        var remaining = m
+        var guard = 0
+        var i = 0
+        while (remaining > 3 && guard++ < m * m * 2) {
+            val a = prev[i]
+            val b = i
+            val c = next[i]
+            if (isEar(a, b, c, orientation, xs, ys, next, remaining)) {
+                sink.triangle(
+                    xs[a], ys[a], trueDist(xs[a], ys[a]),
+                    xs[b], ys[b], trueDist(xs[b], ys[b]),
+                    xs[c], ys[c], trueDist(xs[c], ys[c]),
+                )
+                next[a] = c
+                prev[c] = a
+                remaining--
+            }
+            i = next[i]
+        }
         var idx = i
         var count = 0
         while (count < remaining - 2) {
@@ -650,6 +806,17 @@ internal object GeometryTessellator {
                 ring.add(ring[1])
                 rings++
                 fillPolygon(ring.toFloatArray(), sink)
+            } else if (ring.size >= 6) {
+                // 环遍历中断(遇到已用子边 / 数值异常):已收集的点 ≥ 3 个时
+                // 补起点闭合输出(EvenOdd 子环)。修复:自交蝴蝶结的第二环
+                // 会走到已用子边被丢弃 → 只渲染一半;这里兜底保留部分环。
+                ring.add(ring[0])
+                ring.add(ring[1])
+                val area2 = signedArea2(ring.toFloatArray(), ring.size / 2)
+                if (abs(area2) > 1e-6f) {
+                    rings++
+                    fillPolygon(ring.toFloatArray(), sink)
+                }
             }
             // 继续扫描未访问子边
             startSub = 0

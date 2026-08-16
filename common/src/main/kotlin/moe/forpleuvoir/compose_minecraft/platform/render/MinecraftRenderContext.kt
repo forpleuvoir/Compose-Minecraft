@@ -23,6 +23,7 @@ import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.client.gui.render.TextureSetup
 import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.client.renderer.state.gui.BlitRenderState
+import net.minecraft.client.renderer.state.gui.ColoredRectangleRenderState
 import net.minecraft.client.renderer.state.gui.GuiRenderState
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState
 import net.minecraft.locale.Language
@@ -168,6 +169,40 @@ internal class MinecraftRenderContext {
                     )
                 }
                 is DrawTextCommand -> renderState.addText(text(command, scissor))
+                is MinecraftCanvas.DrawGradientRectCommand -> renderState.addGuiElement(
+                    // T.14 阴影(渐变保底):MC 原生双色垂直渐变矩形(GUI pipeline,与 blit 同排序组,
+                    // 阴影命令先记录先绘制,层级正确)
+                    ColoredRectangleRenderState(
+                        RenderPipelines.GUI,
+                        TextureSetup.noTexture(),
+                        command.matrix.toMatrix3x2f(),
+                        command.left.roundToInt(),
+                        command.top.roundToInt(),
+                        command.right.roundToInt(),
+                        command.bottom.roundToInt(),
+                        command.topColorArgb,
+                        command.bottomColorArgb,
+                        scissor?.toScreenRectangle(),
+                    )
+                )
+                is MinecraftCanvas.DrawShadowCommand -> {
+                    // T.14 阴影(CPU 离屏真模糊):alpha 场 + 高斯卷积 + 纹理 blit,
+                    // 双后端兼容,无自定义 shader/render pass
+                    MinecraftShadowRenderer.renderShadow(
+                        renderState = renderState,
+                        matrix = command.matrix,
+                        left = command.left,
+                        top = command.top,
+                        right = command.right,
+                        bottom = command.bottom,
+                        elevation = command.elevation,
+                        offsetX = command.offsetX,
+                        offsetY = command.offsetY,
+                        cornerRadius = command.cornerRadius,
+                        pathSegments = command.pathSegments,
+                        scissor = scissor?.toScreenRectangle(),
+                    )
+                }
                 is MinecraftCanvas.DrawImageRectCommand -> Unit // 图片:后续阶段(像素上传为 GpuTexture)
             }
         }

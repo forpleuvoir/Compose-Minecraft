@@ -16,8 +16,10 @@
 
 package androidx.compose.ui.graphics.layer
 
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.isUnspecified
 import androidx.compose.ui.graphics.BlendMode
@@ -28,6 +30,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.MinecraftCanvas
 import androidx.compose.ui.graphics.MinecraftImageBitmap
+import androidx.compose.ui.graphics.MinecraftPath
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RenderEffect
@@ -86,6 +89,13 @@ class GraphicsLayer internal constructor() {
 
     /** 记录阶段(record)使用的画布,draw/toImageBitmap 阶段回放 */
     private var recordingCanvas: MinecraftCanvas? = null
+
+    /** 由 set*Outline 设置的轮廓;null 时 [outline] 回退为图层尺寸矩形 */
+    private var layerOutline: Outline? = null
+
+    /** 阴影光源方向(平台扩展 T.14):归一化向量,屏幕 y 向下,默认右上角 */
+    var shadowLightDirectionX: Float = 1f
+    var shadowLightDirectionY: Float = -1f
 
     /**
      * [CompositingStrategy] determines whether or not the contents of this layer are rendered into
@@ -237,7 +247,9 @@ class GraphicsLayer internal constructor() {
      * this will return [Outline.Rectangle] with the size of the [GraphicsLayer] specified by
      * [record] or [IntSize.Zero] if [record] was not previously invoked.
      */
-    val outline: Outline get() = Outline.Rectangle(Rect(0f, 0f, size.width.toFloat(), size.height.toFloat()))
+    val outline: Outline
+        get() = layerOutline
+            ?: Outline.Rectangle(Rect(0f, 0f, size.width.toFloat(), size.height.toFloat()))
 
     /**
      * Specifies the given path to be configured as the outline for this [GraphicsLayer]. When
@@ -248,7 +260,9 @@ class GraphicsLayer internal constructor() {
      * @param path Path to be used as the Outline for the [GraphicsLayer]
      * @sample androidx.compose.ui.graphics.samples.GraphicsLayerOutlineSample
      */
-    fun setPathOutline(path: Path) = Unit
+    fun setPathOutline(path: Path) {
+        layerOutline = Outline.Generic(path)
+    }
 
     /**
      * Configures a rounded rect outline for this [GraphicsLayer]. By default, [topLeft] is set to
@@ -266,7 +280,17 @@ class GraphicsLayer internal constructor() {
         topLeft: Offset = Offset.Zero,
         size: Size = Size.Unspecified,
         cornerRadius: Float = 0f,
-    ) = Unit
+    ) {
+        val w = if (size != Size.Unspecified) size.width else this.size.width.toFloat()
+        val h = if (size != Size.Unspecified) size.height else this.size.height.toFloat()
+        layerOutline = Outline.Rounded(
+            RoundRect(
+                topLeft.x, topLeft.y,
+                topLeft.x + w, topLeft.y + h,
+                CornerRadius(cornerRadius),
+            )
+        )
+    }
 
     /**
      * Configures a rectangular outline for this [GraphicsLayer]. By default, [topLeft] is set to
@@ -279,7 +303,13 @@ class GraphicsLayer internal constructor() {
      * @param size The size of the rounded rect outline
      * @sample androidx.compose.ui.graphics.samples.GraphicsLayerRectOutline
      */
-    fun setRectOutline(topLeft: Offset = Offset.Zero, size: Size = Size.Unspecified) = Unit
+    fun setRectOutline(topLeft: Offset = Offset.Zero, size: Size = Size.Unspecified) {
+        val w = if (size != Size.Unspecified) size.width else this.size.width.toFloat()
+        val h = if (size != Size.Unspecified) size.height else this.size.height.toFloat()
+        layerOutline = Outline.Rectangle(
+            Rect(topLeft.x, topLeft.y, topLeft.x + w, topLeft.y + h)
+        )
+    }
 
     /**
      * The rotation, in degrees, of the contents around the horizontal axis in degrees. Default
@@ -442,8 +472,79 @@ class GraphicsLayer internal constructor() {
                 size.height.toFloat(),
             )
         }
+        // 平台适配点(T.14):阴影 —— 基于 outline 的多层伪模糊(无离屏/无 Skia 模糊)。
+        // 在内容之前绘制,随图层变换;偏移向下,内层深外层浅。
+        // Path outline(Outline.Generic)阴影后续阶段补齐。
+        drawShadow(canvas)
         canvas.replayFrom(recording, alphaMultiplier = alpha)
         canvas.restore()
+    }
+
+    /**
+     * 绘制软阴影(T.14,CPU 离屏真模糊 + 方向性投影)。
+     * 记录一条 [DrawShadowCommand]:内容矩形 + 扩散距离 + 投影偏移 + 圆角半径。
+     * 投影偏移 = 光源反方向 × elevation × 0.5(光源方向默认右上角,
+     * 经 [moe.forpleuvoir.compose_minecraft.platform.LocalShadowLight]
+     * CompositionLocal 可配置,由业务方在 graphicsLayer block 赋值)。
+     * Path outline 阴影后续阶段补齐。
+     */
+    private fun drawShadow(canvas: MinecraftCanvas) {
+        val elevation = shadowElevation
+        if (elevation <= 0f) return
+        val outline = layerOutline ?: return
+        // 轮廓 bounds(spot 阴影偏移的 center 基准,Skia:offset = -(lightXY - center) * zRatio)
+        val bounds = when (outline) {
+            is Outline.Rectangle -> outline.rect
+            is Outline.Rounded -> Rect(outline.roundRect.left, outline.roundRect.top, outline.roundRect.right, outline.roundRect.bottom)
+            is Outline.Generic -> outline.path.getBounds()
+        }
+        // Skia SkShadowUtils 公式(完全参照官方):
+        //   zRatio = elevation / (lightHeight - elevation),钳制 [0, 0.95]
+        //   lightXY = 归一化光源方向 × lightHeight(600),光源在 600 高度平面
+        //   spot offset = -(lightXY - center) * zRatio(阴影朝光源反方向投影)
+        val zRatio = (elevation / (600f - elevation)).coerceIn(0f, 0.95f)
+        val cx = (bounds.left + bounds.right) * 0.5f
+        val cy = (bounds.top + bounds.bottom) * 0.5f
+        val lx = shadowLightDirectionX
+        val ly = shadowLightDirectionY
+        val len = kotlin.math.sqrt(lx * lx + ly * ly)
+        val offsetX = if (len > 0f) -(lx / len * 600f - cx) * zRatio else -(-cx) * zRatio
+        val offsetY = if (len > 0f) -(ly / len * 600f - cy) * zRatio else -(-cy) * zRatio
+        when (outline) {
+            is Outline.Rectangle -> {
+                val r = outline.rect
+                canvas.recordShadow(
+                    r.left, r.top, r.right, r.bottom, elevation, offsetX, offsetY, 0f,
+                )
+            }
+            is Outline.Rounded -> {
+                // 圆角矩形:阴影本体 = 同圆角的圆角矩形投影(距离场带圆角)
+                val rr = outline.roundRect
+                canvas.recordShadow(
+                    rr.left, rr.top, rr.right, rr.bottom, elevation, offsetX, offsetY,
+                    rr.topLeftCornerRadius.x,
+                )
+            }
+            is Outline.Generic -> {
+                // Path 阴影:阴影形状 = 真实 Path 轮廓(渲染端按 Path 距离场生成)。
+                // 注意:此分支必须处理而非 return 跳过,否则 GenericShape 阴影全部丢失。
+                val path = outline.path
+                if (path is MinecraftPath) {
+                    canvas.recordShadow(
+                        0f, 0f, 0f, 0f, elevation, offsetX, offsetY, 0f,
+                        pathSegments = path.segments(),
+                    )
+                }
+            }
+        }
+    }
+
+    private companion object {
+        /** 阴影最内层 alpha 占阴影色的比例(渐变保底方案用) */
+        const val SHADOW_MAX_ALPHA_FACTOR = 0.5f
+
+        /** 渐变中段 alpha 占最内层的比例(渐变保底方案用) */
+        const val SHADOW_MID_ALPHA_FACTOR = 0.35f
     }
 }
 

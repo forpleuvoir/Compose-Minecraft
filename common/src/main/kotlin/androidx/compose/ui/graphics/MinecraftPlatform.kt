@@ -719,6 +719,53 @@ internal class MinecraftCanvas internal constructor(
         override val paint: PaintSnapshot? = null
     }
 
+    /**
+     * 渐变矩形命令(T.14 阴影):顶部/底部双色垂直渐变,渲染端经 MC 原生
+     * ColoredRectangleRenderState(GUI pipeline)提交 —— 与 blit 矩形同排序组,
+     * 阴影先记录先绘制,层级正确。
+     */
+    class DrawGradientRectCommand(
+        override val matrix: FloatArray,
+        override val clip: Rect?,
+        val left: Float,
+        val top: Float,
+        val right: Float,
+        val bottom: Float,
+        /** 0xAARRGGBB,顶部(y0)颜色 */
+        val topColorArgb: Int,
+        /** 0xAARRGGBB,底部(y1)颜色 */
+        val bottomColorArgb: Int,
+    ) : DrawCommand {
+        override val paint: PaintSnapshot? = null
+    }
+
+    /**
+     * 阴影命令(T.14 CPU 离屏真模糊):携带内容矩形(局部)与扩散距离,
+     * 渲染端经 [moe.forpleuvoir.compose_minecraft.platform.render.MinecraftShadowRenderer] 提交。
+     * [offsetX]/[offsetY] 为投影偏移(光源反方向,局部单位):阴影本体 =
+     * 内容矩形平移该偏移后的矩形。
+     */
+    class DrawShadowCommand(
+        override val matrix: FloatArray,
+        override val clip: Rect?,
+        val left: Float,
+        val top: Float,
+        val right: Float,
+        val bottom: Float,
+        /** 扩散距离(局部单位) */
+        val elevation: Float,
+        /** 投影偏移 x(局部单位,光源反方向) */
+        val offsetX: Float,
+        /** 投影偏移 y(局部单位,光源反方向) */
+        val offsetY: Float,
+        /** 圆角半径(局部单位,0 = 直角矩形) */
+        val cornerRadius: Float,
+        /** Path 轮廓段(非空 = Path 阴影,left/top/right/bottom 忽略) */
+        val pathSegments: List<MinecraftPath.PathSegmentData>? = null,
+    ) : DrawCommand {
+        override val paint: PaintSnapshot? = null
+    }
+
     private val drawCommands = ArrayList<DrawCommand>()
 
     /** 回放用:当前帧的全部绘制命令(阶段 C 由 MinecraftRenderContext 消费) */
@@ -746,6 +793,58 @@ internal class MinecraftCanvas internal constructor(
                 y = y,
                 style = style,
                 alpha = alpha,
+            )
+        )
+    }
+
+    /** 记录一段垂直渐变矩形(T.14 阴影,渲染端经 ColoredRectangleRenderState 提交) */
+    internal fun recordGradientRect(
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float,
+        topColorArgb: Int,
+        bottomColorArgb: Int,
+    ) {
+        drawCommands.add(
+            DrawGradientRectCommand(
+                matrix = currentMatrix.values.copyOf(),
+                clip = currentClip,
+                left = left,
+                top = top,
+                right = right,
+                bottom = bottom,
+                topColorArgb = topColorArgb,
+                bottomColorArgb = bottomColorArgb,
+            )
+        )
+    }
+
+    /** 记录一段阴影(T.14 CPU 离屏真模糊,渲染端经 MinecraftShadowRenderer 提交) */
+    internal fun recordShadow(
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float,
+        elevation: Float,
+        offsetX: Float,
+        offsetY: Float,
+        cornerRadius: Float,
+        pathSegments: List<MinecraftPath.PathSegmentData>? = null,
+    ) {
+        drawCommands.add(
+            DrawShadowCommand(
+                matrix = currentMatrix.values.copyOf(),
+                clip = currentClip,
+                left = left,
+                top = top,
+                right = right,
+                bottom = bottom,
+                elevation = elevation,
+                offsetX = offsetX,
+                offsetY = offsetY,
+                cornerRadius = cornerRadius,
+                pathSegments = pathSegments,
             )
         )
     }
@@ -824,6 +923,8 @@ internal class MinecraftCanvas internal constructor(
                         )
 
                     is DrawTextCommand      -> Unit // 文本在 else 分支处理
+                    is DrawGradientRectCommand -> Unit // 渐变矩形在 else 分支处理
+                    is DrawShadowCommand    -> Unit // 阴影在 else 分支处理
                 }
             } else if (command is DrawTextCommand) {
                 // 平台适配点:文本命令同样叠加图层级 alpha(经颜色 alpha 通道应用),
@@ -831,6 +932,18 @@ internal class MinecraftCanvas internal constructor(
                 recordTextDraw(
                     command.text, command.x, command.y, command.style,
                     alpha = command.alpha * alphaMultiplier,
+                )
+            } else if (command is DrawGradientRectCommand) {
+                // 渐变矩形(阴影):颜色已是最终 ARGB,无需 alphaMultiplier 叠加
+                recordGradientRect(
+                    command.left, command.top, command.right, command.bottom,
+                    command.topColorArgb, command.bottomColorArgb,
+                )
+            } else if (command is DrawShadowCommand) {
+                recordShadow(
+                    command.left, command.top, command.right, command.bottom,
+                    command.elevation, command.offsetX, command.offsetY, command.cornerRadius,
+                    command.pathSegments,
                 )
             }
             restore()

@@ -8,6 +8,7 @@ import com.mojang.blaze3d.shaders.ShaderSource
 import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
 import com.mojang.blaze3d.vertex.VertexConsumer
+import com.mojang.blaze3d.vertex.VertexFormat
 import com.mojang.logging.LogUtils
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.navigation.ScreenRectangle
@@ -91,6 +92,28 @@ internal object MinecraftGuiTriangles {
             .build()
     }
 
+    /**
+     * 软阴影专用 pipeline(平台扩展,GPU 距离场方案):顶点格式与绑定同
+     * [pipeline],shader 为 core/gui_shadow —— 片元用高斯模糊解析解
+     * erfc(d/(σ√2))/2 生成 alpha(参照 Skia SkShadowUtils 参数语义:
+     * σ = 0.667e、ambient 0.039 / spot 0.19 × (1-e/600))。
+     * 无离屏、无纹理、无 CPU 模糊;网格由 GeometryTessellator.shadowFill
+     * 生成并经 LRU 缓存。
+     */
+    val shadowPipeline: RenderPipeline by lazy {
+        RenderPipeline.builder()
+            .withLocation(Identifier.fromNamespaceAndPath("compose_minecraft", "pipeline/gui_shadow"))
+            .withVertexShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_shadow"))
+            .withFragmentShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_shadow"))
+            .withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
+            .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
+            .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR_LINE_WIDTH)
+            .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
+            .withCull(false)
+            .build()
+    }
+
+
     @Volatile
     private var compiled = false
 
@@ -115,6 +138,7 @@ internal object MinecraftGuiTriangles {
         }
         device.precompilePipeline(pipeline, shaderSource)
         device.precompilePipeline(strokePipeline, shaderSource)
+        device.precompilePipeline(shadowPipeline, shaderSource)
         compiled = true
     }
 }

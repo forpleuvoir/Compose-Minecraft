@@ -94,6 +94,11 @@ build_project(rebuild=true)
 8. 焦点相关:`onFocusChanged` 必须放在焦点目标(`focusable`/`clickable`)**之前**;
    `clickable` 自带焦点目标,不要与 `focusable` 叠加(会造成 Tab 循环);
    `onKeyEvent` 不要无条件消费导航键(Tab/方向键),否则焦点导航失效。
+9. **反射必须经用户确认**:禁止未经确认直接写反射代码;优先用 Mixin @Shadow/
+   注入点、公开 API 等非反射方式。
+10. **Mixin 可注入 lambda 合成方法**:`@Redirect(method = "lambda$sortElements$0", ...)`
+    可定向到 JDK 编译器生成的 lambda 合成方法(命名规则 `lambda$<方法名>$<序号>`,
+    稳定)。lambda 体内的调用无法用普通方法名命中。
 
 ## 移植源码维护经验(与调试)
 
@@ -113,6 +118,43 @@ build_project(rebuild=true)
 - **输入桥接**:MC `KeyEvent.modifiers` 为位标志(Control=2 / Shift=1 / Alt=4,
   见 `InputWithModifiers`),键码为 GLFW 值(经 `InputConstants` 抽象),Compose `Key`
   为 AWT VK 编码;桥接层只做映射,不直接绑定 LWJGL/AWT 类型。
+
+### 阴影实现踩坑记录(T.14,GPU 距离场方案)
+
+**方案演进**:CPU alpha 场 + 高斯卷积 + 纹理上传(逐像素 + 上传)性能不可接受
+(40+ 阴影 16FPS)→ 重构为 **GPU 距离场**:CPU 只三角化 + 每顶点距离
+(`GeometryTessellator.shadowFill`),`gui_shadow` shader 用高斯模糊解析解
+`alpha = A/2·erfc(d/(σ√2))` 生成软阴影,网格 LRU 缓存后静态场景零 CPU。
+
+- **Skia SkShadowUtils 参数语义**(官方 Compose/Skiko 的阴影):`σ = e·lightRadius/lightHeight/2`
+  (默认 800/600 → 0.667e,扩散**随 elevation 增大**);`alpha = (0.039+0.19)·(1-e/600)`
+  (ambient 0.039 无偏移 + spot 0.19 偏移);spot 偏移 `= -(lightXY-center)·zRatio`,
+  `zRatio = e/(600-e)`。**elevation 不是独立参数,扩散/浓度/偏移全部由它派生**。
+- **erfc 符号(致命坑)**:顶点 coverage 语义是"**内部为正、外部为负**"
+  (GeometryTessellator 约定)。高斯模糊半平面解 `A/2·erfc(d')` 在**内部 d' 正时
+  衰减到 0** —— 直接套用会得到"阴影中心空心、边缘(轮廓处 0.5)反而浓、
+  外部实心"的完全相反效果。正确写法 `alpha = A/2·(1+erf(d'))`。**符号写反时
+  视觉 = "描边投影、中间空、最外硬边",与预期完全相反,极易误判为其他问题。**
+- **外扩带 coverage 必须为负**(外部 = 负距离),与 `fillPolygon` 三环结构一致;
+  写成正数会导致外部区域 alpha ≥ 0.5(全黑) + 3σ 硬截止。
+- **自交 Path 有向面积恰为 0**:`fillPolygon` 的退化检查(面积 < 1e-6 直接 return)
+  会把自交对称图形(蝴蝶结 X 形)当退化丢弃 → 图形"不见"且 `splitFill` 永不执行。
+  **修复:findCrossings 自交检测必须优先于面积检查**。
+- **splitFill 环遍历遇"已用子边"丢环**:EvenOdd 子环遍历到 used 边时 `ok=false`
+  丢弃整个环 → 自交图形只渲染一半;已收集 ≥3 点时补起点闭合输出(部分环兜底)。
+- **`Modifier.shadow` 顺序**:shadow 必须写在内容(background)之前 —— graphicsLayer
+  包裹其后所有修饰符;写在 background 后则背景在阴影图层外(先绘制),阴影命令
+  排后 → 阴影盖内容。
+- **官方 `Modifier.shadow` 默认 `clip = elevation > 0`**:描边/线/点超出 shape
+  轮廓会被裁掉,测试时显式 `clip = false`。
+- **`replayFrom` 回放命令丢参数**:回放 `DrawShadowCommand` 时漏传 `pathSegments`
+  → 回放后命令走矩形分支(0,0,0,0 尺寸)静默跳过,Path 阴影全部丢失。**回放分支
+  必须透传全部字段。**
+- **`drawShadow` 的 `Outline.Generic` 分支不能 `return` 跳过**:否则 GenericShape
+  阴影全部丢失(矩形/圆角矩形正常,容易误判为"只有 Path 阴影没实现")。
+- **Mixin 置底排序风险**(`GuiRenderStateMixin`):置底只在节点内生效(阴影被
+  `findAppropriateNode` up 到上层节点时不跨节点)、`@Redirect` lambda 结构脆弱、
+  不保证全场景最底 —— 已记录在类注释,待渲染链路拆分后处理。
 
 ### 矩阵/旋转调试踩坑记录(T.13 旋转中心"公转"案)
 

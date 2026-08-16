@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ComposableOpenTarget
 import androidx.compose.runtime.RememberObserver
 import androidx.compose.runtime.remember
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.internal.JvmDefaultWithCompatibility
@@ -72,6 +73,14 @@ interface GraphicsLayerScope : Density {
      */
     /*@setparam:FloatRange(from = 0.0)*/
     var shadowElevation: Float
+
+    /**
+     * 阴影光源方向(平台扩展 T.14 方向性投影)。
+     * 归一化向量,屏幕坐标 y 向下,默认右上角 (1, -1);
+     * 业务方在组合内读取 [moe.forpleuvoir.compose_minecraft.platform.LocalShadowLight]
+     * 后赋值,阴影向光源反方向偏移投射。
+     */
+    var shadowLightDirection: Offset
 
     /**
      * Sets the color of the ambient shadow that is drawn when [shadowElevation] > 0f.
@@ -337,6 +346,16 @@ internal class ReusableGraphicsLayerScope : GraphicsLayerScope {
                 field = value
             }
         }
+
+    /**
+     * 阴影光源方向(平台扩展 T.14 方向性投影)。
+     * 归一化向量,屏幕坐标 y 向下,默认右上角 (1, -1)。
+     * 由 [moe.forpleuvoir.compose_minecraft.platform.shadow] 在组合期从
+     * [moe.forpleuvoir.compose_minecraft.platform.LocalShadowLight] 自动赋值,
+     * 业务方通常无需直接操作本属性。不参与官方 [mutatedFields] 位
+     * (由 OwnerLayer 每帧同步)。
+     */
+    override var shadowLightDirection: Offset = Offset(1f, -1f)
 
     override var ambientShadowColor: Color = DefaultShadowColor
         set(value) {

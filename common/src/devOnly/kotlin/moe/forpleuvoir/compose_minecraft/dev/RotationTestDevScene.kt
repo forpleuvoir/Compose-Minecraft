@@ -8,22 +8,31 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.LocalShadowLight
+import moe.forpleuvoir.compose_minecraft.platform.shadow
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
@@ -125,6 +134,48 @@ fun RotationTestDevScene() {
             BasicText(
                 "红十字不动 = 文本绕自身中心转;红点不动 = 方块绕自身中心转",
                 style = Style.EMPTY.withColor(Color(0xFF90A4AE)),
+            )
+
+            // ── 3. 阴影演示:shadowElevation + 圆角矩形 outline(CPU 离屏真模糊)──
+            // 浅色底板让黑色阴影可见;光源方向经 LocalShadowLight 配置(点击切换)
+            var lightIndex by remember { mutableStateOf(0) }
+            val lights = listOf(
+                Offset(1f, -1f),    // 右上(默认)
+                Offset(-1f, -1f),   // 左上
+                Offset(0f, -1f),    // 正上
+                Offset(1f, 1f),     // 右下
+            )
+            val lightNames = listOf("右上", "左上", "正上", "右下")
+            CompositionLocalProvider(LocalShadowLight provides lights[lightIndex]) {
+                Box(
+                    Modifier
+                        .padding(top = 32.dp)
+                        .background(Color(0xFF78909C))
+                        .padding(28.dp)
+                ) {
+                    Box(
+                        Modifier
+                            .size(96.dp, 36.dp)
+                            // 阴影必须在内容(background)之前:shadow(graphicsLayer)包裹内容,
+                            // 阴影命令先记录、内容后回放 → 内容盖住阴影重叠部分
+                            .shadow(1.dp, RoundedCornerShape(4.dp))
+                            .background(Color(0xFF42A5F5), RoundedCornerShape(4.dp))
+                    )
+                }
+            }
+            BasicText(
+                "阴影:shadowElevation=4 + RectangleShape(直角矩形投影)",
+                modifier = Modifier.padding(top = 6.dp),
+                style = Style.EMPTY.withColor(Color(0xFF90A4AE)),
+            )
+            BasicText(
+                "光源:${lightNames[lightIndex]}(点击切换 LocalShadowLight)",
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .background(Color(0xFF37474F))
+                    .clickable { lightIndex = (lightIndex + 1) % lights.size }
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                style = Style.EMPTY.withColor(Color(0xFFFFD54F)),
             )
         }
     }
