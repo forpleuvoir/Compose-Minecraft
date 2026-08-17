@@ -17,8 +17,8 @@ import net.minecraft.client.input.KeyEvent as MCKeyEvent
  */
 object ComposeInputBridge {
 
-    /** GLFW 滚轮一格(±1.0)对应的滚动像素(MC 列表语义:一格 = 3 行 × 行高 9) */
-    const val MC_SCROLL_NOTCH_PX = 27f
+    /** GLFW 滚轮一格(±1.0)对应的滚动像素(官方桌面 ≈53px/格;MC 原版列表语义 3 行偏慢,翻倍) */
+    const val MC_SCROLL_NOTCH_PX = 54f
 
     /**
      * MC 滚轮事件 → Compose [Offset] 滚动量。

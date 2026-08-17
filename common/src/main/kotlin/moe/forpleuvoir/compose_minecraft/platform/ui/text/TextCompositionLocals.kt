@@ -18,6 +18,8 @@ package moe.forpleuvoir.compose_minecraft.platform.ui.text
 
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.sp
 import net.minecraft.network.chat.FontDescription
 import net.minecraft.resources.Identifier
 
@@ -34,9 +36,19 @@ val LocalDefaultTextStyle = staticCompositionLocalOf<TextStyle> { TextStyle.Defa
 /**
  * 默认字体(T.30):文本**未显式指定字体**(`SpanStyle.platformStyle.font`)时使用的
  * MC 字体。默认 [MinecraftFonts.Default](minecraft:default);业务可 Provider 覆盖为
- * [MinecraftFonts] 中的其它字体(alt/unifont/illageralt/资源包字体)。
+ * [MinecraftFonts] 中的其它字体(alt/unifont/illageralt/资源包字体)或
+ * [rememberCustomFont] 加载的自定义字体。
  */
 val LocalDefaultFont = staticCompositionLocalOf<FontDescription> { MinecraftFonts.Default }
+
+/**
+ * 默认字号(T.32):`BasicText` 等文本组件的 [TextStyle]**未显式指定
+ * `fontSize`**(`TextStyle.Default` 语义)时使用的默认字号。
+ * 默认 18.sp(2x 平台基准字号,9sp = 1x 原生像素);业务可用
+ * [androidx.compose.runtime.CompositionLocalProvider] 覆盖(显式传 `fontSize`
+ * 的样式优先于本 Local)。
+ */
+val LocalDefaultFontSize = staticCompositionLocalOf<TextUnit> { 18.sp }
 
 /**
  * MC 资源字体清单(T.30):Minecraft 渲染体系可用的内置字体

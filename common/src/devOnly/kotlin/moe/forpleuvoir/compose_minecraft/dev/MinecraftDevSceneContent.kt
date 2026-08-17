@@ -147,6 +147,12 @@ fun MinecraftDevSceneContent() {
                 subtitle = "ComposeScreen.open(density=2f) 打开 —— dp 尺寸/sp 字号放大 2 倍,100dp 应显示为 200px",
                 onClick = { ComposeScreen.open(density = 2f) { DensityDevScene() } },
             )
+
+            DevMenuButton(
+                title = "系统字体测试 (OS Fonts)",
+                subtitle = "枚举系统字体目录,点击注册为自定义字体并经 LocalDefaultFont 切换渲染",
+                onClick = { ComposeScreen.open { FontDevScene() } },
+            )
         }
     }
 }

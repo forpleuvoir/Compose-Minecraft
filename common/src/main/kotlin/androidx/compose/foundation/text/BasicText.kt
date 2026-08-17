@@ -58,8 +58,10 @@ import androidx.compose.ui.unit.Constraints.Companion.fitPrioritizingWidth
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
+import androidx.compose.ui.unit.isUnspecified
 import androidx.compose.ui.unit.sp
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFont
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFontSize
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withDefaultFont
 import androidx.compose.ui.unit.IntOffset
@@ -152,9 +154,12 @@ fun BasicText(
     // 未显式指定字体(platformStyle.font)补 LocalDefaultFont。
     val defaultTextStyle = LocalDefaultTextStyle.current
     val defaultFont = LocalDefaultFont.current
+    val defaultFontSize = LocalDefaultFontSize.current
     val effectiveStyle =
-        remember(style, defaultTextStyle, defaultFont) {
-            (style ?: defaultTextStyle).withDefaultFont(defaultFont)
+        remember(style, defaultTextStyle, defaultFont, defaultFontSize) {
+            val withFont = (style ?: defaultTextStyle).withDefaultFont(defaultFont)
+            // 平台适配点(T.32):fontSize 未显式指定时补 LocalDefaultFontSize(显式优先)
+            if (withFont.fontSize.isUnspecified) withFont.merge(TextStyle(fontSize = defaultFontSize)) else withFont
         }
     val platformData = remember(effectiveStyle, density) { effectiveStyle.toPlatformData(density) }
     val mcStyle = platformData.mcStyle
@@ -352,9 +357,12 @@ fun BasicText(
     // 未显式指定字体(platformStyle.font)补 LocalDefaultFont。
     val defaultTextStyle = LocalDefaultTextStyle.current
     val defaultFont = LocalDefaultFont.current
+    val defaultFontSize = LocalDefaultFontSize.current
     val effectiveStyle =
-        remember(style, defaultTextStyle, defaultFont) {
-            (style ?: defaultTextStyle).withDefaultFont(defaultFont)
+        remember(style, defaultTextStyle, defaultFont, defaultFontSize) {
+            val withFont = (style ?: defaultTextStyle).withDefaultFont(defaultFont)
+            // 平台适配点(T.32):fontSize 未显式指定时补 LocalDefaultFontSize(显式优先)
+            if (withFont.fontSize.isUnspecified) withFont.merge(TextStyle(fontSize = defaultFontSize)) else withFont
         }
     val platformData = remember(effectiveStyle, density) { effectiveStyle.toPlatformData(density) }
     val mcStyle = platformData.mcStyle

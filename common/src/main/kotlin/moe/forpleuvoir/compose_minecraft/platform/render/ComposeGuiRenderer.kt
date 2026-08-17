@@ -4,6 +4,7 @@ import com.mojang.blaze3d.ProjectionType
 import com.mojang.blaze3d.pipeline.RenderPipeline
 import com.mojang.blaze3d.systems.RenderPass
 import com.mojang.blaze3d.systems.RenderSystem
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.MinecraftCustomFonts
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.Font
 import net.minecraft.client.gui.font.TextRenderable
@@ -110,6 +111,9 @@ class ComposeGuiRenderer : GuiCommandSink {
      * (原版 GUI 画完后 Compose 画在最上层;注入点不依赖原版 draws 状态)。
      */
     fun render() {
+        // T.32:自定义字体自愈 —— 资源重载清空 FontManager.fontSets 后重建已注册字体
+        // (无注册时 O(1) 空检查,见 MinecraftCustomFonts.ensureAlive)
+        MinecraftCustomFonts.ensureAlive()
         if (elements.isEmpty() && texts.isEmpty()) return
         prepare()
         vertexBuffer.upload()
