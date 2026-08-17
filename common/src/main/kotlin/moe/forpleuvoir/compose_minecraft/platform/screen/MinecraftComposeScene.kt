@@ -3,36 +3,26 @@ package moe.forpleuvoir.compose_minecraft.platform.screen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.MinecraftCanvas
 import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.pointer.MinecraftPointerIcon
-import androidx.compose.ui.input.pointer.MinecraftPointerIconKind
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.platform.PlatformContext
-import androidx.compose.ui.platform.PlatformTextInputMethodRequest
-import androidx.compose.ui.platform.WindowInfo
 import androidx.compose.ui.scene.CanvasLayersComposeScene
 import androidx.compose.ui.scene.ComposeScene
 import androidx.compose.ui.scene.PointerEventResult
 import androidx.compose.ui.semantics.SemanticsOwner
-import androidx.compose.ui.text.input.PlatformTextInputService
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import com.mojang.blaze3d.platform.cursor.CursorType
-import com.mojang.blaze3d.platform.cursor.CursorTypes
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.awaitCancellation
 import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiRenderer
 import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderContext
-import moe.forpleuvoir.compose_minecraft.platform.textinput.MinecraftTextInputService
 import moe.forpleuvoir.compose_minecraft.platform.ui.popup.LocalPopupHost
 import moe.forpleuvoir.compose_minecraft.platform.ui.popup.PopupHostOverlay
 import moe.forpleuvoir.compose_minecraft.platform.ui.popup.PopupHostState
@@ -57,6 +47,20 @@ class MinecraftComposeScene(
     height: Int,
     /** 平台适配点(T.26):场景密度,默认 1f(1dp == 1 像素);业务方可传 >1f 放大 UI */
     density: Float = 1f,
+    /**
+     * 平台接入点工厂(平台开放点):默认 [MinecraftPlatformContext]。
+     *
+     * 依赖方模组可注入自定义 [PlatformContext] 实现 —— 推荐继承
+     * [MinecraftPlatformContext] 覆写部分成员(可访问场景公开状态:
+     * textInputService / sceneContainerSize / desiredCursorType /
+     * onSemanticsChanged / getSemanticsOwners,并复用
+     * [MinecraftPlatformContext.toMinecraftCursorType] 光标映射),或完全自建。
+     *
+     * 注意:工厂在字段初始化期调用(CanvasLayersComposeScene 构造之前),自定义实现
+     * 构造时只能访问本场景已初始化的公开状态,不得读取内部 scene 字段(尚未赋值,
+     * 会触发属性初始化顺序 NPE)。
+     */
+    platformContextFactory: (MinecraftComposeScene) -> PlatformContext = { MinecraftPlatformContext(it) },
 ) {
     /** 每帧命令记录的画布(不分配 CPU/GPU 位图,纯命令列表) */
     private val canvas = MinecraftCanvas()
@@ -76,112 +80,67 @@ class MinecraftComposeScene(
      */
     private val charFilter = AtomicReference<(Int) -> Boolean>({ true })
 
-    /** 平台文本输入服务(IME Service):桥接 MC TextInputManager 与 Compose 编辑缓冲 */
-    internal val textInputService = MinecraftTextInputService()
 
     /**
-     * Compose 侧请求的原版光标(I9 指针图标):由平台接入点 [PlatformContext.setPointerIcon]
+     * Compose 侧请求的原版光标(I9 指针图标):由平台接入点 PlatformContext.setPointerIcon
      * 写入,经 [ComposeScreen.extractRenderState] 每帧通过原版
      * [net.minecraft.client.gui.GuiGraphicsExtractor.requestCursor] 提交 —— 走原版
      * per-frame 光标管线(帧末 applyCursor → Window.selectCursor,带去重),
      * 避免与原版光标重置互相覆盖。null = 无请求(原版默认光标)。
+     *
+     * 平台开放点:public —— 自定义 PlatformContext 的 setPointerIcon 覆写写入。
      */
-    internal var desiredCursorType: CursorType? = null
-        private set
+    var desiredCursorType: CursorType? = null
 
     /**
-     * 窗口像素尺寸(供 [WindowInfo.containerSize],Dialog 居中/Popup 裁剪使用)。
+     * 窗口像素尺寸(供 WindowInfo.containerSize,Dialog 居中/Popup 裁剪使用)。
      * 独立于 [scene] 的字段:不能在构造期间读取 scene 属性(CanvasLayersComposeScene
      * 构造即查询 containerSize,而 scene 尚未赋值完成,见 windowInfo 处注释),
      * 由 [renderFrame] 每帧与 resize 同源同步;场景构造期间保持 IntSize.Zero。
+     *
+     * 平台开放点:public —— 自定义 PlatformContext 的 windowInfo 读取。
      */
-    private var sceneContainerSize = IntSize.Zero
+    var sceneContainerSize = IntSize.Zero
+        private set
 
     /**
-     * 已捕获的语义树所有者(复述系统数据源):由 [PlatformContext.semanticsOwnerListener]
+     * 已捕获的语义树所有者(复述系统数据源):由 PlatformContext.semanticsOwnerListener
      * 在场景/图层附着时登记,ComposeScreen 朗读时遍历全部 owner 的语义节点。
      * 主场景 owner 最先(init 时 onOwnerAppended),其后每个 Popup/Dialog 图层
      * 各一个 owner(顺序 = 图层栈)。
      */
-    private val capturedSemanticsOwners = mutableListOf<SemanticsOwner>()
+    internal val capturedSemanticsOwners = mutableListOf<SemanticsOwner>()
 
     /**
      * 语义树变化回调(复述系统):owner 语义变化时触发,ComposeScreen 借此在
      * 焦点变化时补触发原版朗读调度。注意此回调在语义快照提交时被调用,非合成期间。
+     *
+     * 平台开放点:public —— 自定义 PlatformContext 的 semanticsOwnerListener 覆写触发。
      */
-    internal var onSemanticsChanged: (() -> Unit)? = null
+    var onSemanticsChanged: (() -> Unit)? = null
+
+    /** 登记语义树所有者(复述系统,平台开放点:自定义 semanticsOwnerListener 调用) */
+    fun addSemanticsOwner(semanticsOwner: SemanticsOwner) {
+        capturedSemanticsOwners += semanticsOwner
+    }
+
+    /** 注销语义树所有者(复述系统,平台开放点:自定义 semanticsOwnerListener 调用) */
+    fun removeSemanticsOwner(semanticsOwner: SemanticsOwner) {
+        capturedSemanticsOwners -= semanticsOwner
+    }
 
     /** 全部已登记语义树(复述系统读取入口) */
-    internal fun getSemanticsOwners(): List<SemanticsOwner> = capturedSemanticsOwners.toList()
+    fun getSemanticsOwners(): List<SemanticsOwner> = capturedSemanticsOwners.toList()
+
+    /** 平台接入点实现(factory 注入,默认 [MinecraftPlatformContext]) */
+    val platformContext: PlatformContext = platformContextFactory(this)
 
     private val scene: ComposeScene = CanvasLayersComposeScene(
         density = Density(density),
         size = IntSize(width.coerceAtLeast(1), height.coerceAtLeast(1)),
         // 主线程驱动:MC 的 extract/render 都在主线程,recompose 同步刷新
         coroutineContext = Dispatchers.Unconfined,
-        platformContext = object : PlatformContext.Empty() {
-            // 平台适配点(Dialog/Popup 定位):官方桌面实现的 WindowInfo.containerSize 来自
-            // 场景实时尺寸;移植默认 WindowInfoImpl 恒为 IntSize.Zero,会导致 Dialog 居中/
-            // Popup 裁剪基于 0 尺寸容器,这里改为独立字段 [sceneContainerSize],
-            // 由 renderFrame 每帧同步窗口像素尺寸。
-            // 注意:此处不能读取 this@MinecraftComposeScene.scene —— CanvasLayersComposeScene
-            // 构造期间(RootNodeOwner.<init> → updatePositionCacheAndDispatch)即会查询
-            // containerSize,而 scene 字段此刻尚未赋值完成(属性初始化顺序),会 NPE。
-            override val windowInfo: WindowInfo
-                get() = object : WindowInfo {
-                    // 始终视作聚焦(MC 全屏窗口即前台);官方默认亦为 true
-                    override val isWindowFocused: Boolean
-                        get() = true
-
-                    override val containerSize: IntSize
-                        get() = this@MinecraftComposeScene.sceneContainerSize
-                }
-
-            // 注入 MC IME 服务(替代 EmptyPlatformTextInputService 默认值)
-            @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
-            override val textInputService: PlatformTextInputService
-                get() = this@MinecraftComposeScene.textInputService
-
-            // 新版 API 会话(BasicTextField(state)):绑定 request 的 onEditCommand/value,
-            // 使 preedit 事件能写入编辑缓冲;会话取消时解绑(IME 停止由 RootNodeOwner 的
-            // textInputService.stopInput() 负责)
-            @OptIn(ExperimentalComposeUiApi::class)
-            override suspend fun startInputMethod(request: PlatformTextInputMethodRequest): Nothing {
-                this@MinecraftComposeScene.textInputService.bindRequest(request)
-                try {
-                    awaitCancellation()
-                } finally {
-                    this@MinecraftComposeScene.textInputService.unbindRequest(request)
-                }
-            }
-
-            // I9 指针图标:Compose 光标请求 → MC 原版光标类型(经原版 per-frame 管线生效,
-            // 由 RootNodeOwner.PointerIconServiceImpl 在指针 Enter/Exit 时调用)
-            override fun setPointerIcon(pointerIcon: PointerIcon) {
-                desiredCursorType = pointerIcon.toMinecraftCursorType()
-            }
-
-            // 复述系统:捕获语义树所有者(mainOwner 与每个图层 owner),语义变化时
-            // 通知 ComposeScreen(焦点变化 → 补触发原版朗读调度)
-            override val semanticsOwnerListener: PlatformContext.SemanticsOwnerListener
-                get() = object : PlatformContext.SemanticsOwnerListener {
-                    override fun onSemanticsOwnerAppended(semanticsOwner: SemanticsOwner) {
-                        capturedSemanticsOwners += semanticsOwner
-                    }
-
-                    override fun onSemanticsOwnerRemoved(semanticsOwner: SemanticsOwner) {
-                        capturedSemanticsOwners -= semanticsOwner
-                    }
-
-                    override fun onSemanticsChange(semanticsOwner: SemanticsOwner) {
-                        onSemanticsChanged?.invoke()
-                    }
-
-                    override fun onLayoutChange(semanticsOwner: SemanticsOwner, semanticsNodeId: Int) {
-                        // 位置/尺寸变化不触发朗读;朗读文本来源是语义属性,非几何
-                    }
-                }
-        },
+        platformContext = platformContext,
         // MC 每帧都会调用 render(),无需额外 invalidate 调度
         invalidate = {},
     )
@@ -257,16 +216,4 @@ class MinecraftComposeScene(
 
     /** 释放场景(组合、Recomposer 等) */
     fun close() = scene.close()
-}
-
-/**
- * Compose [PointerIcon] → MC 原版 [CursorType] 映射(I9 指针图标):
- * - Default → 标准箭头;Crosshair → 十字;Text → I 形(文本);Hand → 手型;
- * - 未知/自定义图标实现回退默认箭头(与原占位行为一致,不触发错误)。
- */
-private fun PointerIcon.toMinecraftCursorType(): CursorType = when ((this as? MinecraftPointerIcon)?.kind) {
-    MinecraftPointerIconKind.Crosshair -> CursorTypes.CROSSHAIR
-    MinecraftPointerIconKind.Text -> CursorTypes.IBEAM
-    MinecraftPointerIconKind.Hand -> CursorTypes.POINTING_HAND
-    else -> CursorTypes.ARROW
 }

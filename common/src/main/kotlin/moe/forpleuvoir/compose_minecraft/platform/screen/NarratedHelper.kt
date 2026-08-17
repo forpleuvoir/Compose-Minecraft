@@ -38,10 +38,9 @@ object NarratedHelper {
      * 复述系统接入(方案 A):重写原版 [Screen.updateNarratedWidget],把 Compose 语义树
      * 映射为原版朗读输出。
      *
-     * 朗读目标(与用户确认:焦点优先 + 悬停回退,对齐原版 FOCUSED > HOVERED 优先级):
-     * 1. 焦点节点:语义树中 `Focused == true` 的节点(经 focusable/clickable 自动写入,
-     *    Focusable.kt 语义应用),无则跳过;
-     * 2. 悬停回退:鼠标位置命中的语义节点(按绘制序,Z 序上层优先)。
+     * 朗读目标(与用户确认:悬停优先 + 焦点兜底 —— 鼠标悬停到哪个组件就朗读哪个,
+     * 无悬停时才回退朗读语义焦点节点(Focused == true 的节点,经 focusable/clickable
+     * 自动写入,Focusable.kt 语义应用)):
      *
      * 文本组装(与用户确认):主文本 = text > contentDescription > editableText
      * (BasicText 写 text、Image 写 contentDescription、BasicTextField 写 editableText);
@@ -63,17 +62,16 @@ object NarratedHelper {
             owner.getAllSemanticsNodes(mergingEnabled = true)
         }
 
-        // 1) 焦点节点优先
+        // 1) 悬停节点优先(鼠标所在的最上层可朗读节点;“悬停读悬停,无悬停才读焦点”)
+        val hoveredNode = allNodes.asReversed().firstOrNull { node ->
+            !node.isSemanticsHidden && node.hasNarrationContent &&
+                    node.boundsInRoot.contains(mousePosition)
+        }
+        // 2) 焦点兜底(无悬停目标时,朗读语义焦点所在节点)
         val focusedNode = allNodes.firstOrNull { node ->
             node.config.getOrNull(SemanticsProperties.Focused) == true && !node.isSemanticsHidden
         }
-        // 2) 悬停回退:鼠标所在的最上层可朗读节点
-        val hoveredNode =
-            focusedNode ?: allNodes.asReversed().firstOrNull { node ->
-                !node.isSemanticsHidden && node.hasNarrationContent &&
-                        node.boundsInRoot.contains(mousePosition)
-            }
-        val target = focusedNode ?: hoveredNode
+        val target = hoveredNode ?: focusedNode
         if (target == null) {
             // 无焦点也无悬停目标:输出导航提示(对齐原版 SCREEN_USAGE_NARRATION,
             // 且朗读器开启时立即有反馈;文案经语言系统翻译)

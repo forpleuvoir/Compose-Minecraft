@@ -29,4 +29,4 @@ fun mcLanguageCodeToLocale(): java.util.Locale {
  * 权威来源:`Language.getInstance().isDefaultRightToLeft()`(由语言包加载时的
  * defaultRightToLeft 决定,ClientLanguage 构造参数),不自行硬编码语言列表。
  */
-fun isMcLanguageRtl(): Boolean = Language.getInstance().isDefaultRightToLeft()
+fun isMcLanguageRtl(): Boolean = Language.getInstance().isDefaultRightToLeft

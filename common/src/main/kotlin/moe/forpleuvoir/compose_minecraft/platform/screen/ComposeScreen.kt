@@ -13,6 +13,7 @@ import com.mojang.blaze3d.platform.cursor.CursorType
 import moe.forpleuvoir.compose_minecraft.platform.textinput.ComposeInputBridge.scrollDelta
 import moe.forpleuvoir.compose_minecraft.platform.textinput.ComposeInputBridge.toCompose
 import moe.forpleuvoir.compose_minecraft.platform.textinput.ComposeInputBridge.toPointerKeyboardModifiers
+import moe.forpleuvoir.compose_minecraft.platform.textinput.MinecraftTextInputService
 import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiRenderer
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
@@ -77,11 +78,10 @@ class ComposeScreen(
     var reopenable: Boolean = false
 
     // ── 复述系统(Narration)桥接状态 ──────────────────────────
-    // 最近一次鼠标位置(像素,经 toPixels 换算):悬停朗读回退用
-    private var lastMousePixelX: Float = 0f
-    private var lastMousePixelY: Float = 0f
+    // 最近一次鼠标位置(像素,取自 mouseHandler 原始坐标):悬停朗读回退用
 
-    // 上一次朗读的焦点语义节点 id:语义变化时检测焦点迁移 → 补触发原版朗读
+    private val mousePosition get() = Offset(minecraft.mouseHandler.xpos().toFloat(), minecraft.mouseHandler.ypos().toFloat())
+
     private var lastFocusedSemanticsId: Int = -1
 
     // 语义变化暂存:onSemanticsChanged 回调发生在语义快照提交期(合成/测量阶段),
@@ -172,21 +172,19 @@ class ComposeScreen(
     // ── 鼠标输入(阶段 F)──────────────────────────────────────
 
     /**
-     * T.24:MC 输入坐标为 guiScale 缩放坐标(Scene 1:1 像素后需乘回 guiScale 转像素)。
-     * 注意 MC 的 scaled 坐标本身是「像素 / guiScale 取整」,乘回后与原始像素最多差
-     * guiScale-1 像素(MC 输入层固有限制,渲染裁剪已完全像素化)。
+     * 平台接入点的 MC IME 服务(文本输入桥接)。
+     *
+     * 平台开放点:platformContext 经 factory 可由下游替换,若自定义实现自持
+     * [MinecraftTextInputService](默认即如此)这里 cast 成功;否则返回 null,
+     * IME 组合态转发(isComposing/onCharTyped/onPreeditChanged)静默失效。
      */
-    private fun guiScale(): Int =
-        Minecraft.getInstance().gameRenderer.gameRenderState().windowRenderState.guiScale
-
-    private fun toPixels(x: Double): Float = (x * guiScale()).toFloat()
+    private val MinecraftComposeScene.imeService: MinecraftTextInputService?
+        get() = platformContext.textInputService as? MinecraftTextInputService
 
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
-        lastMousePixelX = toPixels(event.x)
-        lastMousePixelY = toPixels(event.y)
         val consumed = composeScene?.sendPointerEvent(
             eventType = PointerEventType.Press,
-            position = Offset(toPixels(event.x), toPixels(event.y)),
+            position = mousePosition,
             type = PointerType.Mouse,
             keyboardModifiers = event.buttonInfo.modifiers().toPointerKeyboardModifiers(),
             button = PointerButton(event.buttonInfo.button()),
@@ -197,7 +195,7 @@ class ComposeScreen(
     override fun mouseReleased(event: MouseButtonEvent): Boolean {
         val consumed = composeScene?.sendPointerEvent(
             eventType = PointerEventType.Release,
-            position = Offset(toPixels(event.x), toPixels(event.y)),
+            position = mousePosition,
             type = PointerType.Mouse,
             keyboardModifiers = event.buttonInfo.modifiers().toPointerKeyboardModifiers(),
             button = PointerButton(event.buttonInfo.button()),
@@ -206,22 +204,18 @@ class ComposeScreen(
     }
 
     override fun mouseMoved(x: Double, y: Double) {
-        lastMousePixelX = toPixels(x)
-        lastMousePixelY = toPixels(y)
         composeScene?.sendPointerEvent(
             eventType = PointerEventType.Move,
-            position = Offset(toPixels(x), toPixels(y)),
+            position = mousePosition,
             type = PointerType.Mouse,
         )
         super.mouseMoved(x, y)
     }
 
     override fun mouseDragged(event: MouseButtonEvent, dx: Double, dy: Double): Boolean {
-        lastMousePixelX = toPixels(event.x)
-        lastMousePixelY = toPixels(event.y)
         val consumed = composeScene?.sendPointerEvent(
             eventType = PointerEventType.Move,
-            position = Offset(toPixels(event.x), toPixels(event.y)),
+            position = mousePosition,
             type = PointerType.Mouse,
             keyboardModifiers = event.buttonInfo.modifiers().toPointerKeyboardModifiers(),
         )
@@ -232,7 +226,7 @@ class ComposeScreen(
         val consumed =
             composeScene?.sendPointerEvent(
                 eventType = PointerEventType.Scroll,
-                position = Offset(toPixels(x), toPixels(y)),
+                position = mousePosition,
                 type = PointerType.Mouse,
                 scrollDelta = scrollDelta(scrollX, scrollY),
             )
@@ -250,14 +244,14 @@ class ComposeScreen(
      * 组合期间按键不达应用的行为一致)。
      */
     override fun keyPressed(event: MCKeyEvent): Boolean {
-        return composeScene?.textInputService?.isComposing == true
+        return composeScene?.imeService?.isComposing == true
                 && event.key in IME_COMPOSITION_KEYS
                 || composeScene?.sendKeyEvent(event.toCompose(KeyEventType.KeyDown)) == true
                 || super.keyPressed(event)
     }
 
     override fun keyReleased(event: MCKeyEvent): Boolean {
-        return composeScene?.textInputService?.isComposing == true
+        return composeScene?.imeService?.isComposing == true
                 && event.key in IME_COMPOSITION_KEYS
                 || composeScene?.sendKeyEvent(event.toCompose(KeyEventType.KeyUp)) == true
                 || super.keyReleased(event)
@@ -280,7 +274,7 @@ class ComposeScreen(
         if (!scene.isCharAccepted(event.codepoint)) {
             return false
         }
-        scene.textInputService.onCharTyped(event.codepoint)
+        scene.imeService?.onCharTyped(event.codepoint)
         val typedEvent = ComposeKeyEvent(
             key = Key.Unknown,
             type = KeyEventType.KeyDown,
@@ -295,7 +289,7 @@ class ComposeScreen(
      * Compose EditCommand 写入编辑缓冲(下划线组合文本/组合区清理/光标定位)。
      */
     override fun preeditUpdated(event: PreeditEvent?): Boolean {
-        composeScene?.textInputService?.onPreeditChanged(event)
+        composeScene?.imeService?.onPreeditChanged(event)
         return true
     }
 
@@ -327,7 +321,7 @@ class ComposeScreen(
     // ── 复述系统(Narration)桥接 ──────────────────────────────
 
     override fun updateNarratedWidget(output: NarrationElementOutput) {
-        NarratedHelper.updateNarratedWidget(composeScene, Offset(lastMousePixelX, lastMousePixelY), output)
+        NarratedHelper.updateNarratedWidget(composeScene, mousePosition, output)
     }
 
     companion object {

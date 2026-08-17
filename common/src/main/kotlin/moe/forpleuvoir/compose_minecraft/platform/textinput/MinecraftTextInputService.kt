@@ -39,9 +39,11 @@ import kotlin.math.roundToInt
  *   replaceSelectedText(clearComposition=true) 已清除组合区),这里仅删除缓冲区中残留的
  *   组合文本(取消场景组合文本仍在 composition range 内,一并删除),并把光标放到
  *   提交文本之后(取消场景光标回到组合起点)。
+ *
+ * 平台开放点:公开可继承,依赖方模组可覆写以替换/扩展 IME 桥接行为。
  */
 @Suppress("DEPRECATION") // PlatformTextInputService 官方已废弃(改用 PlatformTextInputModifierNode),移植兼容层仍在使用
-internal class MinecraftTextInputService : PlatformTextInputService {
+open class MinecraftTextInputService : PlatformTextInputService {
 
     // ── 会话绑定 ──
 

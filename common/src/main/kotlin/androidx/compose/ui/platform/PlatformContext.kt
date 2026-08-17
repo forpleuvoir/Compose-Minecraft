@@ -18,10 +18,7 @@ package androidx.compose.ui.platform
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.ComposeUiFlags
-import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.FrameRateCategory
-import androidx.compose.ui.InternalComposeUiApi
+import androidx.compose.ui.*
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.geometry.Offset
@@ -29,7 +26,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.InputModeManager
 import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.isClearFocusOnMouseDownEnabled
 import androidx.compose.ui.node.LayoutNode
 import androidx.compose.ui.node.OwnedLayer
 import androidx.compose.ui.node.Owner
@@ -38,15 +34,12 @@ import androidx.compose.ui.scene.CanvasLayersComposeScene
 import androidx.compose.ui.scene.ComposeScene
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsOwner
-import androidx.compose.ui.text.input.EditCommand
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.ImeOptions
-import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.intl.LocaleList
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
-import kotlin.reflect.KProperty
 import kotlinx.coroutines.awaitCancellation
+import kotlin.reflect.KProperty
 
 /**
  * Platform context that provides platform-specific bindings.
@@ -137,7 +130,7 @@ interface PlatformContext {
     val viewConfiguration: ViewConfiguration get() = DefaultViewConfiguration
     val inputModeManager: InputModeManager
     @Suppress("DEPRECATION") // TODO https://youtrack.jetbrains.com/issue/CMP-9858
-    val textInputService: androidx.compose.ui.text.input.PlatformTextInputService get() = EmptyPlatformTextInputService
+    val textInputService: PlatformTextInputService get() = EmptyPlatformTextInputService
 
     suspend fun startInputMethod(request: PlatformTextInputMethodRequest): Nothing {
         awaitCancellation()
