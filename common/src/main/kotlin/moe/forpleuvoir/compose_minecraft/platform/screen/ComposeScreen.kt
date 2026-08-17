@@ -116,6 +116,11 @@ class ComposeScreen(
     /** T.25:关闭返回父屏后再次打开时复活场景(重新注册渲染器) */
     override fun added() {
         ensureScene()
+        // T.25 修复:复活后复位可复活标记 —— 否则场景一旦被 open 标记为 reopenable 永不
+        // 复位,最后从本屏退出回非 Compose 屏时 removed 不销毁场景,Recomposer/effect
+        // 协程、窗口尺寸监听与整棵节点树挂起不释放(泄漏)。复位后除非再次作为父屏被
+        // open 标记,否则下次 removed 正常关闭。
+        reopenable = false
         super.added()
     }
 
