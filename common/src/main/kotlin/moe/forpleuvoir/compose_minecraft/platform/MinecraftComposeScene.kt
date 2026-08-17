@@ -15,6 +15,7 @@ import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.platform.PlatformContext
 import androidx.compose.ui.platform.PlatformTextInputMethodRequest
+import androidx.compose.ui.platform.WindowInfo
 import androidx.compose.ui.scene.CanvasLayersComposeScene
 import androidx.compose.ui.scene.ComposeScene
 import androidx.compose.ui.scene.PointerEventResult
@@ -82,12 +83,37 @@ class MinecraftComposeScene(
     internal var desiredCursorType: CursorType? = null
         private set
 
+    /**
+     * 窗口像素尺寸(供 [WindowInfo.containerSize],Dialog 居中/Popup 裁剪使用)。
+     * 独立于 [scene] 的字段:不能在构造期间读取 scene 属性(CanvasLayersComposeScene
+     * 构造即查询 containerSize,而 scene 尚未赋值完成,见 windowInfo 处注释),
+     * 由 [renderFrame] 每帧与 resize 同源同步;场景构造期间保持 IntSize.Zero。
+     */
+    private var sceneContainerSize = IntSize.Zero
+
     private val scene: ComposeScene = CanvasLayersComposeScene(
         density = Density(density),
         size = IntSize(width.coerceAtLeast(1), height.coerceAtLeast(1)),
         // 主线程驱动:MC 的 extract/render 都在主线程,recompose 同步刷新
         coroutineContext = Dispatchers.Unconfined,
         platformContext = object : PlatformContext.Empty() {
+            // 平台适配点(Dialog/Popup 定位):官方桌面实现的 WindowInfo.containerSize 来自
+            // 场景实时尺寸;移植默认 WindowInfoImpl 恒为 IntSize.Zero,会导致 Dialog 居中/
+            // Popup 裁剪基于 0 尺寸容器,这里改为独立字段 [sceneContainerSize],
+            // 由 renderFrame 每帧同步窗口像素尺寸。
+            // 注意:此处不能读取 this@MinecraftComposeScene.scene —— CanvasLayersComposeScene
+            // 构造期间(RootNodeOwner.<init> → updatePositionCacheAndDispatch)即会查询
+            // containerSize,而 scene 字段此刻尚未赋值完成(属性初始化顺序),会 NPE。
+            override val windowInfo: WindowInfo
+                get() = object : WindowInfo {
+                    // 始终视作聚焦(MC 全屏窗口即前台);官方默认亦为 true
+                    override val isWindowFocused: Boolean
+                        get() = true
+
+                    override val containerSize: IntSize
+                        get() = this@MinecraftComposeScene.sceneContainerSize
+                }
+
             // 注入 MC IME 服务(替代 EmptyPlatformTextInputService 默认值)
             @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
             override val textInputService: PlatformTextInputService
@@ -169,6 +195,7 @@ class MinecraftComposeScene(
      */
     fun renderFrame() {
         val windowState = Minecraft.getInstance().gameRenderer.gameRenderState().windowRenderState
+        sceneContainerSize = IntSize(windowState.width, windowState.height)
         resize(
             width = windowState.width,
             height = windowState.height,

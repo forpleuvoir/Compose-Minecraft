@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
@@ -111,7 +112,6 @@ fun PointerIconDevScene() {
                         .padding(4.dp),
                 style = Style.EMPTY.withColor(Color(0xFF80CBC4)).withUnderlined(true).toTextStyle(),
             )
-
             BasicText(
                 "3. overrideDescendants 语义:左边父级 override=true,子级(手型)\n" +
                         "应被压制为父级十字;右边 override=false,子级手型优先",

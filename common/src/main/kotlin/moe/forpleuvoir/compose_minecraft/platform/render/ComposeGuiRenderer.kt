@@ -60,22 +60,27 @@ interface GuiCommandSink {
  */
 class ComposeGuiRenderer : GuiCommandSink {
 
-    /** 本帧收集的 GUI 元素(extract 阶段填充,render 提交后清空) */
-    private val elements = ArrayList<GuiElementRenderState>()
+    /**
+     * 本帧收集的 GUI 命令(**按记录顺序**,元素与文本交错)。
+     *
+     * 顺序即 Compose z 序:文本与几何必须保持交错 —— 若把文本单独收集、
+     * 提交时批量挪到末尾,会破坏图层语义(如 Dialog scrim 盖住主场景文本,
+     * 文本却被挪到 scrim 之上"穿透"遮罩)。因此 addElement/addText 写入
+     * 同一个有序列表,prepare 时按序处理:元素建 mesh,文本即时转 glyph 建 mesh。
+     */
+    private val items = ArrayList<Item>()
 
-    /** 本帧收集的文本状态(prepare 阶段转为 GlyphRenderState) */
-    private val texts = ArrayList<GuiTextRenderState>()
+    /** 单个有序命令:元素与文本二选一(不可同时为 null) */
+    private class Item(val element: GuiElementRenderState?, val text: GuiTextRenderState?)
 
     /**
-     * T.25:吸收另一收集器的元素到**本收集器末尾**(元素顺序在自身之前,用于
+     * T.25:吸收另一收集器的命令到**本收集器末尾**(元素顺序在自身之前,用于
      * 「渲染父屏」:父屏内容画在子屏之下),并清空对方 —— 对方收集器不被提交
      * (父屏已 removed,renderer 未注册),每帧被重新填充,不清空会无限累积。
      */
     fun absorbAndClear(other: ComposeGuiRenderer) {
-        elements.addAll(other.elements)
-        texts.addAll(other.texts)
-        other.elements.clear()
-        other.texts.clear()
+        items.addAll(other.items)
+        other.items.clear()
     }
 
     /** 分组后的 draw 列表(同 pipeline/scissor/texture 合并) */
@@ -96,11 +101,11 @@ class ComposeGuiRenderer : GuiCommandSink {
     // ── GuiCommandSink ─────────────────────────────────────────
 
     override fun addElement(element: GuiElementRenderState) {
-        elements.add(element)
+        items.add(Item(element, null))
     }
 
     override fun addText(text: GuiTextRenderState) {
-        texts.add(text)
+        items.add(Item(null, text))
     }
 
     // ── 提交(仿原版 GuiRenderer.render:prepare → upload → draw)────
@@ -114,7 +119,7 @@ class ComposeGuiRenderer : GuiCommandSink {
         // T.32:自定义字体自愈 —— 资源重载清空 FontManager.fontSets 后重建已注册字体
         // (无注册时 O(1) 空检查,见 MinecraftCustomFonts.ensureAlive)
         MinecraftCustomFonts.ensureAlive()
-        if (elements.isEmpty() && texts.isEmpty()) return
+        if (items.isEmpty()) return
         prepare()
         vertexBuffer.upload()
         draw()
@@ -122,40 +127,42 @@ class ComposeGuiRenderer : GuiCommandSink {
         vertexBuffer.endDraw()
         vertexBuffer.endFrame()
         draws.clear()
-        elements.clear()
-        texts.clear()
+        items.clear()
     }
 
     /**
-     * 准备阶段:
-     * 1. 文本状态 → [GlyphRenderState](复用原版字体渲染,prepareText 语义);
-     * 2. 按 pipeline/scissor/textureSetup 分组追加 draw,把顶点写入 [vertexBuffer]。
+     * 准备阶段:按**记录顺序**逐条处理本帧命令:
+     * - 元素 → 直接追加到 mesh(按 pipeline/scissor/textureSetup 分组);
+     * - 文本 → [GuiTextRenderState] 立即 [GlyphRenderState] 化(复用原版字体渲染)
+     *   并就地追加到 mesh —— 保持文本与几何的相对绘制顺序(z 序)。
      *
      * **不做任何重排**:记录顺序即 Compose z 序 —— 阴影由 Modifier 链保证画在
      * 其内容之前、父背景之后(shadow 修饰符在链上更早 = 更底层)。若把阴影
      * 提到"绝对最前",会被场景全屏不透明背景盖住(T.27 实测:阴影 draw 正常
      * 执行但完全不可见,alpha 放大 13 倍/纯红输出均无显示 —— 根因即排序)。
-     * T.18 原版路径正常是因为旧 GuiRenderStateMixin 置底"只在节点内生效"。
+     * 文本同理:批量挪到末尾会破坏图层语义(如 Dialog scrim 之下本应被遮罩的
+     * 主场景文本被画到 scrim 之上,见 [items] 注释)。
      */
     private fun prepare() {
-        for (text in texts) {
-            val pose = text.pose
-            val scissor = text.scissor
-            // GlyphVisitor 是 MC Java 嵌套接口,Kotlin 无 SAM 构造器,用匿名对象
-            text.ensurePrepared().visit(object : Font.GlyphVisitor {
-                override fun acceptRenderable(renderable: TextRenderable) {
-                    addElement(GlyphRenderState(pose, renderable, scissor))
-                }
-            })
-        }
-        texts.clear()
-
         previousScissorArea = null
         previousPipeline = null
         previousTextureSetup = null
         previousDraw = null
-        for (elementState in elements) {
-            addElementToMesh(elementState)
+        for (item in items) {
+            val element = item.element
+            if (element != null) {
+                addElementToMesh(element)
+            } else {
+                val text = item.text ?: continue
+                val pose = text.pose
+                val scissor = text.scissor
+                // GlyphVisitor 是 MC Java 嵌套接口,Kotlin 无 SAM 构造器,用匿名对象
+                text.ensurePrepared().visit(object : Font.GlyphVisitor {
+                    override fun acceptRenderable(renderable: TextRenderable) {
+                        addElementToMesh(GlyphRenderState(pose, renderable, scissor))
+                    }
+                })
+            }
         }
     }
 

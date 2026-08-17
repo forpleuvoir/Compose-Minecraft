@@ -520,35 +520,48 @@ internal class MinecraftParagraph(
         val effectiveAlpha = color.alpha * alpha
         // 平台适配点(T.10):文本缩放 —— 对画布施加缩放,recordTextDraw 记录缩放矩阵,
         // 渲染端 pose 变换字形顶点(MC GUI 渲染为 GPU 矩阵变换)。
-        if (scale != 1f) {
+        // 平台适配点(T.33 修复):缩放必须用 save/restore 包裹 —— MinecraftCanvas.scale
+        // 是原地乘当前矩阵,若不恢复会污染画布矩阵,导致本文本之后的所有兄弟节点
+        // (背景/边框/后续文本)在放大后的错位矩阵上绘制(实测 autoSize 大 scale 文本
+        // 之后的内容全部错位/画到屏幕外)。节点级 willClip 的 save/restore 只恢复
+        // 节点进入时的状态,无法兜底 scale 污染(willClip=false 时节点不 save)。
+        val scaled = scale != 1f
+        if (scaled) {
+            mc.save()
             mc.scale(scale, scale)
         }
-        val lineCount = visibleLineCount
-        for (i in 0 until lineCount) {
-            val line = layout.lines[i]
-            val start = lineDrawStart(i, line)
-            if (line.end > start) {
-                // 平台适配点(T.6 修复):整行绘制 —— 原 displayPos/visibleWidth 水平截断已移除,
-                // 多行文本每行完整渲染(水平滚动交还原版 ScrollState 模型)。
-                // 行尾可能含 `\n`(computeLines 的 exclusive end 含换行符),绘制时去掉。
-                var drawText = intrinsics.text.substring(start, line.end)
-                if (drawText.endsWith('\n')) drawText = drawText.dropLast(1)
-                if (drawText.isNotEmpty()) {
-                    // 平台适配点(T.3):多段样式 —— 行内文本按段边界切分,每段用自己的样式;
-                    // 无段(空列表)时退回单样式(旧行为)。
-                    val segments = intrinsics.segments
-                    if (segments.isEmpty()) {
-                        mc.recordTextDraw(
-                            text = drawText,
-                            x = 0f,
-                            y = i * layout.lineHeight,
-                            style = style,
-                            alpha = effectiveAlpha,
-                        )
-                    } else {
-                        recordSegmentedTextDraw(mc, drawText, start, i, segments, style, effectiveAlpha)
+        try {
+            val lineCount = visibleLineCount
+            for (i in 0 until lineCount) {
+                val line = layout.lines[i]
+                val start = lineDrawStart(i, line)
+                if (line.end > start) {
+                    // 平台适配点(T.6 修复):整行绘制 —— 原 displayPos/visibleWidth 水平截断已移除,
+                    // 多行文本每行完整渲染(水平滚动交还原版 ScrollState 模型)。
+                    // 行尾可能含 `\n`(computeLines 的 exclusive end 含换行符),绘制时去掉。
+                    var drawText = intrinsics.text.substring(start, line.end)
+                    if (drawText.endsWith('\n')) drawText = drawText.dropLast(1)
+                    if (drawText.isNotEmpty()) {
+                        // 平台适配点(T.3):多段样式 —— 行内文本按段边界切分,每段用自己的样式;
+                        // 无段(空列表)时退回单样式(旧行为)。
+                        val segments = intrinsics.segments
+                        if (segments.isEmpty()) {
+                            mc.recordTextDraw(
+                                text = drawText,
+                                x = 0f,
+                                y = i * layout.lineHeight,
+                                style = style,
+                                alpha = effectiveAlpha,
+                            )
+                        } else {
+                            recordSegmentedTextDraw(mc, drawText, start, i, segments, style, effectiveAlpha)
+                        }
                     }
                 }
+            }
+        } finally {
+            if (scaled) {
+                mc.restore()
             }
         }
     }

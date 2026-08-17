@@ -31,7 +31,7 @@ fun MinecraftDevSceneContent() {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xF0121212))
+            .background(Color(0x00121212))
     ) {
         Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
             BasicText(
@@ -59,6 +59,12 @@ fun MinecraftDevSceneContent() {
                 title = "指针图标测试 (PointerIcon / I9)",
                 subtitle = "悬停切换 Default/Crosshair/Text/Hand 光标;输入框 I 形、链接手型、overrideDescendants",
                 onClick = { ComposeScreen.open { PointerIconDevScene() } },
+            )
+
+            DevMenuButton(
+                title = "Dialog / Popup 测试",
+                subtitle = "Popup 锚点/外部关闭/Esc/非模态;Dialog scrim/居中/模态;Tooltip 联动",
+                onClick = { ComposeScreen.open { DialogPopupDevScene() } },
             )
 
             DevMenuButton(

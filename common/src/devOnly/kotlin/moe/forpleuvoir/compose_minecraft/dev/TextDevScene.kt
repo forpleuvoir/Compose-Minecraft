@@ -174,7 +174,6 @@ fun TextDevScene() {
                     .width(220.dp)
                     .height(100.dp)
                     .background(Color(0xFF263238))
-                    .border(1.dp, Color(0xFF80CBC4))
                     .padding(6.dp)
             ) {
                 BasicText(

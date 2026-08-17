@@ -3,7 +3,6 @@ package moe.forpleuvoir.compose_minecraft.platform.render
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.MinecraftCanvas
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawArcCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawCircleCommand
@@ -17,7 +16,6 @@ import androidx.compose.ui.graphics.MinecraftCanvas.DrawRectCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawRoundRectCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.PaintSnapshot
-import androidx.compose.ui.graphics.MinecraftImageBitmap
 import androidx.compose.ui.graphics.NativeColorFilter
 import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.PointMode
@@ -31,7 +29,6 @@ import net.minecraft.client.renderer.state.gui.BlitRenderState
 import net.minecraft.client.renderer.state.gui.ColoredRectangleRenderState
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState
 import net.minecraft.locale.Language
-import moe.forpleuvoir.compose_minecraft.platform.ui.text.obfuscatedRaw
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toComponent
 import org.joml.Matrix3x2f
 import kotlin.math.max
@@ -90,7 +87,7 @@ internal class MinecraftRenderContext {
             val scissor =
                 command.clip?.let { raw ->
                     val clamped =
-                        raw.intersect(Rect(0f, 0f, windowWidth.toFloat(), windowHeight.toFloat()))
+                        raw.intersect(Rect(0f, 0f, windowWidth, windowHeight))
                     val l = clamped.left.roundToInt()
                     val t = clamped.top.roundToInt()
                     val r = clamped.right.roundToInt()
@@ -100,16 +97,36 @@ internal class MinecraftRenderContext {
             if (command.clip != null && scissor == null) continue
 
             when (command) {
-                is DrawRectCommand -> sink.addElement(
-                    blit(
-                        command.matrix, scissor,
-                        command.left, command.top, command.right, command.bottom,
-                        command.paint,
-                    )
-                )
+                // 平台适配点(T.33 修复):矩形必须按 paint.style 分流 —— Fill 走 blit
+                // 实心四边形(最快路径);Stroke 走三角化描边带(GeometryTessellator.
+                // roundRect radius=0 退化为矩形描边)。原实现无条件 blit,导致
+                // border(1.dp, color) 的描边矩形被画成整块实心色块,覆盖内部内容。
+                is DrawRectCommand ->
+                    if (command.paint.style == PaintingStyle.Fill) {
+                        sink.addElement(
+                            blit(
+                                command.matrix, scissor,
+                                command.left, command.top, command.right, command.bottom,
+                                command.paint,
+                            )
+                        )
+                    } else {
+                        addTriangles(sink, command, scissor) { sink ->
+                            GeometryTessellator.roundRect(
+                                command.left, command.top, command.right, command.bottom,
+                                0f, 0f,
+                                fill = false,
+                                strokeWidth = command.paint.strokeWidth,
+                                sink = sink,
+                            )
+                        }
+                    }
                 is DrawRoundRectCommand -> {
-                    // 圆角为 0(或小于 1px)时退化为矩形;带圆角走三角化
-                    if (command.radiusX <= 1f && command.radiusY <= 1f) {
+                    // 圆角为 0(或小于 1px)时退化为矩形;带圆角走三角化。
+                    // Stroke 样式一律走三角化(描边带),不能走实心 blit。
+                    if (command.radiusX <= 1f && command.radiusY <= 1f &&
+                        command.paint.style == PaintingStyle.Fill
+                    ) {
                         sink.addElement(
                             blit(
                                 command.matrix, scissor,
@@ -291,9 +308,26 @@ internal class MinecraftRenderContext {
         }
 
         when (command) {
-            is DrawRectCommand -> quad(command.left, command.top, command.right, command.bottom)
+            // 平台适配点(T.33 修复):3D 路径同样按 style 分流 —— Fill 走实心 quad,
+            // Stroke 走三角化描边带(与主路径一致,见 render() 内 DrawRectCommand)。
+            is DrawRectCommand ->
+                if (paint.style == PaintingStyle.Fill) {
+                    quad(command.left, command.top, command.right, command.bottom)
+                } else {
+                    tessellated { sink ->
+                        GeometryTessellator.roundRect(
+                            command.left, command.top, command.right, command.bottom,
+                            0f, 0f,
+                            fill = false,
+                            strokeWidth = paint.strokeWidth,
+                            sink = sink,
+                        )
+                    }
+                }
             is DrawRoundRectCommand ->
-                if (command.radiusX <= 1f && command.radiusY <= 1f) {
+                if (command.radiusX <= 1f && command.radiusY <= 1f &&
+                    paint.style == PaintingStyle.Fill
+                ) {
                     quad(command.left, command.top, command.right, command.bottom)
                 } else {
                     tessellated { sink ->
