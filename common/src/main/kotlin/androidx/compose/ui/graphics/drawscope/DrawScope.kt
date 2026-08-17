@@ -930,8 +930,12 @@ interface DrawScope : Density {
         /**
          * Default FilterQuality used for determining the filtering algorithm to apply when scaling
          * [ImageBitmap] objects. Maps to the default behavior of bilinear filtering
+         *
+         * 平台适配点(T.16):官方默认 [FilterQuality.Low](线性过滤,放大糊)。本平台默认改为
+         * [FilterQuality.None](最近邻)—— MC 像素风 GUI 惯例,放大保持锐利;
+         * 需要平滑缩放时显式传 [FilterQuality.Low]。
          */
-        val DefaultFilterQuality: FilterQuality = FilterQuality.Low
+        val DefaultFilterQuality: FilterQuality = FilterQuality.None
     }
 }
 

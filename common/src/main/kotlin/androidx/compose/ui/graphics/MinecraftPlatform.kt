@@ -52,7 +52,8 @@ class MinecraftPaint(
     override var shader: Shader? = null,
     override var pathEffect: PathEffect? = null,
     override var isAntiAlias: Boolean = true,
-    override var filterQuality: FilterQuality = FilterQuality.Low,
+    // 平台适配点(T.16):官方默认 Low(线性)。本平台默认 None(最近邻,MC 像素风);configurePaint 总会按调用参数覆盖
+    override var filterQuality: FilterQuality = FilterQuality.None,
 ) : Paint {
     @Deprecated("Use platform-specific extension to get platform reference")
     override fun asFrameworkPaint(): NativePaint {
@@ -531,7 +532,12 @@ internal class MinecraftPathMeasure : PathMeasure {
     }
 }
 
-/** Minecraft 平台 ImageBitmap(CPU 像素缓冲,后续阶段接入 Minecraft 纹理) */
+/**
+ * Minecraft 平台 ImageBitmap(CPU 像素缓冲,0xAARRGGBB)。
+ *
+ * 平台适配点(T.16):绘制端由 [moe.forpleuvoir.compose_minecraft.platform.render.MinecraftImageTextureCache]
+ * 在渲染线程按需上传为 GpuTexture(按位图身份缓存);本类只持 CPU 像素。
+ */
 internal class MinecraftImageBitmap(
     override val width: Int,
     override val height: Int,
@@ -562,6 +568,7 @@ internal class MinecraftImageBitmap(
         }
     }
 
+    /** 平台适配点(T.16):上传在渲染线程按需执行(见 MinecraftImageTextureCache),此处无操作 */
     override fun prepareToDraw() = Unit
 }
 
@@ -582,12 +589,6 @@ internal class MinecraftCanvas internal constructor(
     internal val image: ImageBitmap? = null,
 ) : Canvas {
 
-    /** T.15 诊断计数(临时):文本命令参数打印帧数 */
-    private var debugTextCmdFrames = 0
-
-    /** T.15 诊断计数(临时):replayFrom 文本分支打印帧数 */
-    private var debugReplayTextFrames = 0
-
     // ─────────────────────────────────────────────────────────────────────────
     // 绘制命令模型
     //
@@ -602,6 +603,8 @@ internal class MinecraftCanvas internal constructor(
         val style: PaintingStyle,
         val strokeWidth: Float,
         val strokeCap: StrokeCap,
+        /** 图片采样质量(T.16):[FilterQuality.None] → 最近邻(平台默认),[FilterQuality.Low] → 双线性 */
+        val filterQuality: FilterQuality = FilterQuality.None,
     )
 
     /** 绘制命令基类 */
@@ -1054,16 +1057,6 @@ internal class MinecraftCanvas internal constructor(
                     is DrawShadowCommand    -> Unit // 阴影在 else 分支处理
                 }
             } else if (command is DrawTextCommand) {
-                // T.15 诊断(临时):replayFrom 文本分支的 currentMatrix
-                if (debugReplayTextFrames < 20) {
-                    debugReplayTextFrames++
-                    val cm = currentMatrix.values
-                    println(
-                        "[T15-REPLAYTEXT] '${command.text}' cmdM20=${command.matrix[12]} cmdM21=${command.matrix[13]} " +
-                            "curM00=${cm[0]} curM10=${cm[1]} curM01=${cm[4]} curM11=${cm[5]} " +
-                            "curM20=${cm[12]} curM21=${cm[13]}"
-                    )
-                }
                 // 平台适配点:文本命令同样叠加图层级 alpha(经颜色 alpha 通道应用),
                 // 否则 graphicsLayer 的 alpha 对图层内文本不生效。
                 recordTextDraw(
@@ -1186,6 +1179,7 @@ internal class MinecraftCanvas internal constructor(
                 style = p.style,
                 strokeWidth = p.strokeWidth,
                 strokeCap = p.strokeCap,
+                filterQuality = p.filterQuality,
             )
         }
         return when (this) {
@@ -1222,26 +1216,10 @@ internal class MinecraftCanvas internal constructor(
                 matrix, clip, paint3D(), pointMode, points,
                 layer3D = layer3D,
             )
-            is DrawTextCommand -> {
-                // T.15 诊断(临时):文本录制时的 x/y 与命令矩阵
-                if (debugTextCmdFrames < 20) {
-                    debugTextCmdFrames++
-                    println(
-                        "[T15-TEXTCMD] text='$text' x=$x y=$y " +
-                            "m00=${matrix[0]} m10=${matrix[1]} m01=${matrix[4]} m11=${matrix[5]} " +
-                            "m20=${matrix[12]} m21=${matrix[13]}"
-                    )
-                    val c = combine(matrix)
-                    println(
-                        "[T15-TEXTCMD] combine: m00=${c[0]} m10=${c[1]} m01=${c[4]} m11=${c[5]} " +
-                            "m20=${c[12]} m21=${c[13]}"
-                    )
-                }
-                DrawTextCommand(
-                    combine(matrix), clip, text, x, y, style,
-                    alpha = alpha * alphaMultiplier,
-                )
-            }
+            is DrawTextCommand -> DrawTextCommand(
+                combine(matrix), clip, text, x, y, style,
+                alpha = alpha * alphaMultiplier,
+            )
             is DrawGradientRectCommand -> DrawGradientRectCommand(
                 combine(matrix), clip, left, top, right, bottom,
                 topColorArgb, bottomColorArgb,
@@ -1257,7 +1235,14 @@ internal class MinecraftCanvas internal constructor(
     private fun snapshot(): FloatArray = currentMatrix.values.copyOf()
 
     private fun Paint.snapshot(): PaintSnapshot =
-        PaintSnapshot(color = color, alpha = alpha, style = style, strokeWidth = strokeWidth, strokeCap = strokeCap)
+        PaintSnapshot(
+            color = color,
+            alpha = alpha,
+            style = style,
+            strokeWidth = strokeWidth,
+            strokeCap = strokeCap,
+            filterQuality = filterQuality,
+        )
 
     private fun record(command: DrawCommand) {
         drawCommands.add(command)

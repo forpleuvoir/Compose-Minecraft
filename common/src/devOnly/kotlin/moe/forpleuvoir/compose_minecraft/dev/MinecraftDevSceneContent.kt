@@ -7,12 +7,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
@@ -29,7 +31,7 @@ fun MinecraftDevSceneContent() {
             .fillMaxSize()
             .background(Color(0xF0121212))
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
             BasicText(
                 "Compose Minecraft Dev Menu",
                 style = Style.EMPTY.withColor(Color.White).withBold(true),
@@ -73,6 +75,12 @@ fun MinecraftDevSceneContent() {
                 title = "3D 透视测试 (Perspective 3D)",
                 subtitle = "rotationX/rotationY 3D 透视,点击方块切换角度",
                 onClick = { ComposeScreen.open { Perspective3DDevScene() } },
+            )
+
+            DevMenuButton(
+                title = "图片管线测试 (Image)",
+                subtitle = "程序生成位图/资源 PNG 解码/drawImageRect/变换组合",
+                onClick = { ComposeScreen.open { ImageDevScene() } },
             )
         }
     }

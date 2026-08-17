@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.MinecraftCanvas
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawArcCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawCircleCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawCommand
+import androidx.compose.ui.graphics.MinecraftCanvas.DrawImageRectCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawLineCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawOvalCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawPathCommand
@@ -15,6 +16,7 @@ import androidx.compose.ui.graphics.MinecraftCanvas.DrawRectCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawRoundRectCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.PaintSnapshot
+import androidx.compose.ui.graphics.MinecraftImageBitmap
 import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
@@ -54,12 +56,6 @@ internal class MinecraftRenderContext {
 
     /** 三角化输出缓冲(每帧复用,避免分配) */
     private val triangleSink = GeometryTessellator.Sink()
-
-    /** T.15 运行时探针计数(临时) */
-    private var debugProbeFrames = 0
-
-    /** T.15 文本 pose 诊断计数(临时) */
-    private var debugTextPoseFrames = 0
 
     /**
      * 三角化结果缓存:按「命令几何内容 + aaScale + Paint 参数」指纹复用顶点数组。
@@ -215,7 +211,9 @@ internal class MinecraftRenderContext {
                         scissor = scissor?.toScreenRectangle(),
                     )
                 }
-                is MinecraftCanvas.DrawImageRectCommand -> Unit // 图片:后续阶段(像素上传为 GpuTexture)
+                is DrawImageRectCommand -> renderState.addBlitToCurrentLayer(
+                    blitImage(command, scissor)
+                )
             }
         }
     }
@@ -284,35 +282,7 @@ internal class MinecraftRenderContext {
         }
 
         when (command) {
-            is DrawRectCommand -> {
-                // T.15 运行时探针(临时):打印矩形 4 角与中心变换后的屏幕坐标,
-                // 验证旋转中心(AGENTS.md T.13:参考点不动 = 中心对)
-                if (debugProbeFrames < 30) {
-                    debugProbeFrames++
-                    val cx = (command.left + command.right) / 2f
-                    val cy = (command.top + command.bottom) / 2f
-                    val tl = map3D(m2, layer3D, command.left, command.top)
-                    val tr = map3D(m2, layer3D, command.right, command.top)
-                    val bl = map3D(m2, layer3D, command.left, command.bottom)
-                    val br = map3D(m2, layer3D, command.right, command.bottom)
-                    val c = map3D(m2, layer3D, cx, cy)
-                    println(
-                        "[T15-PROBE] rect=(${command.left},${command.top},${command.right},${command.bottom}) " +
-                            "center=$cx,$cy -> ${c?.get(0) ?: "null"},${c?.get(1) ?: "null"} | " +
-                            "tl=${tl?.let { "${it[0]},${it[1]}" } ?: "null"} " +
-                            "tr=${tr?.let { "${it[0]},${it[1]}" } ?: "null"} " +
-                            "bl=${bl?.let { "${it[0]},${it[1]}" } ?: "null"} " +
-                            "br=${br?.let { "${it[0]},${it[1]}" } ?: "null"}"
-                    )
-                    // 打印 layer3D 与 m2 矩阵
-                    println(
-                        "[T15-MATRIX] m2=[${m2[0]},${m2[4]},${m2[12]};${m2[1]},${m2[5]},${m2[13]}] " +
-                            "layer3D=[${layer3D[0]},${layer3D[4]},${layer3D[12]};${layer3D[1]},${layer3D[5]},${layer3D[13]};" +
-                            "p3=${layer3D[3]},${layer3D[7]},${layer3D[15]}]"
-                    )
-                }
-                quad(command.left, command.top, command.right, command.bottom)
-            }
+            is DrawRectCommand -> quad(command.left, command.top, command.right, command.bottom)
             is DrawRoundRectCommand ->
                 if (command.radiusX <= 1f && command.radiusY <= 1f) {
                     quad(command.left, command.top, command.right, command.bottom)
@@ -552,15 +522,6 @@ internal class MinecraftRenderContext {
         val baseColor = command.style.color?.value?.or(0xFF000000.toInt()) ?: 0xFFFFFFFF.toInt()
         val alphaByte = (command.alpha * 255f).roundToInt().coerceIn(0, 255)
         val color = (baseColor and 0x00FFFFFF) or (alphaByte shl 24)
-        // T.15 诊断(临时):渲染端最终收到的文本 pose
-        if (debugTextPoseFrames < 200) {
-            debugTextPoseFrames++
-            val m = command.matrix
-            println(
-                "[T15-TEXTPOSE] text='${command.text}' x=${command.x} y=${command.y} " +
-                    "m00=${m[0]} m10=${m[1]} m01=${m[4]} m11=${m[5]} m20=${m[12]} m21=${m[13]}"
-            )
-        }
         return GuiTextRenderState(
             font,
             Language.getInstance().getVisualOrder(command.style.toComponent(command.text)),
@@ -607,6 +568,45 @@ internal class MinecraftRenderContext {
             0f,
             1f,
             color.toArgb(alpha),
+            clip?.toScreenRectangle(),
+        )
+    }
+
+    /**
+     * 把一条图片绘制命令转成 [BlitRenderState](T.16 图片管线)。
+     *
+     * - 纹理:CPU 像素(0xAARRGGBB)→ [MinecraftImageTextureCache] 上传为
+     *   [com.mojang.blaze3d.textures.GpuTexture],按位图身份缓存,首次绘制上传一次;
+     * - pipeline:[RenderPipelines.GUI_TEXTURED](带纹理 GUI 管线,与纯色 GUI 不同);
+     * - UV:归一化(src 矩形 / 纹理尺寸,MC 语义 0..1);
+     * - 颜色:官方 drawImage 语义 **不调制颜色** —— 位图内容直出,恒白色调制,
+     *   仅 alpha 生效(paint.alpha 叠加;paint.color 恒为黑,是官方 drawImage
+     *   的默认画笔色,不可用作调制色,否则纹理 × (0,0,0,α) 全黑)。
+     * - dst 坐标:记录时的局部坐标(整型 IntOffset),变换由 pose(命令矩阵 2D 部分)完成,
+     *   与纯色 [blit] 同一提交语义。
+     */
+    private fun blitImage(command: DrawImageRectCommand, clip: Rect?): BlitRenderState {
+        val image = command.image
+        val texW = image.width
+        val texH = image.height
+        val u0 = command.srcOffsetX.toFloat() / texW
+        val u1 = (command.srcOffsetX + command.srcWidth).toFloat() / texW
+        val v0 = command.srcOffsetY.toFloat() / texH
+        val v1 = (command.srcOffsetY + command.srcHeight).toFloat() / texH
+        return BlitRenderState(
+            RenderPipelines.GUI_TEXTURED,
+            MinecraftImageTextureCache.textureSetup(image, command.paint.filterQuality),
+            command.matrix.toMatrix3x2f(),
+            command.dstOffsetX,
+            command.dstOffsetY,
+            command.dstOffsetX + command.dstWidth,
+            command.dstOffsetY + command.dstHeight,
+            u0,
+            u1,
+            v0,
+            v1,
+            // 恒白色调制(官方 drawImage 语义:颜色不参与,仅 alpha 生效)
+            Color.White.toArgb(command.paint.alpha),
             clip?.toScreenRectangle(),
         )
     }

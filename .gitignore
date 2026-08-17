@@ -8,3 +8,4 @@ out/
 *.iml
 .tmp-scene/
 .reasonix
+.dsh-vision-router/

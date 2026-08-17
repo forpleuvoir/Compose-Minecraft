@@ -427,10 +427,14 @@ class GraphicsLayer internal constructor() {
      * @sample androidx.compose.ui.graphics.samples.GraphicsLayerToImageBitmap
      */
     suspend fun toImageBitmap(): ImageBitmap {
-        val canvas = recordingCanvas
-            ?: error("GraphicsLayer.record must be invoked before calling toImageBitmap")
-        return canvas.image
-            ?: error("GraphicsLayer has no backing image")
+        check(recordingCanvas != null) { "GraphicsLayer.record must be invoked before calling toImageBitmap" }
+        // 平台适配点(T.16):本平台无离屏渲染、无 CPU 光栅化器(AGENTS.md 约束 #4),
+        // 录制命令只能回放到 MC 的 GuiRenderState;「图层内容转位图快照」语义无法实现。
+        // 此前直接返回 recordingCanvas.image —— 命令记录式画布从未把内容写入
+        // CPU buffer,返回值恒为全透明空图,属静默错误;现改为明确报错。
+        throw UnsupportedOperationException(
+            "GraphicsLayer.toImageBitmap 平台未支持:需要 CPU 光栅化器(见 docs/todo-and-placeholders.md §13 路线)"
+        )
     }
 
     /**
@@ -638,12 +642,6 @@ class GraphicsLayer internal constructor() {
     }
 
     private companion object {
-        /** 阴影最内层 alpha 占阴影色的比例(渐变保底方案用) */
-        const val SHADOW_MAX_ALPHA_FACTOR = 0.5f
-
-        /** 渐变中段 alpha 占最内层的比例(渐变保底方案用) */
-        const val SHADOW_MID_ALPHA_FACTOR = 0.35f
-
         /** 与官方 Matrices.kt 一致的近零判定(rotationX/rotationY 3D 门限) */
         private const val NON_ZERO_EPSILON = 0.001f
     }

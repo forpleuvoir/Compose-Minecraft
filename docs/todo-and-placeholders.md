@@ -13,7 +13,7 @@
 
 | 类别 | 状态 | 说明 |
 |---|---|---|
-| 图形绘制命令 | 部分实现 | 矩形/圆角矩形/文本可用;圆/椭圆/弧/线/路径/点/图片/顶点 未接入 MC 渲染后端 |
+| 图形绘制命令 | ✅ 已实现 | 矩形/圆角矩形/圆/椭圆/弧/线/路径/点/文本/图片均已接入 MC 渲染后端(图片 T.16);`drawVertices` 不支持 |
 | 图层能力 | 部分 | clip/scissor、translate/scale/rotate/alpha 已通;`saveLayer`、`clipPath`、`clipRect(Difference)`、Path(复合) 不支持 |
 | 文本 | 部分 | 统一 `McTextStyle`,MC 字体度量;富文本/多 SpanStyle、BiDi、InlineContent/占位符、TextAutoSize 不支持;字号固定 9px |
 | 弹窗 | 局限 | `Popup` 部分可用;`Dialog` 未移植;Popup/Dialog 焦点层级未通 |
@@ -30,9 +30,9 @@
 命令记录式画布。`MinecraftRenderContext` 只回放下列绘制类型,其余在回放时被静默跳过(见 §6):
 
 - ✅ 矩形 `drawRect`
-- ✅ 圆角矩形 `drawRoundRect`(仅当 `radiusX/radiusY <= 1` 时退化为矩形;带圆角的矩形需要三角化,未实现——`MinecraftRenderContext.kt` L50-61)
+- ✅ 圆角矩形 `drawRoundRect`(圆角 > 1px 走 `GeometryTessellator.roundRect` 三角化)
 - ✅ 文本 `drawText`
-- ❌ 圆 `drawCircle` / 椭圆 `drawOval` / 弧 `drawArc` / 线 `drawLine` / 路径 `drawPath` / 点 `drawPoints` / 图片 `drawImageRect` —— **命令会记录,但 `MinecraftRenderContext` `else -> Unit` 直接丢弃,不渲染**
+- ✅ 圆 `drawCircle` / 椭圆 `drawOval` / 弧 `drawArc` / 线 `drawLine` / 路径 `drawPath` / 点 `drawPoints` / 图片 `drawImageRect` —— 几何命令经 `GeometryTessellator` CPU 三角化提交;图片(T.16)经 `MinecraftImageTextureCache` 上传 GpuTexture 后以带 UV 的 `BlitRenderState(GUI_TEXTURED)` 提交
 
 平台侧明确抛 `UnsupportedOperationException` 的 API:
 - `asFrameworkPaint`(L65)
@@ -49,7 +49,8 @@
 完整 `Canvas` 的**无操作占位实现**,所有方法抛 `UnsupportedOperationException`。用于 `DrawContext` 内部保证非空 canvas,业务代码不应触达。
 
 ### 1.3 `ImageBitmap.kt`
-- `createImageBitmap(bytes)` 解码图片 → `UnsupportedOperationException("...第一版不支持图片解码")`(L245)。**无任何图片解码/上传能力**(与 `MinecraftImageBitmap` 的 CPU 像素上传到 GpuTexture 是后续阶段)。
+- ✅ `createImageBitmap(bytes)` 已实现(T.16):MC `NativeImage.read(byte[])`(stb 解码 PNG/JPEG)→ ABGR 转 Compose Argb8888(0xAARRGGBB)。
+- 上传:`MinecraftImageBitmap`(CPU 像素)由渲染端 `MinecraftImageTextureCache` 在渲染线程按需上传为 GpuTexture(位图身份 LRU 缓存,上限 64,淘汰 close),绘制经带 UV 的 `BlitRenderState`。
 
 ### 1.4 `Shader.kt`(L64-151)
 - `LinearGradient(RadialGradient/SweepGradient/Image/Composite)Shader` 全部抛 `UnsupportedOperationException`。**渐变不支持**,`Brush` 仅 `SolidColor` 可用(文本侧同样限制,见 §3)。
@@ -58,12 +59,13 @@
 - `cornerPathEffect` / `dashPathEffect` / `chainPathEffect` / `stampedPathEffect` 全部抛 `UnsupportedOperationException`。虚线/圆角路径效果不支持。
 
 ### 1.6 `GraphicsLayer`(`ui/graphics/layer/GraphicsLayer.kt`)
-- `draw` 仅支持 translate/scale/rotationZ/alpha/**clip(矩形 scissor)**。
-- **rotationX / rotationY(3D 透视)与 pivotOffset 暂不生效**(注释明示)。`setRectOutline`/`setPathOutline` 均为空实现(`Unit`)。
-- `toImageBitmap()` 依赖 `MinecraftCanvas.image`;非图片用途路径未接。
+- ✅ translate/scale/rotationZ/rotationX/rotationY(3D 透视,T.15)/pivot/alpha/clip(矩形 scissor)/shadowElevation(T.14 GPU 距离场软阴影)均已实现。
+- ✅ `setRectOutline` / `setRoundRectOutline` / `setPathOutline` 已实现(T.14 阴影轮廓)。
+- ⚠️ `toImageBitmap()`(T.16):平台无离屏渲染与 CPU 光栅化器(AGENTS.md 约束 #4),「图层内容转位图快照」语义无法实现 —— **明确抛 `UnsupportedOperationException`**(此前静默返回从未回放的空白位图)。如需支持,先实现 CPU 光栅化器(§13)。
+- 离屏合成家族(`compositingStrategy` / `blendMode`≠SrcOver / `colorFilter` / `renderEffect`)未实现(`GraphicsLayerScope` 占位 setter),依赖离屏渲染,见 §11.3。
 
 ### 1.7 `GraphicsLayerOwnerLayer.kt`(`ui/platform/`)
-- `setLightingInfo`(3D 光照/阴影)为空实现——阶段 C 不渲染阴影。
+- `setLightingInfo`(3D 光照)为空实现;阴影本身已由 `GraphicsLayer.drawShadow` + `MinecraftShadowRenderer` 实现(T.14),不依赖该接口。
 
 ### 1.8 `RenderIntent`(`graphics/colorspace/RenderIntent.kt`)
 - 部分渲染意图(如 `Absolute`、`Relative` 之外的某些)注明 "currently not implemented and behaves like Relative"。
@@ -71,7 +73,7 @@
 ### 1.9 `CompositionLocals.platform.kt`(`ui/platform/`)
 - `HostDefaultProvider` 相关 `TODO(CMP-9752)`:未完整实现,当前为占位对齐。
 
-**后续建议**:优先实现图片解码→`MinecraftImageBitmap` 像素上传→GpuTexture→`drawImageRect`;其次是 Path/圆/椭圆/线等三角化;`saveLayer` 若业务需要可再评估离屏 RenderTarget。
+**后续建议**:`drawVertices`(顶点绘制)与离屏合成(saveLayer/colorFilter/renderEffect/blendMode)依赖离屏渲染能力,暂不实现;`toImageBitmap` 需 CPU 光栅化器(见 §13)。
 
 ---
 
@@ -142,12 +144,11 @@
 
 ---
 
-## 6. `MinecraftRenderContext`(`moe/forpleuvoir/compose_minecraft/minecraft/`)
+## 6. `MinecraftRenderContext`(`moe/forpleuvoir/compose_minecraft/platform/render/`)
 
 回放画布命令到 `GuiRenderState`:
-- ✅ `DrawRectCommand`、`DrawRoundRectCommand(radius<=1)`、`DrawTextCommand`
-- ❌ `DrawOvalCommand / DrawCircleCommand / DrawArcCommand / DrawLineCommand / DrawPathCommand / DrawPointsCommand / DrawImageRectCommand`
-  —— 命令已记录,但回放 `else -> Unit` **不渲染**(需三角化 / 图片上传,注释明示后续阶段)。
+- ✅ `DrawRectCommand` / `DrawRoundRectCommand` / `DrawTextCommand` / `DrawOvalCommand` / `DrawCircleCommand` / `DrawArcCommand` / `DrawLineCommand` / `DrawPathCommand` / `DrawPointsCommand`(几何三角化)/ `DrawGradientRectCommand` / `DrawShadowCommand`(T.14)/ `DrawImageRectCommand`(T.16,纹理 blit)。
+- 3D 命令(`layer3D` 非 null)走 CPU 顶点透视变换路径(T.15);文本/阴影/渐变/图片降级 2D 仿射近似。
 - ⚠️ IME preedit 组合态(候选框)未做,由系统输入法负责。
 
 ---
@@ -202,9 +203,10 @@
 - Android 系统自动填充(Autofill)服务,平台无对应宿主。`TODO(CMP-7154/8576)` 均为此。
 - 处置:占位即可,无需实现。
 
-### 11.3 阴影 / 3D 光照 —— 可忽略(绑定 Skia 阴影)
-- `GraphicsLayerOwnerLayer.setLightingInfo`(3D 光照)、`DropShadowPainter`、`GraphicsLayer` 的 rotationX/rotationY 透视。
-- 平台使用 MC `GuiRenderState`,不渲染阴影/透视。空实现是正确的,无需实现。
+### 11.3 离屏合成 / 3D 光照 —— 已实现或按架构约束不实现
+- ✅ 阴影(T.14 GPU 距离场软阴影,`Modifier.shadow` / `shadowElevation`)与 3D 透视(T.15 rotationX/rotationY)已实现。
+- ⚠️ `GraphicsLayerOwnerLayer.setLightingInfo`(3D 光照)仍为空实现(无实际光照语义需求)。
+- ⚠️ 离屏合成家族(`saveLayer`、`compositingStrategy`、`blendMode`≠SrcOver、`colorFilter`、`renderEffect`)按 AGENTS.md 约束 #4「不做离屏渲染」**不实现**;`GraphicsLayerScope` 对应 setter 为占位。
 
 ### 11.4 系统级桌面 API —— 视宿主而定
 - `DEFAULT_DENSITY`/`DrawContext` 密度占位、`DefaultHapticFeedback`(触感反馈,平台无振动)、`EmptyPlatformWindowInsets`(窗口 inset,MC 全屏接管)、`uriHandler`(打开外链,可接 MC/系统或留空)。
@@ -228,8 +230,8 @@
 
 ## 13. 后续路线建议(按优先级)
 
-1. **图片**:`createImageBitmap` 解码 → `MinecraftImageBitmap` → GpuTexture 上传 → 回放 `drawImageRect`。
-2. **几何绘制**:Path(填充/描边)→ 三角化 → 圆/椭圆/弧/线/点;`drawPath` 与选区高亮、圆角矩形真正圆角。
+1. ~~**图片**:`createImageBitmap` 解码 → `MinecraftImageBitmap` → GpuTexture 上传 → 回放 `drawImageRect`~~ —— ✅ 已完成(T.16,`MinecraftImageTextureCache` + NativeImage 解码)。
+2. **CPU 光栅化器**(可选):`GraphicsLayer.toImageBitmap()` 依赖(图层内容 → 位图快照);无离屏渲染下的替代方案。
 3. **Dialog + Popup 焦点层级**:移植 `Dialog`,打通多图层焦点/键盘分发。
 4. **富文本**:按 SpanStyle 分条 `DrawTextCommand`,走多 MC `Style`;再考虑 InlineContent 占位矩形。
 5. **输入补全**:双击、拖放(接 MC 或系统)、软键盘事件、可选的指针图标/系统光标。
