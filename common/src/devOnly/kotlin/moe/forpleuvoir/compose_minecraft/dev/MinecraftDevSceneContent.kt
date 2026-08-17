@@ -42,6 +42,12 @@ fun MinecraftDevSceneContent() {
             )
 
             DevMenuButton(
+                title = "文本字号测试 (Text / fontSize)",
+                subtitle = "fontSize(sp) 驱动字号:8~48sp 阶梯、行高、窄宽换行、样式叠加",
+                onClick = { ComposeScreen.open { TextDevScene() } },
+            )
+
+            DevMenuButton(
                 title = "文本输入测试 (TextInput)",
                 subtitle = "中英文/IME 上屏、光标移动、选区、剪贴板",
                 onClick = { ComposeScreen.open { TextInputDevScene() } },

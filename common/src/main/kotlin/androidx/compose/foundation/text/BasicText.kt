@@ -44,6 +44,7 @@ import androidx.compose.ui.layout.MeasurePolicy
 import androidx.compose.ui.layout.MeasureResult
 import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
@@ -53,6 +54,10 @@ import androidx.compose.ui.text.platform.StyleSegment
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Constraints.Companion.fitPrioritizingWidth
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.TextUnitType
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.util.fastFilter
 import androidx.compose.ui.util.fastForEach
@@ -89,8 +94,9 @@ import net.minecraft.network.chat.Style
  *   fits in the available space and lays the text out with this size. This performs multiple layout
  *   passes and can be slower than using a fixed font size. This takes precedence over sizes defined
  *   through [style]. See [TextAutoSize] and the sample code.
- * @param scale 平台适配点(T.10):文本缩放(1f = 原样)。布局尺寸与字形矩阵同步缩放,
- *   等价于放大字号(MC 无原生字号参数,经渲染矩阵变换实现)。
+ * @param fontSize 平台适配点(T.19):字体大小,**16sp = 原样 1 倍**(MC 无原生字号
+ *   系统,经渲染矩阵缩放实现:布局尺寸与字形矩阵同步缩放)。仅支持 sp 单位;
+ *   默认 16sp 与旧 scale = 1f 渲染一致。
  * @sample androidx.compose.foundation.samples.TextAutoSizeBasicTextSample
  */
 @Composable
@@ -105,7 +111,7 @@ fun BasicText(
     minLines: Int = 1,
     color: ColorProducer? = null,
     autoSize: TextAutoSize? = null,
-    scale: Float = 1f,
+    fontSize: TextUnit = 16.sp,
 ) {
     validateMinMaxLines(minLines = minLines, maxLines = maxLines)
     val selectionRegistrar = LocalSelectionRegistrar.current
@@ -124,6 +130,9 @@ fun BasicText(
         }
 
     val fontFamilyResolver = LocalFontFamilyResolver.current
+
+    // 平台适配点(T.19):fontSize(sp) → 渲染缩放(16sp = 1f);布局/绘制端消费 scale
+    val scale = fontSize.toTextScale(LocalDensity.current)
 
     BackgroundTextMeasurement(text = text, style = style, fontFamilyResolver = fontFamilyResolver)
 
@@ -179,8 +188,9 @@ fun BasicText(
  * @param maxLines 最大可见行数。
  * @param minLines 最小可见行数。
  * @param color 覆盖文本颜色的颜色生产者(覆盖所有段)。
- * @param scale 平台适配点(T.10):文本缩放(1f = 原样)。布局尺寸与字形矩阵同步缩放,
- *   等价于放大字号(MC 无原生字号参数,经渲染矩阵变换实现)。
+ * @param fontSize 平台适配点(T.19):字体大小,**16sp = 原样 1 倍**(MC 无原生字号
+ *   系统,经渲染矩阵缩放实现:布局尺寸与字形矩阵同步缩放)。仅支持 sp 单位;
+ *   默认 16sp 与旧 scale = 1f 渲染一致。
  */
 @Composable
 fun BasicText(
@@ -193,11 +203,14 @@ fun BasicText(
     maxLines: Int = Int.MAX_VALUE,
     minLines: Int = 1,
     color: ColorProducer? = null,
-    scale: Float = 1f,
+    fontSize: TextUnit = 16.sp,
 ) {
     validateMinMaxLines(minLines = minLines, maxLines = maxLines)
 
     val fontFamilyResolver = LocalFontFamilyResolver.current
+
+    // 平台适配点(T.19):fontSize(sp) → 渲染缩放(16sp = 1f);布局/绘制端消费 scale
+    val scale = fontSize.toTextScale(LocalDensity.current)
 
     // 平台适配点(T.3):展平为带自身样式的段;每段缺失属性用 defaultStyle 补缺(applyTo 语义)
     val segments =
@@ -821,4 +834,19 @@ internal fun BackgroundTextMeasurement(
     placeholders: List<AnnotatedString.Range<Placeholder>>?,
 ) {
     // Minecraft 平台第一版不预热文字测量
+}
+
+/**
+ * 平台适配点(T.19):TextUnit(sp) → 文本渲染缩放。
+ *
+ * MC 无原生字号系统,文字大小经渲染矩阵缩放实现(T.10 的 scale 链路)。
+ * 约定 **16sp = 1f**(16sp 时字形原样,布局尺寸与字形矩阵同步缩放);
+ * 仅支持 sp 单位 —— em 需要基准字号链(TextStyle 已随平台移除),无法解析。
+ */
+private fun TextUnit.toTextScale(density: Density): Float {
+    require(type == TextUnitType.Sp) {
+        "平台适配点(T.19):fontSize 仅支持 sp 单位(MC 无原生字号系统,em 无法解析)"
+    }
+    // sp → px(密度 1 下 16sp = 16px)→ 缩放 = px / 16
+    return value * density.density * density.fontScale / 16f
 }

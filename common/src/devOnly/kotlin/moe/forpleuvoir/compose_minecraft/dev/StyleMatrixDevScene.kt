@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.ui.graphics.graphicsLayer
@@ -171,7 +172,8 @@ fun StyleMatrixDevScene() {
                     "Focus A: $focusStateText | Key: $focusedKey",
                     modifier = Modifier.padding(8.dp),
                     style = Style.EMPTY.withColor(Color.White),
-                    scale = if (focusPanelFocused) 0.85f else 1f
+                    // T.19:scale 参数已移除 → fontSize(sp);0.85 * 16sp = 13.6sp
+                    fontSize = if (focusPanelFocused) 13.6.sp else 16.sp
                 )
             }
 

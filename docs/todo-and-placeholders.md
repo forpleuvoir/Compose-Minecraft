@@ -15,7 +15,7 @@
 |---|---|---|
 | 图形绘制命令 | ✅ 已实现 | 矩形/圆角矩形/圆/椭圆/弧/线/路径/点/文本/图片均已接入 MC 渲染后端(图片 T.16);`drawVertices` 不支持 |
 | 图层能力 | 部分 | clip/scissor、translate/scale/rotate/alpha 已通;`saveLayer`、`clipPath`、`clipRect(Difference)`、Path(复合) 不支持 |
-| 文本 | 部分 | 统一 `McTextStyle`,MC 字体度量;富文本/多 SpanStyle、BiDi、InlineContent/占位符、TextAutoSize 不支持;字号固定 9px |
+| 文本 | 部分 | 统一 `McTextStyle`,MC 字体度量;`BasicText(fontSize)` 以 sp 缩放(T.19,16sp=1x);富文本/多 SpanStyle、BiDi、InlineContent/占位符、TextAutoSize 不支持;基线行高 9px |
 | 弹窗 | 局限 | `Popup` 部分可用;`Dialog` 未移植;Popup/Dialog 焦点层级未通 |
 | 焦点/事件 | 部分 | 键盘/鼠标/滚轮/聚焦已通;双击、拖放、触摸、指针图标、IME preedit 组合态提示 未实现或占位 |
 | 平台 API | 居多占位 | 文本输入服务、文本工具栏、无障碍、窗口 inset、触感反馈、软键盘、URI、剪贴板(已接 MC 系统)等。其中多数见 §11「可忽略」,含触感/inset/URI/无障碍 |
@@ -83,7 +83,9 @@
 平台唯一文本后端(MC 字体度量,行高固定 9px):
 - ❌ **富文本/多样式**:只支持统一 `McTextStyle`;`AnnotatedString` 的 `SpanStyle`/`ParagraphStyle` 差异化未实现。
 - ❌ **BiDi / 排版方向**:固定 `ResolvedTextDirection.Ltr`(L193)。
-- ❌ **fontSize/字号**:忽略,统一 MC 原生 9px(AGENTS.md 既定)。
+- ✅ **fontSize/字号**(T.19):`BasicText(fontSize = …)` 以 sp 驱动,**16sp = 原样 1 倍**
+  (MC 无原生字号系统,经渲染矩阵缩放:布局尺寸与字形矩阵同步缩放;仅支持 sp,
+  em 抛 `IllegalArgumentException`)。旧的 `scale: Float = 1f` 参数已移除。
 - ❌ **渐变 Brush**:`paint(Brush:…)` 只解析 `SolidColor`,否则回退白(L447)。
 - ❌ **Text 占位符**:`getPathForRange` 返回空 `Path`(L315);`placeholderRects` 返回 `emptyList()`(L293)——InlineContent / Placeholder 排进文本不生效。
 - ❌ `getRangeForRect` 返回整段 `TextRange(0, length)`(简化命中)。

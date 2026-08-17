@@ -34,7 +34,8 @@ Agent 的 IDE 工具集中以 `mcp__idea__*` 前缀暴露。**所有代码阅读
   挂入 Minecraft(无帧钩子 mixin、无渲染注入 mixin、无 loader 事件;
   仅 StyleAccessor 只读字段 mixin,见 `common/src/main/.../mixin/StyleAccessor.java`);
 - **场景密度固定 1**:1dp == 1 GUI 单位,坐标无需换算;
-- **文字**:MC Font 度量统一,行高 9px 固定,`fontSize` 第一版被忽略;
+- **文字**:MC Font 度量统一,行高 9px 固定;`BasicText(fontSize)` 以 sp 驱动字号
+  (T.19,**16sp = 原样 1 倍**,经渲染矩阵缩放,仅支持 sp);
 - **发布 JAR 内嵌完整 Compose 运行时**(约 4000+ 个 `androidx.compose.*` 类),
   消费者无需引入任何 Compose/Skiko 依赖。
 
