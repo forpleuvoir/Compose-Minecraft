@@ -414,6 +414,16 @@ class GraphicsLayer internal constructor() {
         val image = MinecraftImageBitmap(size.width, size.height)
         val canvas = MinecraftCanvas(image)
         recordingCanvas = canvas
+        // 平台适配点(T.36 视口剔除):clip=true 的图层(如 clipToBounds / verticalScroll
+        // 的 scroll 容器)需在录制画布也施加局部裁剪(0,0,size)。否则嵌套图层(外层
+        // clip 图层包裹内层 clip=false 内容图层)回放时,内层内容命令回放到外层录制
+        // 画布读到的 currentClip 恒 null,回放阶段的文本视口剔除(replayFrom 的
+        // isTextLineOutsideY)永不触发 → 全量行进入 ComposeGuiRenderer.prepare 的
+        // prepareText(滚动容器粘贴大段文本慢帧根因)。该 clip 在 replayFrom 回放时
+        // 经 base.map 换算后与主画布 clipRect 求交,结果与修复前一致(图层 bounds)。
+        if (clip) {
+            canvas.clipRect(0f, 0f, size.width.toFloat(), size.height.toFloat())
+        }
         canvasDrawScope.draw(
             density = density,
             layoutDirection = layoutDirection,

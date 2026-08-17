@@ -82,13 +82,53 @@ internal class MinecraftTextLayout(
     val text: String,
     val maxWidth: Float,
 ) {
+
     private val font: MinecraftFont
         get() = Minecraft.getInstance().font
 
     val lineHeight: Float
         get() = font.lineHeight.toFloat()
 
-    val lines: List<MinecraftTextLine> = computeLines()
+    /**
+     * 累积字符浮点宽度(cumFloatWidths[i] = text[0,i) 的 StringSplitter.stringWidth 浮点值)。
+     *
+     * MC [Font.width] = `Mth.ceil(splitter.stringWidth(s))`,对每个子串单独 ceil。
+     * 由于 stringWidth 是按码点累加的(StringSplitter.stringWidth 遍历每个 codepoint
+     * 求和 widthProvider.getWidth,无字距/无上下文依赖),`stringWidth(s[a..b))` 精确等于
+     * `cumFloatWidths[b] - cumFloatWidths[a]`。因此 `font.width(s[a..b))` 精确等于
+     * `ceil(cumFloatWidths[b] - cumFloatWidths[a])`。
+     *
+     * 性能(T.34):替代每次 `font.width(text.substring(start, end+1))` 的 O(n) 子串创建
+     * + O(n) 宽度计算,降为 O(1) 数组查表。computeLines 从 O(n²) 降为 O(n)。
+     */
+    private val cumFloatWidths: FloatArray = run {
+        val arr = FloatArray(text.length + 1)
+        val splitter = font.splitter
+        var cum = 0f
+        var i = 0
+        while (i < text.length) {
+            val cp = text.codePointAt(i)
+            val cc = Character.charCount(cp)
+            cum += splitter.stringWidth(String(Character.toChars(cp)))
+            // 填充本码点覆盖的所有 char 位置(代理对占 2 char,中间位置与终点同值)
+            for (j in i + 1..i + cc) arr[j] = cum
+            i += cc
+        }
+        arr
+    }
+
+    /**
+     * text[from, to) 的 MC 字形宽度(int 语义,与 [MinecraftFont.width] 一致 ——
+     * `ceil(stringWidth)`,返回 Float 等价于 `font.width(substring).toFloat()`)。
+     */
+    private fun substringWidth(from: Int, to: Int): Float {
+        if (to <= from) return 0f
+        val end = minOf(to, text.length)
+        if (end <= from) return 0f
+        return ceil(cumFloatWidths[end] - cumFloatWidths[from])
+    }
+
+    val lines: List<MinecraftTextLine> by lazy { computeLines() }
 
     /** 段落宽度(最大行宽) */
     val width: Float
@@ -109,7 +149,7 @@ internal class MinecraftTextLayout(
             }
             val start = cur
             while (cur < text.length && text[cur] != ' ' && text[cur] != '\n') cur++
-            maxW = maxOf(maxW, font.width(text.substring(start, cur)).toFloat())
+            maxW = maxOf(maxW, substringWidth(start, cur))
         }
         maxW
     }
@@ -121,7 +161,7 @@ internal class MinecraftTextLayout(
         while (cur < text.length) {
             val nl = text.indexOf('\n', cur)
             val end = if (nl == -1) text.length else nl
-            maxW = maxOf(maxW, font.width(text.substring(cur, end)).toFloat())
+            maxW = maxOf(maxW, substringWidth(cur, end))
             if (nl == -1) break
             cur = nl + 1
         }
@@ -139,7 +179,7 @@ internal class MinecraftTextLayout(
         // 排除行尾换行符(若有)
         val trimmedEnd = if (end > from && text[end - 1] == '\n') end - 1 else end
         if (trimmedEnd <= from) return 0f
-        return font.width(text.substring(from, trimmedEnd)).toFloat()
+        return ceil(cumFloatWidths[trimmedEnd] - cumFloatWidths[from])
     }
 
     private fun computeLines(): List<MinecraftTextLine> {
@@ -169,40 +209,41 @@ internal class MinecraftTextLayout(
                     // 不推进(end == start),外层 start 也原地踏步 -> 无限添加空行 -> OOM。
                     // 防御:单字符强制占一行并推进。
                     if (start < contentEnd) {
-                        val chWidth = font.width(text.substring(start, start + 1))
+                        val chWidth = substringWidth(start, start + 1)
                         if (chWidth > maxWidth) {
                             result.add(
                                 MinecraftTextLine(
                                     start, start + 1,
-                                    chWidth.toFloat(),
+                                    chWidth,
                                 )
                             )
                             start++
                             continue
                         }
                     }
+                    // 性能(T.34):substringWidth 为 O(1) 数组查表,替代原 O(n) font.width(substring)
                     while (end < contentEnd &&
-                        font.width(text.substring(start, end + 1)) <= maxWidth
+                        substringWidth(start, end + 1) <= maxWidth
                     ) {
                         if (text[end] == ' ') lastSpace = end
                         end++
                     }
                     if (end == contentEnd) {
                         result.add(
-                            MinecraftTextLine(start, segEnd, font.width(text.substring(start, contentEnd)).toFloat())
+                            MinecraftTextLine(start, segEnd, substringWidth(start, contentEnd))
                         )
                         start = segEnd
                     } else {
                         val lineEnd = if (lastSpace > start) lastSpace else end
                         result.add(
-                            MinecraftTextLine(start, lineEnd, font.width(text.substring(start, lineEnd)).toFloat())
+                            MinecraftTextLine(start, lineEnd, substringWidth(start, lineEnd))
                         )
                         start = if (lastSpace > start) lastSpace + 1 else end
                     }
                 }
             } else {
                 result.add(
-                    MinecraftTextLine(segStart, segEnd, font.width(text.substring(segStart, if (nl == -1) segEnd else nl)).toFloat())
+                    MinecraftTextLine(segStart, segEnd, substringWidth(segStart, if (nl == -1) segEnd else nl))
                 )
             }
             if (nl == -1) break
@@ -530,8 +571,8 @@ internal class MinecraftParagraph(
             mc.save()
             mc.scale(scale, scale)
         }
+        val lineCount = visibleLineCount
         try {
-            val lineCount = visibleLineCount
             for (i in 0 until lineCount) {
                 val line = layout.lines[i]
                 val start = lineDrawStart(i, line)

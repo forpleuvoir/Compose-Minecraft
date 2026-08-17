@@ -947,9 +947,15 @@ internal class MinecraftCanvas internal constructor(
             // 目标根空间;按 concat 后的矩阵换算会叠加命令自身矩阵造成双重变换。
             val base = Matrix(currentMatrix.values.copyOf())
             concat(Matrix(command.matrix.copyOf()))
+            // 平台适配点(T.35 修复):command.clip 压栈必须与 save()/restore() 严格配对。
+            // 此前 clipStack.addLast 是不平衡的额外压栈,restore() 只弹 save() 那一层,
+            // 每回放一条带 clip 的命令就泄漏一层裁剪到 clipStack —— 后续兄弟元素被错误
+            // 裁剪(多行文本触发,因 clipToBounds 图层录制命令全部携带 clip)。
+            var clipPushed = false
             command.clip?.let { clip ->
                 val rootClip = base.map(clip)
                 clipStack.addLast(currentClip?.intersect(rootClip) ?: rootClip)
+                clipPushed = true
             }
             val snapshot = command.paint
             if (snapshot != null) {
@@ -1130,12 +1136,20 @@ internal class MinecraftCanvas internal constructor(
                     is DrawShadowCommand    -> Unit // 阴影在 else 分支处理
                 }
             } else if (command is DrawTextCommand) {
-                // 平台适配点:文本命令同样叠加图层级 alpha(经颜色 alpha 通道应用),
-                // 否则 graphicsLayer 的 alpha 对图层内文本不生效。
-                recordTextDraw(
-                    command.text, command.x, command.y, command.style,
-                    alpha = command.alpha * alphaMultiplier,
-                )
+                // 平台适配点(T.36):回放阶段视口剔除 —— 文本命令在回放阶段才拿到
+                // 目标画布的完整裁剪(窗口/视口图层 clip);paint() 录制阶段 clip 恒 null
+                // (滚动容器内容图层 clip=false),故此处按行的屏幕 y 范围判断是否完全
+                // 在裁剪外,在外的行跳过(不生成 text item),避免 ComposeGuiRenderer.prepare
+                // 对不可见行重跑 prepareText(粘贴大段文本慢帧根因)。
+                val clip = currentClip
+                if (clip == null || !isTextLineOutsideY(currentMatrix, command, clip)) {
+                    // 平台适配点:文本命令同样叠加图层级 alpha(经颜色 alpha 通道应用),
+                    // 否则 graphicsLayer 的 alpha 对图层内文本不生效。
+                    recordTextDraw(
+                        command.text, command.x, command.y, command.style,
+                        alpha = command.alpha * alphaMultiplier,
+                    )
+                }
             } else if (command is DrawGradientRectCommand) {
                 // 渐变矩形(阴影):颜色已是最终 ARGB,无需 alphaMultiplier 叠加
                 recordGradientRect(
@@ -1150,8 +1164,23 @@ internal class MinecraftCanvas internal constructor(
                     command.ambientColorArgb, command.spotColorArgb,
                 )
             }
+            if (clipPushed) clipStack.removeLast()
             restore()
         }
+    }
+
+    /**
+     * 平台适配点(T.36):判断文本命令的行(局部 y∈[command.y, command.y+[MC_TEXT_LINE_HEIGHT]])
+     * 经 [m] 映射到目标画布空间后,是否完全在 [clip] 的 y 范围之外(垂直视口外)。
+     * MC 字体行高固定 9px(1x 基准);文本 scale 已含在命令矩阵,映射后自然放大。
+     * 只按 y 剔除(垂直滚动主场景),x 方向交给渲染端 scissor(行宽未知且不误剔可见行)。
+     */
+    private fun isTextLineOutsideY(m: Matrix, command: DrawTextCommand, clip: Rect): Boolean {
+        val top = m.map(Offset(command.x, command.y)).y
+        val bottom = m.map(Offset(command.x, command.y + MC_TEXT_LINE_HEIGHT)).y
+        val minY = minOf(top, bottom)
+        val maxY = maxOf(top, bottom)
+        return maxY < clip.top || minY > clip.bottom
     }
 
     /**
@@ -1363,7 +1392,8 @@ internal class MinecraftCanvas internal constructor(
     /** 当前矩阵(画布矩阵栈顶)。T.15:3D 分支需读取父画布矩阵(场景变换)。 */
     internal val currentMatrix: Matrix get() = matrixStack.last()
 
-    private val currentClip: Rect? get() = clipStack.last()
+    /** 当前裁剪矩形(屏幕空间)。T.36:回放阶段视口剔除需读取,与 [currentMatrix] 配合反算行屏幕范围。 */
+    internal val currentClip: Rect? get() = clipStack.last()
 
     override fun save() {
         matrixStack.addLast(Matrix(currentMatrix.values.copyOf()))
@@ -1632,6 +1662,9 @@ internal class MinecraftCanvas internal constructor(
         // 其余 12 种高级模式(Overlay/Difference/...)渲染端回退 SrcOver —— 记录端不拦截。
     }
 }
+
+/** MC 字体行高固定 9px(1x 基准),供回放阶段文本视口剔除(T.36)使用。 */
+private const val MC_TEXT_LINE_HEIGHT = 9f
 
 /** 供 [MinecraftPath.segments] 使用的段类型常量 */
 private val Move = MinecraftPath.PathSegmentType.Move

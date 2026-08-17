@@ -1,6 +1,7 @@
 package moe.forpleuvoir.compose_minecraft.dev
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +28,10 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalCharFilter
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.TextFieldValue
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
@@ -75,25 +80,41 @@ fun TextInputDevScene() {
                 style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
             )
             Row {
-                BasicTextField(
-                    state = textFieldState,
-                    modifier =
-                        Modifier
-                            .width(220.dp)
-                            .height(160.dp)
-                            .focusRequester(focusRequester)
-                            .background(Color(0xFF263238))
-                            .padding(2.dp)
-                    ,
-                    textStyle = Style.EMPTY.withColor(Color.White),
-                    cursorBrush = SolidColor(Color.White),
-                    lineLimits = TextFieldLineLimits.Default,
-                )
+                var editor by remember { mutableStateOf(true) }
+                var show by remember { mutableStateOf(true) }
+
+                Column {
+                    Box(modifier = Modifier.clickable {
+                        editor = !editor
+                    }) {
+                        BasicText("点我隐藏")
+                    }
+                    Box(modifier = Modifier.clickable {
+                        show = !show
+                    }) {
+                        BasicText("点我隐藏")
+                    }
+                }
+                if (editor)
+                    BasicTextField(
+                        state = textFieldState,
+                        modifier =
+                            Modifier
+                                .width(220.dp)
+                                .height(160.dp)
+                                .focusRequester(focusRequester)
+                                .background(Color(0xFF263238))
+                                .padding(2.dp),
+                        textStyle = Style.EMPTY.withColor(Color.White),
+                        cursorBrush = SolidColor(Color.White),
+                        lineLimits = TextFieldLineLimits.Default,
+                    )
                 Spacer(modifier = Modifier.width(8.dp))
-                BasicText(
-                    "text = ${textFieldState.text.toString().ifEmpty { "(empty)" }}",
-                    style = Style.EMPTY.withColor(Color(0xFF80CBC4)).toTextStyle(),
-                )
+                if (show)
+                    BasicText(
+                        "text = ${textFieldState.text.toString().ifEmpty { "(empty)" }}",
+                        style = Style.EMPTY.withColor(Color(0xFF80CBC4)).toTextStyle(),
+                    )
             }
 
             BasicText(
