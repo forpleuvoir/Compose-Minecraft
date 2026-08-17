@@ -26,54 +26,24 @@ import androidx.compose.runtime.retain.RetainedValuesStore
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.ComposeUiFlags
-import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.SessionMutex
 import androidx.compose.ui.areWindowInsetsRulersEnabled
 import androidx.compose.ui.autofill.AutofillManager
-import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.focus.FocusOwner
-import androidx.compose.ui.focus.FocusOwnerImpl
-import androidx.compose.ui.focus.PlatformFocusOwner
-import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.input.InputMode
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isShiftPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.PointerButton
-import androidx.compose.ui.input.pointer.PointerButtons
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.PointerIconService
-import androidx.compose.ui.input.pointer.PointerInputEvent
-import androidx.compose.ui.input.pointer.PointerInputEventProcessor
-import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
-import androidx.compose.ui.input.pointer.PointerType
-import androidx.compose.ui.input.pointer.PositionCalculator
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.input.rotary.RotaryScrollEvent
 import androidx.compose.ui.layout.RootMeasurePolicy
 import androidx.compose.ui.layout.RulerProviderModifierElement
 import androidx.compose.ui.modifier.ModifierLocalManager
-import androidx.compose.ui.platform.DefaultHapticFeedback
-import androidx.compose.ui.platform.DelegatingSoftwareKeyboardController
-import androidx.compose.ui.platform.GraphicsLayerOwnerLayer
-import androidx.compose.ui.platform.OwnedLayerManager
-import androidx.compose.ui.platform.PlatformContext
-import androidx.compose.ui.platform.PlatformRootForTest
-import androidx.compose.ui.platform.PlatformTextInputMethodRequest
-import androidx.compose.ui.platform.PlatformTextInputSessionScope
-import androidx.compose.ui.platform.PlatformWindowInsets
-import androidx.compose.ui.platform.PlatformWindowInsetsProviderNode
-import androidx.compose.ui.platform.createPlatformClipboard
-import androidx.compose.ui.platform.setLightingInfo
+import androidx.compose.ui.platform.*
 import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftGraphicsContext
 import androidx.compose.ui.scene.ComposeScene
 import androidx.compose.ui.scene.ComposeSceneInputHandler
@@ -87,26 +57,14 @@ import androidx.compose.ui.spatial.RectManager
 import androidx.compose.ui.text.InternalTextApi
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.text.input.TextInputService
-import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.round
-import androidx.compose.ui.unit.toRect
-import androidx.compose.ui.unit.round
+import androidx.compose.ui.unit.*
 import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastMaxOfOrDefault
 import androidx.compose.ui.util.trace
 import kotlin.coroutines.CoroutineContext
 import kotlin.math.max
 import kotlin.math.min
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.*
 
 /**
  * Owner of root [LayoutNode].
@@ -302,7 +260,7 @@ internal class RootNodeOwner(
             platformContext.inputModeManager.requestInputMode(InputMode.Touch)
         }
         val isInBounds = event.eventType != PointerEventType.Exit &&
-            event.pointers.fastAll { isInBounds(it.position) }
+                event.pointers.fastAll { isInBounds(it.position) }
         val result = pointerInputEventProcessor.process(
             event,
             IdentityPositionCalculator,
@@ -418,11 +376,14 @@ internal class RootNodeOwner(
         override val clipboard = createPlatformClipboard()
         override val graphicsContext get() = this@RootNodeOwner.graphicsContext
         override val textToolbar get() = platformContext.textToolbar
+
         @Suppress("DEPRECATION")
         override val autofillTree = androidx.compose.ui.autofill.AutofillTree()
+
         @Suppress("DEPRECATION")
         override val autofill: androidx.compose.ui.autofill.Autofill?
             get() = null
+
         // TODO https://youtrack.jetbrains.com/issue/CMP-1572
         override val autofillManager: AutofillManager? get() = null
         override val density get() = this@RootNodeOwner.density
@@ -432,6 +393,7 @@ internal class RootNodeOwner(
             DelegatingSoftwareKeyboardController(textInputService)
 
         private val textInputSessionMutex = SessionMutex<TextInputSession>()
+
         private inner class TextInputSession(
             coroutineScope: CoroutineScope,
         ) : PlatformTextInputSessionScope, CoroutineScope by coroutineScope {
@@ -463,8 +425,8 @@ internal class RootNodeOwner(
 
         override suspend fun textInputSession(
             session: suspend PlatformTextInputSessionScope.() -> Nothing
-        ) : Nothing {
-            textInputSessionMutex.withSessionCancellingPrevious<Nothing>(
+        ): Nothing {
+            textInputSessionMutex.withSessionCancellingPrevious(
                 sessionInitializer = ::TextInputSession,
                 session = session
             )
@@ -709,6 +671,7 @@ internal class RootNodeOwner(
 
     private inner class PlatformRootForTestImpl : PlatformRootForTest {
         override val density get() = this@RootNodeOwner.density
+
         @Suppress("OVERRIDE_DEPRECATION")
         override val textInputService get() = owner.textInputService
         override val semanticsOwner get() = owner.semanticsOwner
@@ -970,7 +933,7 @@ private fun MeasureAndLayoutDelegate.updateRootConstraintsWithInfinityCheck(
 
 private fun IntSize.toConstraints() = Constraints(maxWidth = width, maxHeight = height)
 
-private object IdentityPositionCalculator: PositionCalculator {
+private object IdentityPositionCalculator : PositionCalculator {
     override fun screenToLocal(positionOnScreen: Offset): Offset = positionOnScreen
     override fun localToScreen(localPosition: Offset): Offset = localPosition
 }
@@ -980,14 +943,14 @@ private fun Modifier.rulerProvider(windowInsets: PlatformWindowInsets) =
 
 private data class RootWindowInsetsProviderModifierElement(
     val windowInsets: PlatformWindowInsets,
-): ModifierNodeElement<RootPlatformWindowInsetsProviderNode>() {
+) : ModifierNodeElement<RootPlatformWindowInsetsProviderNode>() {
     override fun create(): RootPlatformWindowInsetsProviderNode = RootPlatformWindowInsetsProviderNode(windowInsets)
     override fun update(node: RootPlatformWindowInsetsProviderNode) = node.update(windowInsets)
 }
 
 private class RootPlatformWindowInsetsProviderNode(
     private var insets: PlatformWindowInsets,
-): PlatformWindowInsetsProviderNode(insets) {
+) : PlatformWindowInsetsProviderNode(insets) {
     override fun calculatePlatformInsets(ancestorWindowInsets: PlatformWindowInsets): PlatformWindowInsets =
         insets
 
