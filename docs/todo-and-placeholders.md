@@ -16,7 +16,7 @@
 | 图形绘制命令 | ✅ 已实现 | 矩形/圆角矩形/圆/椭圆/弧/线/路径/点/文本/图片/顶点渐变均已接入 MC 渲染后端(图片 T.16、顶点 T.23);`drawVertices` 已支持 |
 | 图层能力 | 部分 | clip/scissor、translate/scale/rotate/alpha 已通;`saveLayer`、`clipPath`、`clipRect(Difference)`、Path(复合) 不支持 |
 | 文本 | 部分 | 统一 `BasicText(style: TextStyle)`(T.28,语义经 TextStyleMapper 映射,MC 原版渲染特性经 PlatformSpanStyle 承载);`fontSize` 并入 style(T.19,18sp=2x 平台基准字号),`autoSize` 自动缩放(T.20);段级 SpanStyle 混排(T.29)、BiDi、InlineContent/占位符 不支持;基线行高 9px。默认字体/默认样式/默认字号均可经 CompositionLocal 覆盖(`LocalDefaultFont`/`LocalDefaultTextStyle`/`LocalDefaultFontSize`,T.30/T.32);自定义字体文件注册(T.32,FreeType 加载 ttf/otf/ttc) |
-| 弹窗 | 局限 | `Popup` 部分可用;`Dialog` 未移植;Popup/Dialog 焦点层级未通 |
+| 弹窗 | ✅ 已实现 | `Popup`(锚点定位/PositionProvider/clipping/焦点隔离/Escape 与 outside 点击关闭)与 `Dialog`(scrim 遮罩/居中/模态焦点圈定/dismissOnBackPress/dismissOnClickOutside)均经 `ComposeSceneLayer` 图层机制实现(T.33) |
 | 焦点/事件 | 部分 | 键盘/鼠标/滚轮/聚焦已通;IME preedit 组合态已实现(下划线组合文本 + 候选窗跟随);指针图标已实现(I9:Compose `PointerIcon` → MC 原版 `CursorTypes`,经原版 per-frame 光标管线);双击、拖放、触摸 未实现或占位 |
 | 平台 API | 居多占位 | 文本输入服务、文本工具栏、无障碍、窗口 inset、触感反馈、软键盘、URI、剪贴板(已接 MC 系统)等。其中多数见 §11「可忽略」,含触感/inset/URI/无障碍 |
 | 互操作视图 | 占位(可删) | 无原生视图嵌入,`InteropView` 以 `Any` 占位 —— **Android 原生 View 机制,完全不需要,见 §11.1** |
@@ -135,12 +135,21 @@
 
 ## 4. 弹窗 / 焦点层级(`androidx.compose.ui.window`, `ui.scene`)
 
-- ✅ **`Popup`**(`ui/window/Popup.kt`)可用(foundation 依赖)。
-- ❌ **`Dialog` 未移植**——`ui/window` 下只有 `Popup.kt` 与 `DialogScrimBlendMode.kt`。
-- ⚠️ `ComposeScreen` 头注明确:**双击、Popup/Dialog 焦点层级尚未支持;IME 候选窗由系统输入法负责(preedit 组合态已实现)**。
-- `CanvasLayersComposeScene` 中有 Popup/Dialog `focusedLayer`/`isInteractive` 相关分支,但多层焦点切换未完整验证。
-
-**后续建议**:若要 Dialog,需参照 CMP `Dialog.skiko.kt` 移植 `ui/window/Dialog.kt`(含 scrim 层与焦点),并打通 `CanvasLayersComposeScene` 的图层焦点分发;`getDialogScrimBlendMode` 已单独抽出待用。
+- ✅ **`Popup`**(`ui/window/Popup.kt`)真实现(T.33):对齐官方 `PopupLayout` 语义 ——
+  锚点捕获(`EmptyLayout.onPlaced` + `positionInWindow`)、`PopupPositionProvider`
+  定位(默认 `AlignmentOffsetPositionProvider`)、`clippingEnabled` 窗口内钳制、
+  `focusable` 焦点隔离(经 `ComposeSceneLayer`)、`dismissOnBackPress`(Escape 经
+  layer 键监听)与 `dismissOnClickOutside`(outside 点击关闭);替换原
+  「直接内联 content()」占位。
+- ✅ **`Dialog`**(`ui/window/Dialog.kt`)已移植(T.33):scrim 遮罩(默认黑 60%,
+  `DialogScrimBlendMode` 复用)、内容居中、模态焦点圈定(`focusable=true` 图层
+  阻断底层交互)、`dismissOnBackPress` / `dismissOnClickOutside`(Release +
+  Primary 点击 scrim 关闭)、`usePlatformDefaultWidth`
+  (`preferredDialogWidth` 580/440/320dp)。
+- ✅ 多层焦点/键盘分发:`CanvasLayersComposeScene` 的 `focusedLayer`/`isInteractive`
+  图层机制完整生效(焦点层收键盘,非焦点层被阻断)。
+- ⚠️ `ComposeScreen` 头注明确:**双击尚未支持;IME 候选窗由系统输入法负责
+  (preedit 组合态已实现)**。
 
 ---
 
@@ -267,7 +276,7 @@
 3. ~~**颜色滤镜 / 混合模式**(draw 级近似,不依赖离屏)~~ —— ✅ 已完成(T.21 `colorFilter` ColorMatrix/tint/lighting;T.22 `blendMode` 17 种可表达模式经 `BlendPipelines` 自建 blend pipeline,12 种高级模式回退 SrcOver,详见 §1.6)。
 4. ~~**顶点渐变 `drawVertices`**~~ —— ✅ 已完成(T.23,每顶点色 GPU 插值,Triangles/Strip/Fan + 索引展开)。
 5. ~~**独立渲染工作流**(像素 1:1 投影、像素级裁剪精度、与 HUD 共存)~~ —— ✅ 已完成(T.24,`ComposeGuiRenderer` + `GuiRendererMixin`,取代 `GuiRenderStateMixin`,详见 §6)。
-6. **Dialog + Popup 焦点层级**:移植 `Dialog`,打通多图层焦点/键盘分发。
+6. ~~**Dialog + Popup 焦点层级**:移植 `Dialog`,打通多图层焦点/键盘分发~~ —— ✅ 已完成(T.33,`Popup` 真实现 + `Dialog` 移植,`ComposeSceneLayerMeasurePolicy` 测量策略,见 §4)。
 7. ~~**富文本段级混排**~~ —— ✅ 已完成(T.29,`AnnotatedString` 版 `BasicText` 提升 public,
    `spanStyles` 经 `toStyleSegments` 全覆盖切分 + 段样式映射 → `recordSegmentedTextDraw`
    逐段绘制;段级 color/bold/italic/decoration/PlatformSpanStyle 生效,段级字号暂不支持;

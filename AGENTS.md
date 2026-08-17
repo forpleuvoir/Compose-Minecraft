@@ -284,7 +284,7 @@ build_project(rebuild=true)
   (I9:Compose `PointerIcon` → MC 原版 `CursorTypes` ARROW/CROSSHAIR/IBEAM/
   POINTING_HAND,经 `GuiGraphicsExtractor.requestCursor` 走原版 per-frame 管线,
   尊重原版「允许光标变化」设置项);双击、拖放未实现;
-- Popup 部分可用(foundation 依赖),Dialog 未移植;
+- Popup/Dialog 已实现(T.33):场景内图层弹层(经 `ComposeSceneLayer`,非系统窗口),Popup 支持锚点定位/PositionProvider/clipping/焦点隔离/Escape 与 outside 点击关闭;Dialog 带 scrim 遮罩(默认黑 60%)、居中、模态焦点圈定与 dismissOnBackPress/dismissOnClickOutside;DropdownMenu 未移植;
 - 剪贴板为占位实现;
 - 平台未配置 maven 发布,消费者直接依赖发布 JAR。
 

@@ -52,7 +52,8 @@ import net.minecraft.network.chat.Component
  *   (不 close),返回时 [added] 复活(场景与组合状态保留,滚动位置等不丢失);
  *   非可复活屏关闭即销毁场景。
  *
- * 尚未支持:双击、Popup/Dialog 焦点层级、IME 候选窗(由系统输入法负责)。
+ * 尚未支持:双击、IME 候选窗(由系统输入法负责);Popup/Dialog 已实现(T.33,
+ * 场景内图层弹层:焦点隔离/scrim 遮罩/Escape 与 outside 点击关闭)。
  */
 class ComposeScreen(
     val parent: Screen? = null,
