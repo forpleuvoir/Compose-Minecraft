@@ -1,15 +1,18 @@
 package moe.forpleuvoir.compose_minecraft.dev
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -146,6 +149,40 @@ fun TextDevScene() {
                 "默认 16sp:与旧 scale=1 渲染一致(对照参考,本行即默认字号)",
                 style = Style.EMPTY.withColor(Color(0xFF78909C)),
             )
+
+            // ── ⑧ TextAutoSize ──
+            SectionLabel("⑧ TextAutoSize(自动缩放:二分搜索最大适配字号)")
+            BasicText(
+                "220x100 容器内短文本:应放大填满;140x44 容器内长文本:应缩小避免溢出。",
+                style = Style.EMPTY.withColor(Color(0xFF78909C)),
+            )
+            Box(
+                Modifier
+                    .width(220.dp)
+                    .height(100.dp)
+                    .background(Color(0xFF263238))
+                    .border(1.dp, Color(0xFF80CBC4))
+                    .padding(6.dp)
+            ) {
+                BasicText(
+                    "AutoSize 放大",
+                    autoSize = TextAutoSize.StepBased(),
+                )
+            }
+            Box(
+                Modifier
+                    .padding(top = 6.dp)
+                    .width(140.dp)
+                    .height(44.dp)
+                    .background(Color(0xFF263238))
+                    .border(1.dp, Color(0xFF80CBC4))
+                    .padding(6.dp)
+            ) {
+                BasicText(
+                    "TextAutoSize 自动缩小测试 0123456789 中文混排",
+                    autoSize = TextAutoSize.StepBased(),
+                )
+            }
         }
     }
 }

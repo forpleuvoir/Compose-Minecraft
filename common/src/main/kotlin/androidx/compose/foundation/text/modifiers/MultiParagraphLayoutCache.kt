@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.constrain
 import androidx.compose.ui.unit.isUnspecified
 import androidx.compose.ui.unit.sp
@@ -108,6 +109,12 @@ internal class MultiParagraphLayoutCache(
     /** [LayoutDirection] used to compute [MultiParagraphIntrinsics] */
     private var intrinsicsLayoutDirection: LayoutDirection? = null
 
+    /** 平台适配点(T.20):intrinsics 缓存键中的 scale 分量(TextAutoSize 多档字号布局) */
+    private var intrinsicsScale: Float = 1f
+
+    /** 最近一次 [layoutWithConstraints] 的 [LayoutDirection],TextAutoSize 搜索布局复用 */
+    private var lastLayoutDirection: LayoutDirection = LayoutDirection.Ltr
+
     /** Cached value of final [TextLayoutResult] */
     private var layoutCache: TextLayoutResult? = null
 
@@ -180,6 +187,7 @@ internal class MultiParagraphLayoutCache(
      */
     fun layoutWithConstraints(constraints: Constraints, layoutDirection: LayoutDirection): Boolean {
         recordHistory(LayoutCacheOperation.LayoutWithConstraints)
+        lastLayoutDirection = layoutDirection
         val finalConstraints =
             if (minLines > 1) {
                 useMinLinesConstrainer(constraints, layoutDirection)
@@ -199,13 +207,21 @@ internal class MultiParagraphLayoutCache(
             return true
         }
         if (autoSize != null) {
-            // 平台适配点:TextAutoSize 依赖 fontSize 多档排版,与 MC 固定 9px 字形冲突,第一版不支持
-            throw UnsupportedOperationException(
-                "TextAutoSize 在 Minecraft 平台第一版不支持(MC 字号固定 9px)"
-            )
+            // 平台适配点(T.20):TextAutoSize 二分搜索最大适配字号(sp → 渲染 scale,16sp = 1f),
+            // 用搜索得到的字号重新布局
+            val localAutoSize = autoSize!!
+            val scale =
+                with(localAutoSize) {
+                    with(fontSizeSearchScope) {
+                        getFontSize(finalConstraints, text).toPx() / 16f
+                    }
+                }
+            val multiParagraph = layoutText(finalConstraints, layoutDirection, scale)
+            layoutCache = textLayoutResult(layoutDirection, finalConstraints, multiParagraph)
+            return true
         }
 
-        val multiParagraph = layoutText(finalConstraints, layoutDirection)
+        val multiParagraph = layoutText(finalConstraints, layoutDirection, 1f)
 
         layoutCache = textLayoutResult(layoutDirection, finalConstraints, multiParagraph)
         return true
@@ -266,7 +282,7 @@ internal class MultiParagraphLayoutCache(
                 constraints
             }
         val result =
-            layoutText(finalConstraints, layoutDirection)
+            layoutText(finalConstraints, layoutDirection, 1f)
                 .height
                 .ceilToIntPx()
                 .coerceAtLeast(finalConstraints.minHeight)
@@ -306,15 +322,20 @@ internal class MultiParagraphLayoutCache(
      *
      * After calling paragraphIntrinsics is cached.
      */
-    private fun setLayoutDirection(layoutDirection: LayoutDirection): MultiParagraphIntrinsics {
+    private fun setLayoutDirection(
+        layoutDirection: LayoutDirection,
+        scale: Float,
+    ): MultiParagraphIntrinsics {
         val localIntrinsics = paragraphIntrinsics
         val intrinsics =
             if (
                 localIntrinsics == null ||
                     layoutDirection != intrinsicsLayoutDirection ||
+                    scale != intrinsicsScale ||
                     localIntrinsics.hasStaleResolvedFonts
             ) {
                 intrinsicsLayoutDirection = layoutDirection
+                intrinsicsScale = scale
                 MultiParagraphIntrinsics(
                     annotatedString = text,
                     // 平台适配点:resolveDefaults 随 TextStyle 移除,Style 无缺省解析
@@ -322,6 +343,7 @@ internal class MultiParagraphLayoutCache(
                     density = density!!,
                     fontFamilyResolver = fontFamilyResolver,
                     placeholders = placeholders.orEmpty(),
+                    scale = scale,
                 )
             } else {
                 localIntrinsics
@@ -340,8 +362,9 @@ internal class MultiParagraphLayoutCache(
     private fun layoutText(
         constraints: Constraints,
         layoutDirection: LayoutDirection,
+        scale: Float,
     ): MultiParagraph {
-        val localParagraphIntrinsics = setLayoutDirection(layoutDirection)
+        val localParagraphIntrinsics = setLayoutDirection(layoutDirection, scale)
 
         return MultiParagraph(
             intrinsics = localParagraphIntrinsics,
@@ -408,12 +431,12 @@ internal class MultiParagraphLayoutCache(
 
     /** The width at which increasing the width of the text no longer decreases the height. */
     fun maxIntrinsicWidth(layoutDirection: LayoutDirection): Int {
-        return setLayoutDirection(layoutDirection).maxIntrinsicWidth.ceilToIntPx()
+        return setLayoutDirection(layoutDirection, 1f).maxIntrinsicWidth.ceilToIntPx()
     }
 
     /** The width for text if all soft wrap opportunities were taken. */
     fun minIntrinsicWidth(layoutDirection: LayoutDirection): Int {
-        return setLayoutDirection(layoutDirection).minIntrinsicWidth.ceilToIntPx()
+        return setLayoutDirection(layoutDirection, 1f).minIntrinsicWidth.ceilToIntPx()
     }
 
     /** [MultiParagraph] specific implementation of [TextAutoSizeLayoutScope] */
@@ -430,17 +453,75 @@ internal class MultiParagraphLayoutCache(
         var lastLayoutResult: TextLayoutResult? = null
             private set
 
+        // 平台适配点(T.20):sp → px,与 T.19 的 TextUnit.toTextScale 同公式
+        // (16sp = 16px = 渲染 scale 1f,含 fontScale)
+        override fun TextUnit.toPx(): Float =
+            when (type) {
+                TextUnitType.Sp -> value * density * fontScale
+                TextUnitType.Unspecified -> 0f
+                else ->
+                    throw IllegalArgumentException(
+                        "TextAutoSize 仅支持 sp 字号(收到 $this)"
+                    )
+            }
+
         override fun performLayout(
             constraints: Constraints,
             text: AnnotatedString,
             fontSize: TextUnit,
         ): TextLayoutResult {
-            // 平台适配点:TextAutoSize 第一版不支持(MC 字号固定 9px),入口已在 layoutWithConstraints 拦截
-            throw UnsupportedOperationException("TextAutoSize 在 Minecraft 平台第一版不支持")
-        }
-
-        override fun TextUnit.toPx(): Float {
-            throw UnsupportedOperationException("TextAutoSize 在 Minecraft 平台第一版不支持")
+            // 平台适配点(T.20):MC 无原生字号系统,字号经渲染 scale 驱动(16sp = 1f);
+            // 用局部 intrinsics 布局(不污染主布局缓存)
+            val scale = fontSize.toPx() / 16f
+            val localIntrinsics =
+                MultiParagraphIntrinsics(
+                    annotatedString = text,
+                    style = this@MultiParagraphLayoutCache.style,
+                    density = this@MultiParagraphLayoutCache.density!!,
+                    fontFamilyResolver = this@MultiParagraphLayoutCache.fontFamilyResolver,
+                    placeholders = placeholders.orEmpty(),
+                    scale = scale,
+                )
+            val multiParagraph =
+                MultiParagraph(
+                    intrinsics = localIntrinsics,
+                    constraints =
+                        finalConstraints(
+                            constraints,
+                            softWrap,
+                            overflow,
+                            localIntrinsics.maxIntrinsicWidth,
+                        ),
+                    maxLines = finalMaxLines(softWrap, overflow, maxLines),
+                    overflow = overflow,
+                )
+            val result =
+                TextLayoutResult(
+                    TextLayoutInput(
+                        text,
+                        style,
+                        placeholders.orEmpty(),
+                        maxLines,
+                        softWrap,
+                        overflow,
+                        this@MultiParagraphLayoutCache.density!!,
+                        lastLayoutDirection,
+                        fontFamilyResolver,
+                        constraints,
+                    ),
+                    multiParagraph,
+                    constraints.constrain(
+                        IntSize(
+                            min(
+                                multiParagraph.intrinsics.maxIntrinsicWidth,
+                                multiParagraph.width,
+                            ).ceilToIntPx(),
+                            multiParagraph.height.ceilToIntPx(),
+                        ),
+                    ),
+                )
+            lastLayoutResult = result
+            return result
         }
     }
 

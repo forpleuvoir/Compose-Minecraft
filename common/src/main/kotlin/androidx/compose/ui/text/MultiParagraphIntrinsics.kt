@@ -48,6 +48,9 @@ class MultiParagraphIntrinsics(
     val placeholders: List<AnnotatedString.Range<Placeholder>>,
     density: Density,
     fontFamilyResolver: FontFamily.Resolver,
+    // 平台适配点(T.19/T.20):字号由渲染缩放(scale)驱动,16sp = 1f;
+    // scale 必须在 intrinsics 构造时编码进 MinecraftParagraphIntrinsics(cast 透传)
+    scale: Float = 1f,
 ) : ParagraphIntrinsics {
 
     @Suppress("DEPRECATION")
@@ -117,6 +120,7 @@ class MultiParagraphIntrinsics(
                                 ),
                             density = density,
                             fontFamilyResolver = fontFamilyResolver,
+                            scale = scale,
                         ),
                     startIndex = paragraphStyleItem.start,
                     endIndex = paragraphStyleItem.end,

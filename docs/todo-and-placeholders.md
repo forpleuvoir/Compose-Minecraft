@@ -15,7 +15,7 @@
 |---|---|---|
 | 图形绘制命令 | ✅ 已实现 | 矩形/圆角矩形/圆/椭圆/弧/线/路径/点/文本/图片均已接入 MC 渲染后端(图片 T.16);`drawVertices` 不支持 |
 | 图层能力 | 部分 | clip/scissor、translate/scale/rotate/alpha 已通;`saveLayer`、`clipPath`、`clipRect(Difference)`、Path(复合) 不支持 |
-| 文本 | 部分 | 统一 `McTextStyle`,MC 字体度量;`BasicText(fontSize)` 以 sp 缩放(T.19,16sp=1x);富文本/多 SpanStyle、BiDi、InlineContent/占位符、TextAutoSize 不支持;基线行高 9px |
+| 文本 | 部分 | 统一 `McTextStyle`,MC 字体度量;`BasicText(fontSize)` 以 sp 缩放(T.19,16sp=1x),`autoSize` 自动缩放(T.20);富文本/多 SpanStyle、BiDi、InlineContent/占位符 不支持;基线行高 9px |
 | 弹窗 | 局限 | `Popup` 部分可用;`Dialog` 未移植;Popup/Dialog 焦点层级未通 |
 | 焦点/事件 | 部分 | 键盘/鼠标/滚轮/聚焦已通;双击、拖放、触摸、指针图标、IME preedit 组合态提示 未实现或占位 |
 | 平台 API | 居多占位 | 文本输入服务、文本工具栏、无障碍、窗口 inset、触感反馈、软键盘、URI、剪贴板(已接 MC 系统)等。其中多数见 §11「可忽略」,含触感/inset/URI/无障碍 |
@@ -93,8 +93,11 @@
 - ⚠️ `ActualParagraph/…Intrinsics` 直接映射到 `MinecraftParagraph`,`Font.ResourceLoader` 的 `createFontFamilyResolver` 已废弃。
 
 ### 2.2 `MultiParagraphLayoutCache.kt`(`foundation/text/modifiers/`)
-- ❌ **TextAutoSize**:入口已在 `layoutWithConstraints` 拦截并抛
-  `UnsupportedOperationException("TextAutoSize 在 Minecraft 平台第一版不支持(MC 字号固定 9px)")`(L204, L438-443)。`BasicText(autoSize=…)` 不可用。
+- ✅ **TextAutoSize**(T.20):`BasicText(autoSize = TextAutoSize.StepBased(...))` 二分搜索最大适配字号
+  (默认 12–112sp、步进 0.25sp,官方 `AutoSizeStepBased` 算法原样)。
+  字号经渲染 scale 驱动(sp → px 含 fontScale,16sp = scale 1f):`TextAutoSizeLayoutScopeImpl.toPx/performLayout`
+  实现(performLayout 用局部 intrinsics 布局,不污染主缓存);`MultiParagraphIntrinsics` 透传 scale,
+  `setLayoutDirection` 缓存键含 scale 分量。仅 sp 单位(em 抛 `IllegalArgumentException`)。
 
 ### 2.3 `TextPainter.kt`
 - `drawText(…Brush…)` 解析为纯色;渐变/阴影/装饰按 McTextStyle 能力承载或忽略(§2.1)。
@@ -237,5 +240,5 @@
 3. **Dialog + Popup 焦点层级**:移植 `Dialog`,打通多图层焦点/键盘分发。
 4. **富文本**:按 SpanStyle 分条 `DrawTextCommand`,走多 MC `Style`;再考虑 InlineContent 占位矩形。
 5. **输入补全**:双击、拖放(接 MC 或系统)、软键盘事件、可选的指针图标/系统光标。
-6. **TextAutoSize**:在固定 9px 前提下,可评估按约束多档缩放字形(需变更排版模型)。
+6. ~~**TextAutoSize**:二分搜索最大适配字号(默认 12–112sp)~~ —— ✅ 已完成(T.20,`MultiParagraphLayoutCache` 搜索 + 渲染 scale 驱动)。
 7. **无障碍**:screenReader 接入 MC 的 Toast/讲稿或跳过。
