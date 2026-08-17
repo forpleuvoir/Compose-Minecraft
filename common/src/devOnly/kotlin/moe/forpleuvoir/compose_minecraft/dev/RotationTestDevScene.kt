@@ -151,7 +151,9 @@ fun RotationTestDevScene() {
                 Offset(1f, 1f),     // 右下
             )
             val lightNames = listOf("右上", "左上", "正上", "右下")
+            // 两个阴影块都在 provider 作用域内:光源切换对 3a/3b 同时生效
             CompositionLocalProvider(LocalShadowLight provides lights[lightIndex]) {
+                // ── 3a. 黑阴影(默认色)──
                 Box(
                     Modifier
                         .padding(top = 32.dp)
@@ -167,32 +169,31 @@ fun RotationTestDevScene() {
                             .background(Color(0xFF42A5F5), RoundedCornerShape(4.dp))
                     )
                 }
+                BasicText(
+                    "阴影:shadowElevation=4 + RectangleShape(直角矩形投影)",
+                    modifier = Modifier.padding(top = 6.dp),
+                    style = Style.EMPTY.withColor(Color(0xFF455A64)),
+                )
+                // ── 3b. 阴影颜色演示(T.18):Modifier.shadow 的 ambientColor/spotColor ──
+                // ambient(无偏移)= 蓝色、spot(投影偏移)= 橙红色;两张网格颜色各自生效。
+                Box(
+                    Modifier
+                        .padding(top = 16.dp)
+                        .size(96.dp, 36.dp)
+                        .shadow(
+                            1.dp,
+                            RoundedCornerShape(4.dp),
+                            ambientColor = Color(0xFF1976D2),
+                            spotColor = Color(0xFFE64A19),
+                        )
+                        .background(Color(0xFFFFE0B2), RoundedCornerShape(4.dp))
+                )
+                BasicText(
+                    "阴影颜色:ambient 蓝(无偏移)+ spot 橙红(投影偏移)",
+                    modifier = Modifier.padding(top = 6.dp),
+                    style = Style.EMPTY.withColor(Color(0xFF455A64)),
+                )
             }
-            BasicText(
-                "阴影:shadowElevation=4 + RectangleShape(直角矩形投影)",
-                modifier = Modifier.padding(top = 6.dp),
-                style = Style.EMPTY.withColor(Color(0xFF455A64)),
-            )
-            // ── 3b. 阴影颜色演示(T.18):Modifier.shadow 的 ambientColor/spotColor ──
-            // ambient(无偏移)= 蓝色、spot(投影偏移)= 橙红色;两张网格颜色各自生效。
-            // 与 3a 的黑阴影对比,底色同浅色底板。
-            Box(
-                Modifier
-                    .padding(top = 16.dp)
-                    .size(96.dp, 36.dp)
-                    .shadow(
-                        4.dp,
-                        RoundedCornerShape(4.dp),
-                        ambientColor = Color(0xFF1976D2),
-                        spotColor = Color(0xFFE64A19),
-                    )
-                    .background(Color(0xFFFFE0B2), RoundedCornerShape(4.dp))
-            )
-            BasicText(
-                "阴影颜色:ambient 蓝(无偏移)+ spot 橙红(投影偏移)",
-                modifier = Modifier.padding(top = 6.dp),
-                style = Style.EMPTY.withColor(Color(0xFF455A64)),
-            )
             BasicText(
                 "光源:${lightNames[lightIndex]}(点击切换 LocalShadowLight)",
                 modifier = Modifier
