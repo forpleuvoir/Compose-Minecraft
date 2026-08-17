@@ -138,7 +138,7 @@ ComposeScreen.open(density = 1f) {
 |---|---|---|
 | **Material 全家**(Button/TextField/Card/Theme…) | 未移植 | 用基础组件 + `background`/`border`/`clickable` 自绘 |
 | 官方 `Text` 组件 | 未移植(依赖缺失的 `LocalTextStyle`) | 用 `BasicText(text, style = TextStyle(color = ...))` |
-| `TextField` / IME 文本输入 | 已接通:charTyped 上屏 + IME preedit 组合态(下划线 + 候选窗跟随) | 中文输入法上屏可用,组合态可见(见 `input-mc-native-plan.md`) |
+| `TextField` / IME 文本输入 | 已接通:charTyped 上屏 + IME preedit 组合态(下划线 + 候选窗跟随) | 中文输入法上屏可用,组合态可见(原实现计划 `input-mc-native-plan.md` 已随实现落地移除,实现见 `platform/textinput/MinecraftTextInputService.kt`) |
 | `Popup` / `Dialog` | 已实现(T.33):场景内图层弹层,焦点隔离/遮罩/Escape 与 outside 关闭 | 直接使用;`DropdownMenu` 未移植,需自行定位绘制 |
 | 剪贴板 | 已接通(经 MC `KeyboardHandler`,纯文本) | `LocalClipboard.current` 读写文本 |
 | 指针图标 `PointerIcon` | 已实现(I9) | `Modifier.pointerHoverIcon` 生效:Default→ARROW、Crosshair→CROSSHAIR、Text→IBEAM、Hand→POINTING_HAND(MC 原版 `CursorTypes`,经原版 per-frame 光标管线;自定义图标回退 ARROW) |

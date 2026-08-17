@@ -17,7 +17,7 @@ import net.minecraft.client.input.PreeditEvent
 import kotlin.math.roundToInt
 
 /**
- * MC 平台文本输入服务(IME Service,实施计划 mc-ime-service-plan.md)。
+ * MC 平台文本输入服务(IME Service,实施计划已随实现落地移除,状态以代码为准)。
  *
  * 职责:
  * - 会话开启/关闭时启停 MC 的系统输入法([TextInputManager.startTextInput] / [TextInputManager.stopTextInput]),

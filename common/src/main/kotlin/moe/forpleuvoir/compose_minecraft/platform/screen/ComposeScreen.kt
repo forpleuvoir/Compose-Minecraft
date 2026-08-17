@@ -37,7 +37,7 @@ import net.minecraft.client.input.KeyEvent as MCKeyEvent
  *   场景坐标 = 像素(密度默认 1f,1dp == 1 像素;[density] 可配置放大,见构造);
  * - 生命周期:[removed] 时关闭场景(任何被替换/关闭路径都会触发)。
  *
- * IME 支持(实施计划 mc-ime-service-plan.md):[preeditUpdated] 把系统输入法组合态
+ * IME 支持(实施计划已随实现落地移除):[preeditUpdated] 把系统输入法组合态
  * (preedit)转发到 Compose 编辑缓冲(下划线组合文本);[charTyped] 保持提交文本上屏
  * 并通知 service 计数(组合结束时定位光标)。
  *
