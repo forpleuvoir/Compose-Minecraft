@@ -24,6 +24,23 @@ Agent 的 IDE 工具集中以 `mcp__idea__*` 前缀暴露。**所有代码阅读
 > 必须通过 IDEA MCP 完成**,禁止使用 `gradlew` shell / IDE 终端跑 Gradle 任务,
 > 禁止绕过构建直接手改产物。
 
+### 编辑后质量检查(必做工作流)
+
+**编辑完任何代码文件后,按此顺序检查通过再继续下一步(与构建章节一致,禁止
+跳过 lint 直接交付)**:
+
+1. **代码问题检查(单文件深入)**:`mcp__idea__get_file_problems`,参数
+   `filePath`(项目相对路径)+ `projectPath`(多项目时必须);只看 `errors` 数组。
+2. **代码质量检测(批量)**:`mcp__idea__lint_files`,参数 `files`(数组)+
+   `min_severity`(`warning` 或 `error`,默认 warning)+ `projectPath`;
+   有 items 则逐条修复(severity / description / location)。
+3. **构建验证**:`mcp__idea__build_project` —— 增量用 `filesToRebuild` 指定文件,
+   全量用 `rebuild=true`(devOnly 改动必须全量;单任务会漏编译 devOnly)。
+
+> 三者分工:`get_file_problems` = 单文件 errors;`lint_files` = 批量质量/风格检查;
+> `build_project` = 真实 Gradle 编译(唯一权威)。顺序:先 lint 修复 → 再 build
+> 验证 → 全绿后交付。
+
 ## 项目概述
 
 在 Minecraft(Fabric + NeoForge 双 Loader)中运行 Compose Multiplatform UI 的基座 Mod。
@@ -261,10 +278,14 @@ build_project(rebuild=true)
 
 ## 已知限制
 
-- 文本输入:charTyped 已接通(经 typed KeyEvent 转发);IME 候选窗口由系统输入法负责,
-  组合态提示(preedit)未实现;
+- 文本输入:charTyped 已接通(经 typed KeyEvent 转发);IME 组合态(preedit)已实现
+  (`MinecraftTextInputService` 经 `preeditUpdated` 转发,下划线组合文本 + 候选窗
+  `setTextInputArea` 像素直传 T.31),候选窗口由系统输入法负责;指针图标已实现
+  (I9:Compose `PointerIcon` → MC 原版 `CursorTypes` ARROW/CROSSHAIR/IBEAM/
+  POINTING_HAND,经 `GuiGraphicsExtractor.requestCursor` 走原版 per-frame 管线,
+  尊重原版「允许光标变化」设置项);双击、拖放未实现;
 - Popup 部分可用(foundation 依赖),Dialog 未移植;
-- 剪贴板 / 指针图标为占位实现;
+- 剪贴板为占位实现;
 - 平台未配置 maven 发布,消费者直接依赖发布 JAR。
 
 ## 许可

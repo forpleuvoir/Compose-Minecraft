@@ -420,7 +420,8 @@ internal abstract class HoverIconModifierNode(
     }
 }
 
-internal val pointerIconDefault: PointerIcon = MinecraftPointerIcon()
-internal val pointerIconCrosshair: PointerIcon = MinecraftPointerIcon()
-internal val pointerIconText: PointerIcon = MinecraftPointerIcon()
-internal val pointerIconHand: PointerIcon = MinecraftPointerIcon()
+// 平台适配点(I9 指针图标):四种标准图标携带种类,平台据此映射到 MC 原版光标
+internal val pointerIconDefault: PointerIcon = MinecraftPointerIcon(MinecraftPointerIconKind.Default)
+internal val pointerIconCrosshair: PointerIcon = MinecraftPointerIcon(MinecraftPointerIconKind.Crosshair)
+internal val pointerIconText: PointerIcon = MinecraftPointerIcon(MinecraftPointerIconKind.Text)
+internal val pointerIconHand: PointerIcon = MinecraftPointerIcon(MinecraftPointerIconKind.Hand)

@@ -124,10 +124,10 @@ ComposeScreen.open {
 |---|---|---|
 | **Material 全家**(Button/TextField/Card/Theme…) | 未移植 | 用基础组件 + `background`/`border`/`clickable` 自绘 |
 | 官方 `Text` 组件 | 未移植(依赖缺失的 `LocalTextStyle`) | 用 `BasicText(text, style = TextStyle(color = ...))` |
-| `TextField` / IME 文本输入 | 字符输入已接通(charTyped);IME 组合态提示未实现 | 中文输入法上屏可用;组合态 preedit 待后续(见 `mc-ime-service-plan.md`) |
+| `TextField` / IME 文本输入 | 已接通:charTyped 上屏 + IME preedit 组合态(下划线 + 候选窗跟随) | 中文输入法上屏可用,组合态可见(见 `input-mc-native-plan.md`) |
 | `Popup` / `Dialog` / `DropdownMenu` | 未移植 | 用全屏 Screen 或自定义定位绘制 |
 | 剪贴板 | 已接通(经 MC `KeyboardHandler`,纯文本) | `LocalClipboard.current` 读写文本 |
-| 指针图标 `PointerIcon` | 空实现 | 无 |
+| 指针图标 `PointerIcon` | 已实现(I9) | `Modifier.pointerHoverIcon` 生效:Default→ARROW、Crosshair→CROSSHAIR、Text→IBEAM、Hand→POINTING_HAND(MC 原版 `CursorTypes`,经原版 per-frame 光标管线;自定义图标回退 ARROW) |
 | 动画库 `animation` / `material3` 动效 | 未经受控验证 | 先验证再使用 |
 | 远程图片/自定义字体加载 | 未移植(`FontFamily.Resolver` 未接通) | 仅用 MC 内置字体与 CPU 位图 |
 
@@ -165,7 +165,8 @@ implementation(compose.components.resources)      // 资源加载(未移植)
 
 - **NeoForge 端 dev 测试**:NeoForge(ModDevGradle)不支持 devOnly 源码集,
   dev 场景验证统一在 Fabric 端进行;NeoForge 端只做发布构建;
-- **文本输入**:`charTyped` / IME 尚未接入,`BasicTextField` 源码存在但链路未通;
+- **文本输入**:`charTyped` 上屏与 IME 组合态(preedit)已接通,`BasicTextField` 链路可用;
+  指针图标已接通(I9);剩余输入补全(双击/拖放)见 `docs/todo-and-placeholders.md`;
 - **弹出层**:Popup/Dialog 焦点层级未实现;
 - **发布**:平台当前未配置 maven 发布(阶段 G 决策),消费者直接依赖发布 JAR;
   需要时再补 `mavenLocal()` / 远程仓库发布。

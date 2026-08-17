@@ -14,6 +14,7 @@ import moe.forpleuvoir.compose_minecraft.platform.ComposeInputBridge.toCompose
 import moe.forpleuvoir.compose_minecraft.platform.ComposeInputBridge.toPointerKeyboardModifiers
 import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiRenderer
 import com.mojang.blaze3d.platform.InputConstants
+import com.mojang.blaze3d.platform.cursor.CursorType
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
@@ -118,6 +119,11 @@ class ComposeScreen(
             }
         }
         composeScene?.renderFrame()
+        // I9 指针图标:把 Compose 场景的光标请求并入原版 per-frame 光标管线
+        // (extractor 构造时 pendingCursor = CursorType.DEFAULT,这里覆写请求值,
+        // 帧末由原版 applyCursor → Window.selectCursor 生效,带去重、尊重
+        // 原版「允许光标变化」设置项)。无请求时用 DEFAULT 与原版默认一致。
+        graphics.requestCursor(composeScene?.desiredCursorType ?: CursorType.DEFAULT)
     }
 
     /**

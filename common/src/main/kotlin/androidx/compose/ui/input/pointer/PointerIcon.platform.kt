@@ -17,15 +17,29 @@
 package androidx.compose.ui.input.pointer
 
 /**
+ * 标准指针图标种类(平台适配点,I9 指针图标)。
+ *
+ * 四种标准图标([PointerIcon.Default]/[PointerIcon.Crosshair]/[PointerIcon.Text]/
+ * [PointerIcon.Hand])以此区分;平台接入点
+ * [moe.forpleuvoir.compose_minecraft.platform.MinecraftComposeScene] 的
+ * `PlatformContext.setPointerIcon` 据此映射到 MC 原版光标
+ * (`com.mojang.blaze3d.platform.cursor.CursorTypes`)。
+ */
+internal enum class MinecraftPointerIconKind { Default, Crosshair, Text, Hand }
+
+/**
  * Minecraft 平台指针图标实现(替代原 AWT Cursor 实现)。
  *
- * 平台当前不提供光标切换能力(MC 未暴露原版光标 API),所有图标共用同一
- * 占位实现:语义仅用于内部状态区分,不触发任何系统光标变化。
+ * 以 [MinecraftPointerIconKind] 携带语义种类(原占位实现所有图标 equals 恒等,
+ * 平台无法区分),平台接入点据此触发对应原版光标切换。
  */
-internal class MinecraftPointerIcon : PointerIcon {
-    override fun equals(other: Any?): Boolean = other is MinecraftPointerIcon
+internal class MinecraftPointerIcon(
+    val kind: MinecraftPointerIconKind,
+) : PointerIcon {
+    override fun equals(other: Any?): Boolean =
+        other is MinecraftPointerIcon && other.kind == kind
 
-    override fun hashCode(): Int = 0
+    override fun hashCode(): Int = kind.hashCode()
 
-    override fun toString(): String = "MinecraftPointerIcon"
+    override fun toString(): String = "MinecraftPointerIcon($kind)"
 }

@@ -6,8 +6,11 @@ import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.MinecraftCanvas
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.pointer.MinecraftPointerIcon
+import androidx.compose.ui.input.pointer.MinecraftPointerIconKind
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.platform.PlatformContext
@@ -18,6 +21,8 @@ import androidx.compose.ui.scene.PointerEventResult
 import androidx.compose.ui.text.input.PlatformTextInputService
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
+import com.mojang.blaze3d.platform.cursor.CursorType
+import com.mojang.blaze3d.platform.cursor.CursorTypes
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
@@ -67,6 +72,16 @@ class MinecraftComposeScene(
     /** 平台文本输入服务(IME Service):桥接 MC TextInputManager 与 Compose 编辑缓冲 */
     internal val textInputService = MinecraftTextInputService()
 
+    /**
+     * Compose 侧请求的原版光标(I9 指针图标):由平台接入点 [PlatformContext.setPointerIcon]
+     * 写入,经 [ComposeScreen.extractRenderState] 每帧通过原版
+     * [net.minecraft.client.gui.GuiGraphicsExtractor.requestCursor] 提交 —— 走原版
+     * per-frame 光标管线(帧末 applyCursor → Window.selectCursor,带去重),
+     * 避免与原版光标重置互相覆盖。null = 无请求(原版默认光标)。
+     */
+    internal var desiredCursorType: CursorType? = null
+        private set
+
     private val scene: ComposeScene = CanvasLayersComposeScene(
         density = Density(density),
         size = IntSize(width.coerceAtLeast(1), height.coerceAtLeast(1)),
@@ -89,6 +104,12 @@ class MinecraftComposeScene(
                 } finally {
                     this@MinecraftComposeScene.textInputService.unbindRequest(request)
                 }
+            }
+
+            // I9 指针图标:Compose 光标请求 → MC 原版光标类型(经原版 per-frame 管线生效,
+            // 由 RootNodeOwner.PointerIconServiceImpl 在指针 Enter/Exit 时调用)
+            override fun setPointerIcon(pointerIcon: PointerIcon) {
+                desiredCursorType = pointerIcon.toMinecraftCursorType()
             }
         },
         // MC 每帧都会调用 render(),无需额外 invalidate 调度
@@ -159,4 +180,16 @@ class MinecraftComposeScene(
 
     /** 释放场景(组合、Recomposer 等) */
     fun close() = scene.close()
+}
+
+/**
+ * Compose [PointerIcon] → MC 原版 [CursorType] 映射(I9 指针图标):
+ * - Default → 标准箭头;Crosshair → 十字;Text → I 形(文本);Hand → 手型;
+ * - 未知/自定义图标实现回退默认箭头(与原占位行为一致,不触发错误)。
+ */
+private fun PointerIcon.toMinecraftCursorType(): CursorType = when ((this as? MinecraftPointerIcon)?.kind) {
+    MinecraftPointerIconKind.Crosshair -> CursorTypes.CROSSHAIR
+    MinecraftPointerIconKind.Text -> CursorTypes.IBEAM
+    MinecraftPointerIconKind.Hand -> CursorTypes.POINTING_HAND
+    else -> CursorTypes.ARROW
 }

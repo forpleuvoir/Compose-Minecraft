@@ -56,6 +56,12 @@ fun MinecraftDevSceneContent() {
             )
 
             DevMenuButton(
+                title = "指针图标测试 (PointerIcon / I9)",
+                subtitle = "悬停切换 Default/Crosshair/Text/Hand 光标;输入框 I 形、链接手型、overrideDescendants",
+                onClick = { ComposeScreen.open { PointerIconDevScene() } },
+            )
+
+            DevMenuButton(
                 title = "样式与交互验证 (Style/Click/Focus/Scroll)",
                 subtitle = "BasicText 样式矩阵、鼠标点击、焦点、滚轮",
                 onClick = { ComposeScreen.open { StyleMatrixDevScene() } },

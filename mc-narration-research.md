@@ -81,7 +81,8 @@
    - 多控件屏幕可输出 `POSITION`("第 n 个,共 m 个")对齐原版习惯。
 
 4. **与已知限制的边界**:
-   - 输入框 preedit(IME 组合态)不朗读——维持 AGENTS.md 已知限制;
+   - 输入框 preedit(IME 组合态)不朗读——读屏/朗读本身未实现(见 AGENTS.md 已知限制,
+     与输入侧 preedit 渲染无关);
    - 朗读文本来自 Compose 语义,MC 的 `NarratorStatus`(OFF/CHAT/SYSTEM)与 VOICE 音量直接生效。
 
 ### 2.3 与本项目已删代码的关系
