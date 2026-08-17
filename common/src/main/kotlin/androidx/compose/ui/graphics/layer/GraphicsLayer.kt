@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ImageBitmapConfig
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.MinecraftCanvas
 import androidx.compose.ui.graphics.MinecraftImageBitmap
@@ -35,6 +36,7 @@ import androidx.compose.ui.graphics.MinecraftPath
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RenderEffect
+import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -44,6 +46,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import moe.forpleuvoir.compose_minecraft.platform.render.GraphicsLayerRasterizer
 
 /**
  * Draw the provided [GraphicsLayer] into the current [DrawScope]. The [GraphicsLayer] provided must
@@ -428,13 +431,15 @@ class GraphicsLayer internal constructor() {
      */
     suspend fun toImageBitmap(): ImageBitmap {
         check(recordingCanvas != null) { "GraphicsLayer.record must be invoked before calling toImageBitmap" }
-        // 平台适配点(T.16):本平台无离屏渲染、无 CPU 光栅化器(AGENTS.md 约束 #4),
-        // 录制命令只能回放到 MC 的 GuiRenderState;「图层内容转位图快照」语义无法实现。
-        // 此前直接返回 recordingCanvas.image —— 命令记录式画布从未把内容写入
-        // CPU buffer,返回值恒为全透明空图,属静默错误;现改为明确报错。
-        throw UnsupportedOperationException(
-            "GraphicsLayer.toImageBitmap 平台未支持:需要 CPU 光栅化器(见 docs/todo-and-placeholders.md §13 路线)"
-        )
+        // 平台适配点(T.17):无离屏渲染(AGENTS.md 约束 #4),改为 CPU 光栅化 ——
+        // GraphicsLayerRasterizer 把录制命令(与 GPU 回放同一套三角化)光栅化到
+        // CPU 像素缓冲,任意线程可调用。文本/阴影命令不支持,快照中缺失。
+        val w = size.width
+        val h = size.height
+        if (w <= 0 || h <= 0) return MinecraftImageBitmap(maxOf(w, 0), maxOf(h, 0))
+        val canvas = recordingCanvas ?: return MinecraftImageBitmap(0, 0)
+        val pixels = GraphicsLayerRasterizer.rasterize(canvas, w, h)
+        return MinecraftImageBitmap(w, h, ImageBitmapConfig.Argb8888, true, ColorSpaces.Srgb, pixels)
     }
 
     /**

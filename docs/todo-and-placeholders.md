@@ -61,8 +61,8 @@
 ### 1.6 `GraphicsLayer`(`ui/graphics/layer/GraphicsLayer.kt`)
 - ✅ translate/scale/rotationZ/rotationX/rotationY(3D 透视,T.15)/pivot/alpha/clip(矩形 scissor)/shadowElevation(T.14 GPU 距离场软阴影)均已实现。
 - ✅ `setRectOutline` / `setRoundRectOutline` / `setPathOutline` 已实现(T.14 阴影轮廓)。
-- ⚠️ `toImageBitmap()`(T.16):平台无离屏渲染与 CPU 光栅化器(AGENTS.md 约束 #4),「图层内容转位图快照」语义无法实现 —— **明确抛 `UnsupportedOperationException`**(此前静默返回从未回放的空白位图)。如需支持,先实现 CPU 光栅化器(§13)。
-- 离屏合成家族(`compositingStrategy` / `blendMode`≠SrcOver / `colorFilter` / `renderEffect`)未实现(`GraphicsLayerScope` 占位 setter),依赖离屏渲染,见 §11.3。
+- ✅ `toImageBitmap()`(T.17):CPU 光栅化器(`GraphicsLayerRasterizer`,与 GPU 回放同一套三角化)把录制命令光栅化到像素缓冲,任意线程可调用;**文本与阴影命令不支持,快照中缺失**。
+- 离屏合成家族(`compositingStrategy` / `blendMode`≠SrcOver / `colorFilter` / `renderEffect`)未实现(属性链路完整但渲染端不消费),依赖离屏渲染,见 §11.3。
 
 ### 1.7 `GraphicsLayerOwnerLayer.kt`(`ui/platform/`)
 - `setLightingInfo`(3D 光照)为空实现;阴影本身已由 `GraphicsLayer.drawShadow` + `MinecraftShadowRenderer` 实现(T.14),不依赖该接口。
@@ -73,7 +73,7 @@
 ### 1.9 `CompositionLocals.platform.kt`(`ui/platform/`)
 - `HostDefaultProvider` 相关 `TODO(CMP-9752)`:未完整实现,当前为占位对齐。
 
-**后续建议**:`drawVertices`(顶点绘制)与离屏合成(saveLayer/colorFilter/renderEffect/blendMode)依赖离屏渲染能力,暂不实现;`toImageBitmap` 需 CPU 光栅化器(见 §13)。
+**后续建议**:`drawVertices`(顶点绘制)与离屏合成(saveLayer/colorFilter/renderEffect/blendMode)依赖离屏渲染能力,暂不实现;`toImageBitmap` 已由 CPU 光栅化器支撑(T.17,见 §13)。
 
 ---
 
@@ -231,7 +231,7 @@
 ## 13. 后续路线建议(按优先级)
 
 1. ~~**图片**:`createImageBitmap` 解码 → `MinecraftImageBitmap` → GpuTexture 上传 → 回放 `drawImageRect`~~ —— ✅ 已完成(T.16,`MinecraftImageTextureCache` + NativeImage 解码)。
-2. **CPU 光栅化器**(可选):`GraphicsLayer.toImageBitmap()` 依赖(图层内容 → 位图快照);无离屏渲染下的替代方案。
+2. ~~**CPU 光栅化器**:`GraphicsLayer.toImageBitmap()` 依赖(图层内容 → 位图快照);无离屏渲染下的替代方案~~ —— ✅ 已完成(T.17,`GraphicsLayerRasterizer`;文本/阴影命令不支持)。
 3. **Dialog + Popup 焦点层级**:移植 `Dialog`,打通多图层焦点/键盘分发。
 4. **富文本**:按 SpanStyle 分条 `DrawTextCommand`,走多 MC `Style`;再考虑 InlineContent 占位矩形。
 5. **输入补全**:双击、拖放(接 MC 或系统)、软键盘事件、可选的指针图标/系统光标。

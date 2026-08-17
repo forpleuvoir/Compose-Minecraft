@@ -82,6 +82,12 @@ fun MinecraftDevSceneContent() {
                 subtitle = "程序生成位图/资源 PNG 解码/drawImageRect/变换组合",
                 onClick = { ComposeScreen.open { ImageDevScene() } },
             )
+
+            DevMenuButton(
+                title = "图层快照测试 (GraphicsLayer toImageBitmap)",
+                subtitle = "record 录制 → CPU 光栅化快照,与 GPU 回放对照",
+                onClick = { ComposeScreen.open { BitmapDevScene() } },
+            )
         }
     }
 }
