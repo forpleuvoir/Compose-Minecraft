@@ -100,6 +100,12 @@ fun MinecraftDevSceneContent() {
                 subtitle = "ColorMatrix 反相/灰度、tint、lighting、图层级滤镜",
                 onClick = { ComposeScreen.open { ColorFilterDevScene() } },
             )
+
+            DevMenuButton(
+                title = "混合模式测试 (BlendMode)",
+                subtitle = "17 种可表达 blendMode:灰底 + 半透明红叠加,矩形/圆形双几何",
+                onClick = { ComposeScreen.open { BlendModeDevScene() } },
+            )
         }
     }
 }

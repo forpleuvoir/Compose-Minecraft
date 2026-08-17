@@ -154,6 +154,8 @@ internal object MinecraftGuiTriangles {
  *   (LineWidth 属性槽):外侧为负、轮廓上为 0、内侧为正;内部实心三角形为大数;
  * - [stroke] = true 走描边专用 pipeline(gui_triangles_stroke,固定过渡无
  *   fwidth 噪声),false 走填充 pipeline(gui_triangles,fwidth smoothstep);
+ * - [blendMode](T.22):≠ SrcOver 时选对应 blend 变体 pipeline(BlendPipelines),
+ *   否则用默认 TRANSLUCENT pipeline;
  * - bounds:局部包围盒经 pose 变换后与 scissor 求交 —— 供 GuiRenderer 的
  *   层级归并(findAppropriateNode)使用,非 null 是元素被接受的前提。
  */
@@ -164,12 +166,21 @@ internal class GuiTriangleRenderState(
     /** 交错 [x, y, coverage] 平铺,每 3 个顶点一个三角形 */
     val vertices: FloatArray,
     val stroke: Boolean = false,
+    /** T.22:混合模式(≠ SrcOver 时选 blend 变体 pipeline) */
+    val blendMode: androidx.compose.ui.graphics.BlendMode = androidx.compose.ui.graphics.BlendMode.SrcOver,
 ) : GuiElementRenderState {
 
     private val elementBounds: ScreenRectangle = computeBounds(pose, scissor, vertices)
 
-    override fun pipeline(): RenderPipeline =
-        if (stroke) MinecraftGuiTriangles.strokePipeline else MinecraftGuiTriangles.pipeline
+    override fun pipeline(): RenderPipeline = when {
+        blendMode != androidx.compose.ui.graphics.BlendMode.SrcOver ->
+            if (stroke) BlendPipelines.trianglesStrokeFor(blendMode)
+                ?: MinecraftGuiTriangles.strokePipeline
+            else BlendPipelines.trianglesFor(blendMode)
+                ?: MinecraftGuiTriangles.pipeline
+        stroke -> MinecraftGuiTriangles.strokePipeline
+        else -> MinecraftGuiTriangles.pipeline
+    }
 
     override fun textureSetup(): TextureSetup = TextureSetup.noTexture()
 

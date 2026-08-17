@@ -357,12 +357,14 @@ internal class MinecraftRenderContext {
 
         if (count >= 9) {
             MinecraftGuiTriangles.ensureCompiled()
+            BlendPipelines.ensureCompiled()
             renderState.addGuiElement(
                 GuiTriangleRenderState(
                     pose = IDENTITY_MATRIX,
                     colorArgb = colorArgb,
                     scissor = null,
                     vertices = output.copyOf(count),
+                    blendMode = paint.blendMode,
                 )
             )
         }
@@ -418,6 +420,7 @@ internal class MinecraftRenderContext {
             triangleCache[key] = vertices
         }
         MinecraftGuiTriangles.ensureCompiled()
+        BlendPipelines.ensureCompiled()
         renderState.addGuiElement(
             GuiTriangleRenderState(
                 pose = command.matrix.toMatrix3x2f(),
@@ -425,6 +428,7 @@ internal class MinecraftRenderContext {
                 scissor = scissor?.toScreenRectangle(),
                 vertices = vertices,
                 stroke = paint.style == PaintingStyle.Stroke,
+                blendMode = paint.blendMode,
             )
         )
     }
@@ -560,7 +564,8 @@ internal class MinecraftRenderContext {
     ): BlitRenderState {
         // Java record 构造器无参数名,必须使用位置参数
         return BlitRenderState(
-            RenderPipelines.GUI,
+            // T.22:blendMode ≠ SrcOver 时选对应 blend 变体 pipeline,否则默认 GUI
+            BlendPipelines.guiFor(paint.blendMode) ?: RenderPipelines.GUI,
             TextureSetup.noTexture(),
             matrix.toMatrix3x2f(),
             left.roundToInt(),

@@ -1571,9 +1571,8 @@ internal class MinecraftCanvas internal constructor(
         if (paint.shader != null) {
             throw UnsupportedOperationException("Paint.shader 第一版不支持")
         }
-        if (paint.blendMode != BlendMode.SrcOver) {
-            throw UnsupportedOperationException("Paint.blendMode 仅支持 SrcOver,实际: ${paint.blendMode}")
-        }
+        // T.22:blendMode 支持 17 种可表达模式(渲染端经 BlendPipelines 切换 pipeline),
+        // 其余 12 种高级模式(Overlay/Difference/...)渲染端回退 SrcOver —— 记录端不拦截。
     }
 }
 
