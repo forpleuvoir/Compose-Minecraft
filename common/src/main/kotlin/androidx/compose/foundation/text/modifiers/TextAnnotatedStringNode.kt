@@ -55,6 +55,7 @@ import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextLayoutInput
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.platform.StyleSegment
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Constraints.Companion.fitPrioritizingWidth
@@ -81,6 +82,10 @@ internal class TextAnnotatedStringNode(
     private var overrideColor: ColorProducer? = null,
     private var autoSize: TextAutoSize? = null,
     private var onShowTranslation: ((TextSubstitutionValue) -> Unit)? = null,
+    // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖)
+    private var segments: List<StyleSegment> = emptyList(),
+    // 平台适配点(T.29):字号渲染缩放(18sp → 2x),透传给 MultiParagraphLayoutCache
+    private var scale: Float = 1f,
 ) : Modifier.Node(), LayoutModifierNode, DrawModifierNode, SemanticsModifierNode {
     override val shouldAutoInvalidate: Boolean
         get() = false
@@ -103,6 +108,8 @@ internal class TextAnnotatedStringNode(
                         minLines,
                         placeholders,
                         autoSize,
+                        segments,
+                        scale,
                     )
             }
             return _layoutCache!!
@@ -162,6 +169,10 @@ internal class TextAnnotatedStringNode(
         fontFamilyResolver: FontFamily.Resolver,
         overflow: TextOverflow,
         autoSize: TextAutoSize?,
+        // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖)
+        segments: List<StyleSegment>,
+        // 平台适配点(T.29):字号渲染缩放(18sp → 2x)
+        scale: Float = 1f,
     ): Boolean {
         var changed: Boolean
 
@@ -201,6 +212,16 @@ internal class TextAnnotatedStringNode(
 
         if (this.autoSize != autoSize) {
             this.autoSize = autoSize
+            changed = true
+        }
+
+        if (this.segments != segments) {
+            this.segments = segments
+            changed = true
+        }
+
+        if (this.scale != scale) {
+            this.scale = scale
             changed = true
         }
 
@@ -257,6 +278,8 @@ internal class TextAnnotatedStringNode(
                 minLines = minLines,
                 placeholders = placeholders,
                 autoSize = autoSize,
+                segments = segments,
+                scale = scale,
             )
         }
 
@@ -309,6 +332,8 @@ internal class TextAnnotatedStringNode(
                 minLines,
                 placeholders = emptyList(),
                 autoSize,
+                segments = emptyList(),
+                scale = scale,
             ) ?: return false
         } else {
             val newTextSubstitution = TextSubstitutionValue(text, updatedText)
@@ -323,6 +348,8 @@ internal class TextAnnotatedStringNode(
                     minLines,
                     placeholders = emptyList(),
                     autoSize,
+                    segments = emptyList(),
+                    scale = scale,
                 )
             substitutionLayoutCache.density = layoutCache.density
             newTextSubstitution.layoutCache = substitutionLayoutCache

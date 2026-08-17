@@ -37,6 +37,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.platform.StyleSegment
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import net.minecraft.network.chat.Style
@@ -61,6 +62,10 @@ internal class SelectableTextAnnotatedStringNode(
     overrideColor: ColorProducer? = null,
     autoSize: TextAutoSize? = null,
     private var onShowTranslation: ((TextAnnotatedStringNode.TextSubstitutionValue) -> Unit)? = null,
+    // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖)
+    segments: List<StyleSegment> = emptyList(),
+    // 平台适配点(T.29):字号渲染缩放(18sp → 2x),透传给内部节点
+    scale: Float = 1f,
 ) : DelegatingNode(), LayoutModifierNode, DrawModifierNode, GlobalPositionAwareModifierNode {
     override val shouldAutoInvalidate: Boolean
         get() = false
@@ -82,6 +87,8 @@ internal class SelectableTextAnnotatedStringNode(
                 overrideColor = overrideColor,
                 autoSize = autoSize,
                 onShowTranslation = onShowTranslation,
+                segments = segments,
+                scale = scale,
             )
         )
 
@@ -136,6 +143,10 @@ internal class SelectableTextAnnotatedStringNode(
         selectionController: SelectionController?,
         color: ColorProducer?,
         autoSize: TextAutoSize?,
+        // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖)
+        segments: List<StyleSegment>,
+        // 平台适配点(T.29):字号渲染缩放(18sp → 2x)
+        scale: Float = 1f,
     ) {
         textAnnotatedStringNode.doInvalidations(
             drawChanged = textAnnotatedStringNode.updateDraw(color, style),
@@ -150,6 +161,8 @@ internal class SelectableTextAnnotatedStringNode(
                     fontFamilyResolver = fontFamilyResolver,
                     overflow = overflow,
                     autoSize = autoSize,
+                    segments = segments,
+                    scale = scale,
                 ),
             callbacksChanged =
                 textAnnotatedStringNode.updateCallbacks(

@@ -53,6 +53,11 @@ Agent 的 IDE 工具集中以 `mcp__idea__*` 前缀暴露。**所有代码阅读
   等平台无法表达字段文档化忽略([PlatformTextData.ignored]);`BasicText(autoSize=…)`
   自动缩放(T.20,二分搜索最大适配字号,默认 12–112sp);`BasicTextField(fontSize)` 输入框
   字号(T.26,默认 18sp = 2x,光标/选区/命中坐标随 scale 换算);
+  `BasicText(text: AnnotatedString)` 富文本段级混排(T.29,该重载已提升 public):
+  spanStyles 经 `TextStyleMapper.toStyleSegments` 全覆盖切分 → `StyleSegment` 段样式
+  增量叠加 base MC Style(段级 color/bold/italic/decoration/PlatformSpanStyle 生效,
+  段级字号暂不支持);行内段 x 用 1x `prefixWidth`(渲染端 pose 会再缩放,传 ×scale
+  值会间隔翻倍);
 - **发布 JAR 内嵌完整 Compose 运行时**(约 4000+ 个 `androidx.compose.*` 类),
   消费者无需引入任何 Compose/Skiko 依赖。
 

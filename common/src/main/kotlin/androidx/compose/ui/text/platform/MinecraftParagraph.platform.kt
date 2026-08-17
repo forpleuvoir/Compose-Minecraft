@@ -578,9 +578,15 @@ internal class MinecraftParagraph(
             val clipStart = maxOf(segStart, rowStart)
             val clipEnd = minOf(segEnd, rowEnd)
             if (clipEnd > clipStart) {
+                // 平台适配点(T.29 修复):行内段 x 偏移 = 该行 [rowStart, clipStart) 的
+                // MC 字形宽度(**1x 单位**,layout.prefixWidth 不乘 scale)。渲染端
+                // GuiTextRenderState 的 x/y 是 prepareText 文本空间坐标,字形顶点
+                // 再乘 pose(含字号 scale)缩放 —— 传 ×scale 值会被二次缩放,
+                // 同行多段间隔翻倍、尾段被推出屏幕。
+                val xPx = layout.prefixWidth(rowStart, clipStart)
                 mc.recordTextDraw(
                     text = intrinsics.text.substring(clipStart, clipEnd),
-                    x = (clipStart - rowStart).toFloat(),
+                    x = xPx,
                     y = row * layout.lineHeight,
                     style = seg.style,
                     alpha = alpha,
@@ -590,9 +596,10 @@ internal class MinecraftParagraph(
         }
         // 段未覆盖到的尾部(理论上不应发生,防御性兜底)
         if (cursor < rowEnd) {
+            val xPx = layout.prefixWidth(rowStart, cursor)
             mc.recordTextDraw(
                 text = intrinsics.text.substring(cursor, rowEnd),
-                x = (cursor - rowStart).toFloat(),
+                x = xPx,
                 y = row * layout.lineHeight,
                 style = fallbackStyle,
                 alpha = alpha,

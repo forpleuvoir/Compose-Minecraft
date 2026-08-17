@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.text.internal.requirePrecondition
+import androidx.compose.ui.text.platform.StyleSegment
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.util.fastAny
@@ -51,6 +52,8 @@ class MultiParagraphIntrinsics(
     // 平台适配点(T.19/T.20):字号由渲染缩放(scale)驱动,16sp = 1f;
     // scale 必须在 intrinsics 构造时编码进 MinecraftParagraphIntrinsics(cast 透传)
     scale: Float = 1f,
+    // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖,渲染端逐段绘制)
+    segments: List<StyleSegment> = emptyList(),
 ) : ParagraphIntrinsics {
 
     @Suppress("DEPRECATION")
@@ -121,6 +124,8 @@ class MultiParagraphIntrinsics(
                             density = density,
                             fontFamilyResolver = fontFamilyResolver,
                             scale = scale,
+                            // 平台适配点(T.29 富文本):段列表透传到 Paragraph → 渲染端
+                            segments = segments,
                         ),
                     startIndex = paragraphStyleItem.start,
                     endIndex = paragraphStyleItem.end,

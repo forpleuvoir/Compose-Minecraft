@@ -18,12 +18,14 @@ package moe.forpleuvoir.compose_minecraft.platform.ui.text
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.ParagraphStyle
 import androidx.compose.ui.text.PlatformSpanStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.platform.StyleSegment
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Density
@@ -183,3 +185,70 @@ fun Style.toTextStyle(): TextStyle {
 }
 
 // 复用 StyleExtensions 的 toRgb/toColor(同包 internal)
+
+/**
+ * 段级映射(T.29 富文本):把 [SpanStyle] 增量应用到基础 MC [Style]。
+ * 规则与 [TextStyle.toPlatformData] 的 mcStyle 构建一致(color/bold/italic/
+ * decoration/platformStyle),**不含字号** —— 段级字号暂不参与布局
+ * (布局统一 base scale,文档标注)。
+ */
+fun SpanStyle.toMcStyle(base: Style): Style {
+    var s = base
+    if (color != Color.Unspecified) {
+        s = s.withColor(TextColor.fromRgb(color.toRgb()))
+    }
+    val fontWeight = fontWeight
+    if (fontWeight != null && fontWeight.weight >= FontWeight.SemiBold.weight) {
+        s = s.withBold(true)
+    }
+    if (fontStyle == FontStyle.Italic) {
+        s = s.withItalic(true)
+    }
+    val decoration = textDecoration
+    if (decoration != null) {
+        if (decoration.contains(TextDecoration.Underline)) s = s.withUnderlined(true)
+        if (decoration.contains(TextDecoration.LineThrough)) s = s.withStrikethrough(true)
+    }
+    platformStyle?.let { ps ->
+        if (ps.obfuscated != null) s = s.withObfuscated(ps.obfuscated)
+        if (ps.shadowColor != null) s = s.withShadowColor(ps.shadowColor.toArgb())
+        if (ps.clickEvent != null) s = s.withClickEvent(ps.clickEvent)
+        if (ps.hoverEvent != null) s = s.withHoverEvent(ps.hoverEvent)
+        if (ps.insertion != null) s = s.withInsertion(ps.insertion)
+        if (ps.font != null) s = s.withFont(ps.font)
+    }
+    return s
+}
+
+/**
+ * 富文本(T.29):把 [AnnotatedString] 的 spanStyles(Compose 段样式)切分为
+ * **全覆盖**的 [StyleSegment] 列表 —— 段间无样式覆盖的文本用 [baseStyle],
+ * 满足渲染端 recordSegmentedTextDraw 的段覆盖要求(它只兜底行尾)。
+ * 优先级:同一区间被多个 span 覆盖时,后声明者优先(与官方注解合并语义一致)。
+ */
+fun AnnotatedString.toStyleSegments(baseStyle: Style): List<StyleSegment> {
+    if (spanStyles.isEmpty()) return listOf(StyleSegment(baseStyle, text))
+    // 边界点:0 + 全部 span 的 start/end + length(sortedSet 去重)
+    val bounds = sortedSetOf<Int>()
+    bounds.add(0)
+    bounds.add(text.length)
+    for (range in spanStyles) {
+        bounds.add(range.start.coerceIn(0, text.length))
+        bounds.add(range.end.coerceIn(0, text.length))
+    }
+    val points = bounds.toIntArray()
+    val result = ArrayList<StyleSegment>(points.size - 1)
+    for (i in 0 until points.size - 1) {
+        val start = points[i]
+        val end = points[i + 1]
+        if (end <= start) continue
+        var segStyle = baseStyle
+        for (range in spanStyles) {
+            if (range.start <= start && end <= range.end) {
+                segStyle = range.item.toMcStyle(baseStyle)
+            }
+        }
+        result.add(StyleSegment(segStyle, text.substring(start, end)))
+    }
+    return result
+}

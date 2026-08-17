@@ -26,6 +26,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.platform.StyleSegment
 import androidx.compose.ui.text.style.TextOverflow
 import net.minecraft.network.chat.Style
 
@@ -44,23 +45,30 @@ internal class SelectableTextAnnotatedStringElement(
     private val selectionController: SelectionController? = null,
     private val color: ColorProducer? = null,
     private val autoSize: TextAutoSize? = null,
+    // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖)
+    private val segments: List<StyleSegment> = emptyList(),
+    // 平台适配点(T.29):字号渲染缩放(18sp → 2x)
+    private val scale: Float = 1f,
 ) : ModifierNodeElement<SelectableTextAnnotatedStringNode>() {
 
     override fun create(): SelectableTextAnnotatedStringNode =
         SelectableTextAnnotatedStringNode(
-            text,
-            style,
-            fontFamilyResolver,
-            onTextLayout,
-            overflow,
-            softWrap,
-            maxLines,
-            minLines,
-            placeholders,
-            onPlaceholderLayout,
-            selectionController,
-            color,
-            autoSize,
+            text = text,
+            style = style,
+            fontFamilyResolver = fontFamilyResolver,
+            onTextLayout = onTextLayout,
+            overflow = overflow,
+            softWrap = softWrap,
+            maxLines = maxLines,
+            minLines = minLines,
+            placeholders = placeholders,
+            onPlaceholderLayout = onPlaceholderLayout,
+            selectionController = selectionController,
+            overrideColor = color,
+            autoSize = autoSize,
+            onShowTranslation = null,
+            segments = segments,
+            scale = scale,
         )
 
     override fun update(node: SelectableTextAnnotatedStringNode) {
@@ -78,6 +86,8 @@ internal class SelectableTextAnnotatedStringElement(
             selectionController = selectionController,
             color = color,
             autoSize = autoSize,
+            segments = segments,
+            scale = scale,
         )
     }
 
@@ -91,6 +101,8 @@ internal class SelectableTextAnnotatedStringElement(
         if (text != other.text) return false
         if (style != other.style) return false
         if (placeholders != other.placeholders) return false
+        if (segments != other.segments) return false
+        if (scale != other.scale) return false
 
         // these are equally unlikely to change
         if (fontFamilyResolver != other.fontFamilyResolver) return false
@@ -122,6 +134,8 @@ internal class SelectableTextAnnotatedStringElement(
         result = 31 * result + (selectionController?.hashCode() ?: 0)
         result = 31 * result + (autoSize?.hashCode() ?: 0)
         result = 31 * result + (color?.hashCode() ?: 0)
+        result = 31 * result + segments.hashCode()
+        result = 31 * result + scale.hashCode()
         return result
     }
 

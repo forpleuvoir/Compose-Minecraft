@@ -28,6 +28,7 @@ import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextLayoutInput
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.platform.StyleSegment
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -59,6 +60,11 @@ internal class MultiParagraphLayoutCache(
     private var minLines: Int = DefaultMinLines,
     private var placeholders: List<AnnotatedString.Range<Placeholder>>? = null,
     private var autoSize: TextAutoSize? = null,
+    // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖,渲染端逐段绘制)
+    private var segments: List<StyleSegment> = emptyList(),
+    // 平台适配点(T.29):字号渲染缩放(18sp → 2x)。AnnotatedString 版文本的
+    // fontSize 经 BasicText 组合端换算后一路透传到这里,布局与绘制共用。
+    private var scale: Float = 1f,
 ) {
     /** Convert min max lines into actual constraints */
     private var mMinLinesConstrainer: MinLinesConstrainer? = null
@@ -222,7 +228,7 @@ internal class MultiParagraphLayoutCache(
             return true
         }
 
-        val multiParagraph = layoutText(finalConstraints, layoutDirection, 1f)
+        val multiParagraph = layoutText(finalConstraints, layoutDirection, scale)
 
         layoutCache = textLayoutResult(layoutDirection, finalConstraints, multiParagraph)
         return true
@@ -305,6 +311,10 @@ internal class MultiParagraphLayoutCache(
         minLines: Int,
         placeholders: List<AnnotatedString.Range<Placeholder>>?,
         autoSize: TextAutoSize?,
+        // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖)
+        segments: List<StyleSegment> = emptyList(),
+        // 平台适配点(T.29):字号渲染缩放(18sp → 2x),见构造注释
+        scale: Float = 1f,
     ) {
         this.text = text
         this.style = style
@@ -315,6 +325,8 @@ internal class MultiParagraphLayoutCache(
         this.minLines = minLines
         this.placeholders = placeholders
         this.autoSize = autoSize
+        this.segments = segments
+        this.scale = scale
         recordHistory(LayoutCacheOperation.MarkDirtyNode)
         markDirty()
     }
@@ -346,6 +358,8 @@ internal class MultiParagraphLayoutCache(
                     fontFamilyResolver = fontFamilyResolver,
                     placeholders = placeholders.orEmpty(),
                     scale = scale,
+                    // 平台适配点(T.29 富文本):段列表透传到 intrinsics → Paragraph → 渲染端
+                    segments = segments,
                 )
             } else {
                 localIntrinsics
@@ -433,12 +447,12 @@ internal class MultiParagraphLayoutCache(
 
     /** The width at which increasing the width of the text no longer decreases the height. */
     fun maxIntrinsicWidth(layoutDirection: LayoutDirection): Int {
-        return setLayoutDirection(layoutDirection, 1f).maxIntrinsicWidth.ceilToIntPx()
+        return setLayoutDirection(layoutDirection, scale).maxIntrinsicWidth.ceilToIntPx()
     }
 
     /** The width for text if all soft wrap opportunities were taken. */
     fun minIntrinsicWidth(layoutDirection: LayoutDirection): Int {
-        return setLayoutDirection(layoutDirection, 1f).minIntrinsicWidth.ceilToIntPx()
+        return setLayoutDirection(layoutDirection, scale).minIntrinsicWidth.ceilToIntPx()
     }
 
     /** [MultiParagraph] specific implementation of [TextAutoSizeLayoutScope] */
@@ -484,6 +498,8 @@ internal class MultiParagraphLayoutCache(
                     fontFamilyResolver = this@MultiParagraphLayoutCache.fontFamilyResolver,
                     placeholders = placeholders.orEmpty(),
                     scale = scale,
+                    // 平台适配点(T.29 富文本):autoSize 探测布局同样携带段列表
+                    segments = this@MultiParagraphLayoutCache.segments,
                 )
             val multiParagraph =
                 MultiParagraph(

@@ -68,6 +68,7 @@ import kotlin.math.floor
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.flatten
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.obfuscatedRaw
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toPlatformData
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toStyleSegments
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.Style
 
@@ -168,6 +169,7 @@ fun BasicText(
                 color = color,
                 onShowTranslation = null,
                 autoSize = autoSize,
+                scale = scale,
             )
         } else {
             modifier then
@@ -262,6 +264,11 @@ fun BasicText(
  * you will instead want to use [androidx.compose.material.Text], which is a higher level Text
  * element that contains semantics and consumes style information from a theme.
  *
+ * 平台适配点(T.29 富文本):官方 CMP 此重载为 internal(AnnotatedString 是内部实现通道),
+ * 本平台提升为 public —— 富文本(spanStyles 逐段混排)的公开入口。段级支持
+ * color/bold/italic/decoration/PlatformSpanStyle(MC 特性),段间无样式覆盖文本走
+ * [style] 默认样式;字号(scale)逐段不同暂不支持(布局统一 base scale)。
+ *
  * @param text The text to be displayed.
  * @param modifier [Modifier] to apply to this layout node.
  * @param style Style configuration for the text such as color, font, line height etc.
@@ -288,7 +295,7 @@ fun BasicText(
  * @sample androidx.compose.foundation.samples.TextAutoSizeBasicTextSample
  */
 @Composable
-internal fun BasicText(
+fun BasicText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
     style: TextStyle = TextStyle.Default,
@@ -326,6 +333,14 @@ internal fun BasicText(
     val platformData = remember(style, density) { style.toPlatformData(density) }
     val mcStyle = platformData.mcStyle
 
+    // 平台适配点(T.29 富文本):spanStyles 段 → 全覆盖 StyleSegment(段样式叠加 mcStyle,
+    // 段间无样式覆盖的文本用 mcStyle;渲染端 recordSegmentedTextDraw 要求段全覆盖)
+    val segments = remember(text, style, density) { text.toStyleSegments(mcStyle) }
+
+    // 平台适配点(T.29):字号渲染缩放(18sp → 2x)。AnnotatedString 版走
+    // MultiParagraphLayoutCache,scale 必须透传到布局/绘制(否则字号恒 1x)
+    val textScale = platformData.scale
+
     if (!hasInlineContent && !hasLinks) {
         BackgroundTextMeasurement(
             text = text,
@@ -352,6 +367,8 @@ internal fun BasicText(
                     color = color,
                     onShowTranslation = null,
                     autoSize = autoSize,
+                    segments = segments,
+                    scale = textScale,
                 ),
             EmptyMeasurePolicy,
         )
@@ -383,6 +400,8 @@ internal fun BasicText(
                     }
             },
             autoSize = autoSize,
+            segments = segments,
+            scale = textScale,
         )
     }
 }
@@ -693,6 +712,10 @@ private fun Modifier.textModifier(
     color: ColorProducer?,
     onShowTranslation: ((TextAnnotatedStringNode.TextSubstitutionValue) -> Unit)?,
     autoSize: TextAutoSize?,
+    // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖)
+    segments: List<StyleSegment> = emptyList(),
+    // 平台适配点(T.29):字号渲染缩放(18sp → 2x),透传给布局/绘制
+    scale: Float = 1f,
 ): Modifier {
     if (selectionController == null) {
         val staticTextModifier =
@@ -711,6 +734,8 @@ private fun Modifier.textModifier(
                 color,
                 autoSize,
                 onShowTranslation,
+                segments,
+                scale,
             )
         return this then Modifier /* selection position */ then staticTextModifier
     } else {
@@ -729,6 +754,8 @@ private fun Modifier.textModifier(
                 selectionController,
                 color,
                 autoSize,
+                segments,
+                scale,
             )
         return this then selectionController.modifier then selectableTextModifier
     }
@@ -751,6 +778,10 @@ private fun LayoutWithLinksAndInlineContent(
     color: ColorProducer?,
     onShowTranslation: ((TextAnnotatedStringNode.TextSubstitutionValue) -> Unit)?,
     autoSize: TextAutoSize?,
+    // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖)
+    segments: List<StyleSegment> = emptyList(),
+    // 平台适配点(T.29):字号渲染缩放(18sp → 2x)
+    scale: Float = 1f,
 ) {
 
     val textScope =
@@ -814,6 +845,8 @@ private fun LayoutWithLinksAndInlineContent(
                 color = color,
                 onShowTranslation = onShowTranslation,
                 autoSize = autoSize,
+                segments = segments,
+                scale = scale,
             ),
         measurePolicy =
             if (!hasInlineContent) {

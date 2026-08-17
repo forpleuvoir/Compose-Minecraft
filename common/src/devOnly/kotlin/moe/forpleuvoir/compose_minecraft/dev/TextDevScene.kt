@@ -23,6 +23,8 @@ import androidx.compose.ui.text.ParagraphStyle
 import androidx.compose.ui.text.PlatformSpanStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
@@ -230,6 +232,75 @@ fun TextDevScene() {
                         ),
                     ),
                 ),
+            )
+
+            // ── ⑩ 富文本(AnnotatedString spanStyles 逐段混排,T.29)──
+            SectionLabel("⑩ 富文本(spanStyles 逐段混排:每段一行,便于核对样式)")
+            BasicText(
+                "spanStyles 段级样式叠加 base TextStyle;段间无样式文本走默认样式。字号(scale)逐段暂不支持。",
+                style = Style.EMPTY.withColor(Color(0xFF78909C)).toTextStyle(),
+            )
+            BasicText(
+                buildAnnotatedString {
+                    append("① 普通文本")
+                    append("\n")
+                    withStyle(SpanStyle(color = Color(0xFFFF5252))) { append("② 红色") }
+                    append("\n")
+                    withStyle(SpanStyle(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)) {
+                        append("③ 加粗")
+                    }
+                    append("\n")
+                    withStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) {
+                        append("④ 斜体")
+                    }
+                    append("\n")
+                    withStyle(SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)) {
+                        append("⑤ 下划线")
+                    }
+                    append("\n")
+                    withStyle(
+                        SpanStyle(
+                            textDecoration =
+                                androidx.compose.ui.text.style.TextDecoration.LineThrough,
+                        ),
+                    ) { append("⑥ 删除线") }
+                    append("\n")
+                    withStyle(
+                        SpanStyle(
+                            color = Color(0xFF69F0AE),
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            platformStyle = PlatformSpanStyle(obfuscated = true),
+                        ),
+                    ) { append("⑦ 绿粗乱码") }
+                    append("\n")
+                    withStyle(
+                        SpanStyle(
+                            platformStyle = PlatformSpanStyle(
+                                shadowColor = Color(0xFFB71C1C),
+                                clickEvent = ClickEvent.RunCommand("say rich text works"),
+                            ),
+                        ),
+                    ) { append("⑧ 红阴影点击") }
+                    append("\n")
+                    append("⑨ 尾部普通")
+                },
+                style = TextStyle(fontSize = 72.sp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF263238))
+                    .padding(6.dp),
+            )
+            BasicText(
+                "段间未覆盖文本示例(仅首尾两段有样式,中间为默认):",
+                style = Style.EMPTY.withColor(Color(0xFF78909C)).toTextStyle(),
+            )
+            BasicText(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = Color(0xFF40C4FF))) { append("[蓝]") }
+                    append("无样式中段 ")
+                    withStyle(SpanStyle(color = Color(0xFFFFB74D))) { append("[橙]") }
+                },
+                style = TextStyle(fontSize = 36.sp),
             )
         }
     }

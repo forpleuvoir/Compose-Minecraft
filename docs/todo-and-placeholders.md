@@ -83,8 +83,13 @@
 
 ### 2.1 `MinecraftParagraph.platform.kt`(`ui/text/platform/`)
 平台唯一文本后端(MC 字体度量,行高固定 9px):
-- ⚠️ **富文本/多样式**:`BasicText` API 已 TextStyle 化(T.28,见下),但 `AnnotatedString`
-  的 `SpanStyle` 段级差异化混排仍未实现(单样式,整段同色/同字号)。
+- ⚠️ **富文本段级混排**(T.29 ✅,`AnnotatedString` 版 `BasicText` 已提升 public):
+  `spanStyles` 经 `TextStyleMapper.toStyleSegments` 切分为**全覆盖** `StyleSegment`
+  (段样式增量叠加 base MC Style;段间无样式覆盖文本走默认样式;同区间多 span
+  后声明优先),经 `BasicText → textModifier → Element → Node → MultiParagraphLayoutCache
+  → MultiParagraphIntrinsics → ParagraphIntrinsics → MinecraftParagraph.recordSegmentedTextDraw`
+  逐段绘制。段级支持 color/bold/italic/decoration/PlatformSpanStyle(MC 特性);
+  **段级字号(scale)暂不支持**(布局统一 base scale);InlineContent 占位符仍未实现。
 - ❌ **BiDi / 排版方向**:固定 `ResolvedTextDirection.Ltr`(L193)。
 - ✅ **fontSize/字号**(T.19/T.28):`BasicText(style = TextStyle(fontSize = …))` 以 sp 驱动,
   **18sp = 2x 平台基准字号**(9sp = 1x 原生像素,16sp ≈ 1.78x 非整数缩放、非自然字号)
@@ -263,7 +268,10 @@
 4. ~~**顶点渐变 `drawVertices`**~~ —— ✅ 已完成(T.23,每顶点色 GPU 插值,Triangles/Strip/Fan + 索引展开)。
 5. ~~**独立渲染工作流**(像素 1:1 投影、像素级裁剪精度、与 HUD 共存)~~ —— ✅ 已完成(T.24,`ComposeGuiRenderer` + `GuiRendererMixin`,取代 `GuiRenderStateMixin`,详见 §6)。
 6. **Dialog + Popup 焦点层级**:移植 `Dialog`,打通多图层焦点/键盘分发。
-7. **富文本段级混排**:`BasicText(text: AnnotatedString)` 的 `spanStyles` 逐段映射为 `StyleSegment`(每段 SpanStyle → MC Style 经 T.28 Mapper;`Segments`/`recordSegmentedTextDraw` 机制已就绪),实现段内多 SpanStyle;再考虑 InlineContent 占位矩形。
+7. ~~**富文本段级混排**~~ —— ✅ 已完成(T.29,`AnnotatedString` 版 `BasicText` 提升 public,
+   `spanStyles` 经 `toStyleSegments` 全覆盖切分 + 段样式映射 → `recordSegmentedTextDraw`
+   逐段绘制;段级 color/bold/italic/decoration/PlatformSpanStyle 生效,段级字号暂不支持;
+   待做:InlineContent 占位矩形)。
 8. **输入补全**:双击、拖放(接 MC 或系统)、软键盘事件、可选的指针图标/系统光标。
 9. ~~**TextAutoSize**:二分搜索最大适配字号(默认 12–112sp)~~ —— ✅ 已完成(T.20,`MultiParagraphLayoutCache` 搜索 + 渲染 scale 驱动)。
 10. **无障碍**:screenReader 接入 MC 的 Toast/讲稿或跳过。
