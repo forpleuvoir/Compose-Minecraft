@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.isIdentity
 import androidx.compose.ui.graphics.prepareTransformationMatrix
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -622,6 +623,8 @@ class GraphicsLayer internal constructor() {
                 val r = outline.rect
                 canvas.recordShadow(
                     r.left, r.top, r.right, r.bottom, elevation, offsetX, offsetY, 0f,
+                    ambientColorArgb = ambientShadowColor.toArgb(),
+                    spotColorArgb = spotShadowColor.toArgb(),
                 )
             }
             is Outline.Rounded -> {
@@ -630,6 +633,8 @@ class GraphicsLayer internal constructor() {
                 canvas.recordShadow(
                     rr.left, rr.top, rr.right, rr.bottom, elevation, offsetX, offsetY,
                     rr.topLeftCornerRadius.x,
+                    ambientColorArgb = ambientShadowColor.toArgb(),
+                    spotColorArgb = spotShadowColor.toArgb(),
                 )
             }
             is Outline.Generic -> {
@@ -640,6 +645,8 @@ class GraphicsLayer internal constructor() {
                     canvas.recordShadow(
                         0f, 0f, 0f, 0f, elevation, offsetX, offsetY, 0f,
                         pathSegments = path.segments(),
+                        ambientColorArgb = ambientShadowColor.toArgb(),
+                        spotColorArgb = spotShadowColor.toArgb(),
                     )
                 }
             }

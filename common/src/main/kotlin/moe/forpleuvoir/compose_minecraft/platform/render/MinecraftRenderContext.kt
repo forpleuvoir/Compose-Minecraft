@@ -208,6 +208,8 @@ internal class MinecraftRenderContext {
                         offsetY = command.offsetY,
                         cornerRadius = command.cornerRadius,
                         pathSegments = command.pathSegments,
+                        ambientColorArgb = command.ambientColorArgb,
+                        spotColorArgb = command.spotColorArgb,
                         scissor = scissor?.toScreenRectangle(),
                     )
                 }

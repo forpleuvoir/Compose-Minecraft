@@ -89,8 +89,9 @@ internal object MinecraftShadowRenderer {
 
     /**
      * 渲染一条阴影命令:形状(矩形/圆角矩形/Path)生成两帧网格 ——
-     * ambient(无偏移)+ spot(偏移 [offsetX, offsetY]),各提交一个
-     * [GuiShadowRenderState](黑色 + 各自阴影 alpha)。
+     * ambient(无偏移,颜色 [ambientColorArgb])+ spot(偏移 [offsetX, offsetY],
+     * 颜色 [spotColorArgb]),各提交一个 [GuiShadowRenderState](RGB = 阴影颜色,
+     * alpha = 颜色 alpha × 各自阴影强度;默认全黑 = 官方默认行为)。
      */
     fun renderShadow(
         renderState: GuiRenderState,
@@ -100,6 +101,8 @@ internal object MinecraftShadowRenderer {
         offsetX: Float, offsetY: Float,
         cornerRadius: Float,
         pathSegments: List<MinecraftPath.PathSegmentData>?,
+        ambientColorArgb: Int,
+        spotColorArgb: Int,
         scissor: ScreenRectangle?,
     ) {
         if (elevation <= 0f) return
@@ -127,10 +130,12 @@ internal object MinecraftShadowRenderer {
 
         // ambient:无偏移(环境光,均匀包围)
         emit(renderState, matrix, pts, minX, minY, maxX, maxY,
-            0f, 0f, blurPx, norm, AMBIENT_ALPHA * fade, kind, segHash, scissor)
+            0f, 0f, blurPx, norm, AMBIENT_ALPHA * fade, ambientColorArgb,
+            kind, segHash, scissor)
         // spot:投影偏移(点光方向)
         emit(renderState, matrix, pts, minX, minY, maxX, maxY,
-            offsetX, offsetY, blurPx, norm, SPOT_ALPHA * fade, kind, segHash, scissor)
+            offsetX, offsetY, blurPx, norm, SPOT_ALPHA * fade, spotColorArgb,
+            kind, segHash, scissor)
     }
 
     // ── 单阴影元素 ───────────────────────────────────────────────────────
@@ -143,6 +148,7 @@ internal object MinecraftShadowRenderer {
         offX: Float, offY: Float,
         blurPx: Float, norm: Float,
         alpha: Float,
+        colorArgb: Int,
         kind: Int, segHash: Int,
         scissor: ScreenRectangle?,
     ) {
@@ -169,10 +175,15 @@ internal object MinecraftShadowRenderer {
         val clipped = scissor?.intersection(bounds) ?: bounds
         if (clipped.width <= 0 || clipped.height <= 0) return
 
+        // 最终阴影 alpha = 颜色 alpha × Skia 阴影强度(0.039|0.19 × fade),
+        // RGB = 颜色 RGB(Skia 语义:阴影颜色调制,默认黑 = 原行为)。
+        val colorAlpha = ((colorArgb ushr 24) and 0xFF) / 255f
+        val finalAlpha = (colorAlpha * alpha * 255f).toInt().coerceIn(0, 255)
+
         renderState.addGuiElement(
             GuiShadowRenderState(
                 pose = Matrix3x2f(matrix[0], matrix[1], matrix[4], matrix[5], matrix[12], matrix[13]),
-                shadowColorArgb = (alpha * 255f).toInt().coerceIn(0, 255) shl 24,
+                shadowColorArgb = (colorArgb and 0xFFFFFF) or (finalAlpha shl 24),
                 scissor = scissor,
                 vertices = vertices,
                 elementBounds = clipped,

@@ -14,8 +14,9 @@ import org.joml.Matrix3x2fc
  *   distNorm = 到阴影形状真实轮廓的有符号距离 ÷ (σ√2)(片元插值),
  *   gui_shadow 片元着色器用高斯模糊解析解 erfc(distNorm)/2 生成 alpha
  *   (参照 Skia SkShadowUtils:σ = 0.667·e,无离屏、无 CPU 模糊);
- * - 颜色:黑色 + 阴影 alpha(ambient 0.039 / spot 0.19 × (1-e/600)),
- *   由 [shadowColorArgb] 统一给定(每个阴影 = ambient + spot 两个元素);
+ * - 颜色:RGB = 阴影颜色(默认黑),alpha = 颜色 alpha × 阴影强度
+ *   (ambient 0.039 / spot 0.19 × (1-e/600)),由 [shadowColorArgb] 统一给定
+ *   (每个阴影 = ambient + spot 两个元素,颜色各自携带,T.18);
  * - 网格由 [GeometryTessellator.shadowFill] 生成并 LRU 缓存
  *   ([MinecraftShadowRenderer]),形状不变时每帧零 CPU;
  * - bounds:本体(外扩模糊带)经 pose 变换后与 scissor 求交 —— 供

@@ -11,9 +11,10 @@
 // 参数语义完全参照 Skia SkShadowUtils:
 //     σ = elevation · lightRadius / lightHeight / 2(默认 800/600 → 0.667·e)
 //     alpha = kAmbientAlpha(0.039) | kSpotAlpha(0.19) · (1 - e/lightHeight)
-// 每个阴影由两个元素组成:ambient(无偏移)+ spot(偏移),颜色均为黑色,
-// alpha 通道 = 各自阴影 alpha;顶点颜色 RGB = 0(黑色),混合为普通
-// TRANSLUCENT alpha 混合。
+// 每个阴影由两个元素组成:ambient(无偏移)+ spot(偏移),颜色由顶点色
+// RGB 给定(默认黑),alpha 通道 = 各自阴影 alpha × 距离场(片元端);
+// 最终 alpha = 颜色 alpha × 阴影强度 × 距离场(CPU 端已把颜色 alpha
+// 乘进顶点色 alpha),混合为普通 TRANSLUCENT alpha 混合。
 //
 // erf 近似:Abramowitz-Stegun 7.1.26(最大误差 1.5e-7),GLSL 330 无内置 erf。
 // 调试:把 DEBUG_DISTANCE 改为 1,输出距离灰度图(0 黑 / 0.5 轮廓 / 1 白)。
@@ -54,5 +55,6 @@ void main() {
     if (alpha <= 0.004) {
         discard;
     }
-    fragColor = vec4(0.0, 0.0, 0.0, vertexColor.a * alpha) * ColorModulator;
+    // RGB = 顶点色(阴影颜色,默认黑);alpha = 阴影强度 × 距离场模糊
+    fragColor = vec4(vertexColor.rgb, vertexColor.a * alpha) * ColorModulator;
 }

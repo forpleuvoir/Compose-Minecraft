@@ -792,6 +792,10 @@ internal class MinecraftCanvas internal constructor(
         val cornerRadius: Float,
         /** Path 轮廓段(非空 = Path 阴影,left/top/right/bottom 忽略) */
         val pathSegments: List<MinecraftPath.PathSegmentData>? = null,
+        /** ambient 阴影颜色(0xAARRGGBB,T.18;默认黑 = 官方默认) */
+        val ambientColorArgb: Int = 0xFF000000.toInt(),
+        /** spot 阴影颜色(0xAARRGGBB,T.18;默认黑 = 官方默认) */
+        val spotColorArgb: Int = 0xFF000000.toInt(),
     ) : DrawCommand {
         override val paint: PaintSnapshot? = null
     }
@@ -861,6 +865,8 @@ internal class MinecraftCanvas internal constructor(
         offsetY: Float,
         cornerRadius: Float,
         pathSegments: List<MinecraftPath.PathSegmentData>? = null,
+        ambientColorArgb: Int = 0xFF000000.toInt(),
+        spotColorArgb: Int = 0xFF000000.toInt(),
     ) {
         drawCommands.add(
             DrawShadowCommand(
@@ -875,6 +881,8 @@ internal class MinecraftCanvas internal constructor(
                 offsetY = offsetY,
                 cornerRadius = cornerRadius,
                 pathSegments = pathSegments,
+                ambientColorArgb = ambientColorArgb,
+                spotColorArgb = spotColorArgb,
             )
         )
     }
@@ -1074,6 +1082,7 @@ internal class MinecraftCanvas internal constructor(
                     command.left, command.top, command.right, command.bottom,
                     command.elevation, command.offsetX, command.offsetY, command.cornerRadius,
                     command.pathSegments,
+                    command.ambientColorArgb, command.spotColorArgb,
                 )
             }
             restore()
@@ -1227,6 +1236,7 @@ internal class MinecraftCanvas internal constructor(
             is DrawShadowCommand -> DrawShadowCommand(
                 combine(matrix), clip, left, top, right, bottom,
                 elevation, offsetX, offsetY, cornerRadius, pathSegments,
+                ambientColorArgb, spotColorArgb,
             )
             is DrawImageRectCommand -> null
         }

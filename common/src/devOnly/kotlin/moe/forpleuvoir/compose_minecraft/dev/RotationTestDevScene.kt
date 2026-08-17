@@ -168,6 +168,26 @@ fun RotationTestDevScene() {
                 modifier = Modifier.padding(top = 6.dp),
                 style = Style.EMPTY.withColor(Color(0xFF90A4AE)),
             )
+            // ── 3b. 阴影颜色演示(T.18):Modifier.shadow 的 ambientColor/spotColor ──
+            // ambient(无偏移)= 蓝色、spot(投影偏移)= 橙红色;两张网格颜色各自生效。
+            // 与 3a 的黑阴影对比,底色同浅色底板。
+            Box(
+                Modifier
+                    .padding(top = 16.dp)
+                    .size(96.dp, 36.dp)
+                    .shadow(
+                        4.dp,
+                        RoundedCornerShape(4.dp),
+                        ambientColor = Color(0xFF1976D2),
+                        spotColor = Color(0xFFE64A19),
+                    )
+                    .background(Color(0xFFFFE0B2), RoundedCornerShape(4.dp))
+            )
+            BasicText(
+                "阴影颜色:ambient 蓝(无偏移)+ spot 橙红(投影偏移)",
+                modifier = Modifier.padding(top = 6.dp),
+                style = Style.EMPTY.withColor(Color(0xFF90A4AE)),
+            )
             BasicText(
                 "光源:${lightNames[lightIndex]}(点击切换 LocalShadowLight)",
                 modifier = Modifier
