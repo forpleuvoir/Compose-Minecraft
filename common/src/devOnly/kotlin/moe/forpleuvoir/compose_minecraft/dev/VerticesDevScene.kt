@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.TextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
 
 /**
@@ -50,12 +51,12 @@ internal fun VerticesDevScene() {
         ) {
             BasicText(
                 text = "顶点渐变测试 (T.23)",
-                fontSize = 22.sp,
+                style = TextStyle(fontSize = 22.sp),
                 color = { Color(0xFF1A1A1A) },
             )
             BasicText(
                 text = "每顶点色经 GPU 插值;①③⑥ 同色区应平滑过渡,⑤ 重叠区 = 品红亮化。请按编号报告。",
-                fontSize = 12.sp,
+                style = TextStyle(fontSize = 12.sp),
                 color = { Color(0xFF455A64) },
             )
             DevMenuButton(
@@ -231,7 +232,7 @@ private fun sinF(a: Float): Float = kotlin.math.sin(a.toDouble()).toFloat()
 private fun SectionLabel(text: String) {
     BasicText(
         text = text,
-        fontSize = 13.sp,
+        style = TextStyle(fontSize = 13.sp),
         color = { Color(0xFF1A1A1A) },
     )
 }

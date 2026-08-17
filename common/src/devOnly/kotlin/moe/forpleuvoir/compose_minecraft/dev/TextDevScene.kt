@@ -19,9 +19,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.ParagraphStyle
+import androidx.compose.ui.text.PlatformSpanStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
+import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.Component
+import net.minecraft.network.chat.HoverEvent
 import net.minecraft.network.chat.Style
 
 /**
@@ -60,12 +67,12 @@ fun TextDevScene() {
 
             BasicText(
                 "文本字号测试 (BasicText fontSize / sp)",
-                style = Style.EMPTY.withColor(Color.White).withBold(true),
+                style = Style.EMPTY.withColor(Color.White).withBold(true).toTextStyle(),
             )
             BasicText(
                 "T.19:fontSize(sp) 驱动字号,16sp = 原样 1 倍(与旧 scale=1 渲染一致);\n" +
                     "仅支持 sp 单位(em 抛异常)。布局尺寸随缩放联动。",
-                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
             )
 
             // ── ① 字号阶梯 ──
@@ -80,11 +87,10 @@ fun TextDevScene() {
                 ) {
                     BasicText(
                         "${s.value.toInt()}sp",
-                        fontSize = 10.sp,
-                        style = Style.EMPTY.withColor(Color(0xFF90A4AE)),
+                        style = Style.EMPTY.withColor(Color(0xFF90A4AE)).toTextStyle().merge(TextStyle(fontSize = 10.sp)),
                         modifier = Modifier.width(52.dp),
                     )
-                    BasicText("Minecraft 文本 Aa", fontSize = s)
+                    BasicText("Minecraft 文本 Aa", style = TextStyle(fontSize = s))
                 }
             }
 
@@ -96,16 +102,16 @@ fun TextDevScene() {
                     .background(Color(0xFF263238))
                     .padding(6.dp)
             ) {
-                BasicText("8sp 行", fontSize = 8.sp, modifier = Modifier.padding(end = 12.dp))
-                BasicText("16sp 行", fontSize = 16.sp, modifier = Modifier.padding(end = 12.dp))
-                BasicText("32sp 行", fontSize = 32.sp)
+                BasicText("8sp 行", style = TextStyle(fontSize = 8.sp), modifier = Modifier.padding(end = 12.dp))
+                BasicText("16sp 行", style = TextStyle(fontSize = 16.sp), modifier = Modifier.padding(end = 12.dp))
+                BasicText("32sp 行", style = TextStyle(fontSize = 32.sp))
             }
 
             // ── ③ 窄宽换行 ──
             SectionLabel("③ 窄宽换行(160dp 内 32sp,布局宽度按 1/scale 换算)")
             BasicText(
                 "窄宽度换行测试:32sp 大字号在 160dp 宽度内自动换行,布局宽度按 1/scale 换算。",
-                fontSize = 32.sp,
+                style = TextStyle(fontSize = 32.sp),
                 modifier = Modifier
                     .width(160.dp)
                     .background(Color(0xFF263238))
@@ -123,38 +129,39 @@ fun TextDevScene() {
 
             // ── ⑤ 样式叠加 ──
             SectionLabel("⑤ 样式叠加(全部 24sp)")
-            BasicText("加粗 + 24sp", fontSize = 24.sp, style = Style.EMPTY.withBold(true))
-            BasicText("斜体 + 24sp", fontSize = 24.sp, style = Style.EMPTY.withItalic(true))
-            BasicText("下划线 + 24sp", fontSize = 24.sp, style = Style.EMPTY.withUnderlined(true))
+            BasicText("加粗 + 24sp", style = Style.EMPTY.withBold(true).toTextStyle().merge(TextStyle(fontSize = 24.sp)))
+            BasicText("斜体 + 24sp", style = Style.EMPTY.withItalic(true).toTextStyle().merge(TextStyle(fontSize = 24.sp)))
+            BasicText("下划线 + 24sp", style = Style.EMPTY.withUnderlined(true).toTextStyle().merge(TextStyle(fontSize = 24.sp)))
             BasicText(
                 "粗体 + 斜体 + 下划线 + 红色 + 24sp",
-                fontSize = 24.sp,
                 style = Style.EMPTY
                     .withBold(true)
                     .withItalic(true)
                     .withUnderlined(true)
-                    .withColor(Color(0xFFFF7043)),
+                    .withColor(Color(0xFFFF7043))
+                    .toTextStyle()
+                    .merge(TextStyle(fontSize = 24.sp)),
             )
 
             // ── ⑥ 中英混排 ──
             SectionLabel("⑥ 中英混排(32sp,MC 字体 CJK 贴图随矩阵缩放)")
             BasicText(
                 "中文混排 Mix ABC 123 —— 32sp",
-                fontSize = 32.sp,
+                style = TextStyle(fontSize = 32.sp),
             )
 
             // ── ⑦ 对照参考 ──
             SectionLabel("⑦ 对照参考(默认 16sp,与旧 scale=1 渲染一致)")
             BasicText(
                 "默认 16sp:与旧 scale=1 渲染一致(对照参考,本行即默认字号)",
-                style = Style.EMPTY.withColor(Color(0xFF78909C)),
+                style = Style.EMPTY.withColor(Color(0xFF78909C)).toTextStyle(),
             )
 
             // ── ⑧ TextAutoSize ──
             SectionLabel("⑧ TextAutoSize(自动缩放:二分搜索最大适配字号)")
             BasicText(
                 "220x100 容器内短文本:应放大填满;140x44 容器内长文本:应缩小避免溢出。",
-                style = Style.EMPTY.withColor(Color(0xFF78909C)),
+                style = Style.EMPTY.withColor(Color(0xFF78909C)).toTextStyle(),
             )
             Box(
                 Modifier
@@ -183,6 +190,47 @@ fun TextDevScene() {
                     autoSize = TextAutoSize.StepBased(),
                 )
             }
+
+            // ── ⑨ MC 渲染特性(PlatformSpanStyle 承载,T.28)──
+            SectionLabel("⑨ MC 渲染特性(PlatformSpanStyle:obfuscated/shadowColor/clickEvent/hoverEvent/insertion/font)")
+            BasicText(
+                "Obfuscated 乱码(闪烁字体):",
+                style = Style.EMPTY.withColor(Color(0xFF78909C)).toTextStyle(),
+            )
+            BasicText(
+                "THIS IS OBFUSCATED",
+                style = TextStyle.Default.merge(
+                    SpanStyle(platformStyle = PlatformSpanStyle(obfuscated = true)),
+                ),
+            )
+            BasicText(
+                "ShadowColor 阴影文字:",
+                style = Style.EMPTY.withColor(Color(0xFF78909C)).toTextStyle(),
+            )
+            BasicText(
+                "带阴影的文本",
+                style = TextStyle.Default.merge(
+                    SpanStyle(
+                        platformStyle = PlatformSpanStyle(shadowColor = Color(0x80000000)),
+                    ),
+                ),
+            )
+            BasicText(
+                "ClickEvent/HoverEvent/Insertion(构造承载,渲染同普通文本):",
+                style = Style.EMPTY.withColor(Color(0xFF78909C)).toTextStyle(),
+            )
+            BasicText(
+                "点击命令 / 悬停提示 / 插入文本",
+                style = TextStyle.Default.merge(
+                    SpanStyle(
+                        platformStyle = PlatformSpanStyle(
+                            clickEvent = ClickEvent.RunCommand("say hello from compose"),
+                            hoverEvent = HoverEvent.ShowText(Component.literal("MC 原版悬停提示")),
+                            insertion = "inserted-text",
+                        ),
+                    ),
+                ),
+            )
         }
     }
 }
@@ -192,7 +240,7 @@ fun TextDevScene() {
 private fun SectionLabel(text: String) {
     BasicText(
         text,
-        style = Style.EMPTY.withColor(Color(0xFF80CBC4)).withBold(true),
+        style = Style.EMPTY.withColor(Color(0xFF80CBC4)).withBold(true).toTextStyle(),
         modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
     )
 }

@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
@@ -36,7 +37,7 @@ fun ParentDevSceneContent(
         Column(Modifier.padding(16.dp)) {
             BasicText(
                 "父屏幕能力测试 (ParentScreen)",
-                style = Style.EMPTY.withColor(Color.White).withBold(true),
+                style = Style.EMPTY.withColor(Color.White).withBold(true).toTextStyle(),
             )
             BasicText(
                 if (renderParent) {
@@ -44,7 +45,7 @@ fun ParentDevSceneContent(
                 } else {
                     "渲染父屏:关 —— 下方无父屏内容"
                 },
-                style = Style.EMPTY.withColor(Color(0xFF90A4AE)),
+                style = Style.EMPTY.withColor(Color(0xFF90A4AE)).toTextStyle(),
             )
             DevMenuButton(
                 title = "切换:渲染父屏 (Toggle renderParentScreen)",

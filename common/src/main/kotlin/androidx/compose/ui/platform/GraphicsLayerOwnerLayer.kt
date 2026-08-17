@@ -420,10 +420,3 @@ internal class GraphicsLayerOwnerLayer(
         isIdentity = matrixCache.isIdentity()
     }
 }
-
-// Minecraft 平台:不实现 3D 光照/阴影(阶段 C 不渲染阴影),保持空实现以贴近上游调用点。
-internal fun GraphicsContext.setLightingInfo(
-    canvasOffset: Offset,
-    density: Density,
-    containerSize: IntSize
-) = Unit

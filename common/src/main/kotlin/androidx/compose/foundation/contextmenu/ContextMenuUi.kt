@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright 2024 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
@@ -73,7 +74,7 @@ internal object ContextMenuSpec {
 
     // 平台适配点:fontSize/lineHeight/letterSpacing 排版参数随 TextStyle 移除(MC 固定 9px 行高),
     // 仅保留颜色;textAlign 由布局对齐承担
-    fun textStyle(color: Color): Style = Style.EMPTY.withColor(color)
+    fun textStyle(color: Color): TextStyle = TextStyle(color = color)
 }
 
 private val DefaultPopupProperties = PopupProperties(focusable = true)

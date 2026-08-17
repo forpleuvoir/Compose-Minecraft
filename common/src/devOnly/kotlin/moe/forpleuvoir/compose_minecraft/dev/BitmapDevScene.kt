@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 import kotlin.math.cos
@@ -87,12 +88,12 @@ fun BitmapDevScene() {
 
             BasicText(
                 "图层快照测试 (GraphicsLayer.toImageBitmap)",
-                style = Style.EMPTY.withColor(Color.White).withBold(true),
+                style = Style.EMPTY.withColor(Color.White).withBold(true).toTextStyle(),
             )
             BasicText(
                 "上方:图层内容(record 录制,GuiRenderState 回放);下方:CPU 光栅化快照。\n" +
                     "文本与阴影命令快照中不支持(缺失)。",
-                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
             )
 
             // ── 图层(record 每帧录制,与下方快照同一内容)──
@@ -125,7 +126,7 @@ fun BitmapDevScene() {
             if (snap != null) {
                 BasicText(
                     "快照 ${snap.width}x${snap.height}",
-                    style = Style.EMPTY.withColor(Color(0xFF90CAF9)),
+                    style = Style.EMPTY.withColor(Color(0xFF90CAF9)).toTextStyle(),
                 )
                 Canvas(
                     Modifier
@@ -137,7 +138,7 @@ fun BitmapDevScene() {
                 }
                 BasicText(
                     "2x 放大(默认最近邻采样,像素格锐利)",
-                    style = Style.EMPTY.withColor(Color(0xFF90CAF9)),
+                    style = Style.EMPTY.withColor(Color(0xFF90CAF9)).toTextStyle(),
                 )
                 Canvas(
                     Modifier
@@ -150,7 +151,7 @@ fun BitmapDevScene() {
             } else {
                 BasicText(
                     "尚未生成快照",
-                    style = Style.EMPTY.withColor(Color(0xFF78909C)),
+                    style = Style.EMPTY.withColor(Color(0xFF78909C)).toTextStyle(),
                 )
             }
         }

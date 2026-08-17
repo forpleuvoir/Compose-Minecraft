@@ -44,11 +44,15 @@ Agent 的 IDE 工具集中以 `mcp__idea__*` 前缀暴露。**所有代码阅读
 - **场景密度可配置(T.26)**:默认 1f(1dp == 1 像素,场景尺寸 = 窗口像素,T.24
   1:1 渲染),经 `ComposeScreen.open(density = …)` / 构造传入,>1f 放大 UI
   (官方桌面 density 语义,文本字号同步放大);
-- **文字**:MC Font 度量统一,行高 9px 固定;`BasicText(fontSize)` 以 sp 驱动字号
-  (T.19,**16sp = 原样 1 倍**,经渲染矩阵缩放,仅支持 sp;18sp = 2x 为平台基准字号,
-  9sp = 1x 原生像素);`BasicText(autoSize=…)` 自动缩放(T.20,二分搜索最大适配字号,
-  默认 12–112sp);`BasicTextField(fontSize)` 输入框字号(T.26,默认 18sp = 2x,
-  光标/选区/命中坐标随 scale 换算);
+- **文字**:MC Font 度量统一,行高 9px 固定;`BasicText(style: TextStyle)` 以 Compose
+  [TextStyle] 为 API(T.28)—— 语义经 `TextStyleMapper.toPlatformData` 映射到平台:
+  color/alpha/fontSize(**sp 经渲染矩阵缩放,18sp = 2x 平台基准字号,9sp = 1x 原生像素**,
+  仅 sp)/fontWeight(≥600 加粗)/fontStyle(斜体)/textDecoration(下划线/删除线)生效;
+  [PlatformSpanStyle] 承载 MC 原版 Style 全部渲染特性(obfuscated/shadowColor/
+  clickEvent/hoverEvent/insertion/font);letterSpacing/background/lineHeight/textAlign
+  等平台无法表达字段文档化忽略([PlatformTextData.ignored]);`BasicText(autoSize=…)`
+  自动缩放(T.20,二分搜索最大适配字号,默认 12–112sp);`BasicTextField(fontSize)` 输入框
+  字号(T.26,默认 18sp = 2x,光标/选区/命中坐标随 scale 换算);
 - **发布 JAR 内嵌完整 Compose 运行时**(约 4000+ 个 `androidx.compose.*` 类),
   消费者无需引入任何 Compose/Skiko 依赖。
 

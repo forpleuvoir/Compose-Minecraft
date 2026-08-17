@@ -84,6 +84,8 @@ internal class TextStringSimpleNode(
     private var segments: List<StyleSegment> = emptyList(),
     /** 平台适配点(T.10):文本缩放;1f = 原样。 */
     private var scale: Float = 1f,
+    /** 平台适配点(T.28):文本透明度(TextStyle.alpha,默认 1f),绘制时合成进颜色。 */
+    private var textAlpha: Float = 1f,
 ) : Modifier.Node(), LayoutModifierNode, DrawModifierNode, SemanticsModifierNode {
     override val shouldAutoInvalidate: Boolean
         get() = false
@@ -177,7 +179,7 @@ internal class TextStringSimpleNode(
         return textSubstitution?.takeIf { it.isShowingSubstitution }?.layoutCache ?: layoutCache
     }
 
-    fun updateDraw(color: ColorProducer?, style: Style): Boolean {
+    fun updateDraw(color: ColorProducer?, style: Style, alpha: Float = 1f): Boolean {
         var changed = false
         if (color != this.overrideColor) {
             changed = true
@@ -185,6 +187,8 @@ internal class TextStringSimpleNode(
         overrideColor = color
         // 平台适配点:MC Style 无布局/绘制属性分离,整样式参与比较
         changed = changed || style != this.style
+        changed = changed || alpha != this.textAlpha
+        textAlpha = alpha
         return changed
     }
 
@@ -512,7 +516,9 @@ internal class TextStringSimpleNode(
                 val color =
                     if (overrideColorVal.isSpecified) overrideColorVal
                     else drawStyle.color?.toColor() ?: Color.White
-                localParagraph.paint(canvas = canvas, color = color)
+                // 平台适配点(T.28):TextStyle.alpha 合成进绘制色(MinecraftParagraph.paint
+                // 经 recordTextDraw alpha 参数消费;MC TextColor 无 alpha 通道)
+                localParagraph.paint(canvas = canvas, color = color.copy(alpha = color.alpha * textAlpha))
             } finally {
                 if (willClip) {
                     canvas.restore()

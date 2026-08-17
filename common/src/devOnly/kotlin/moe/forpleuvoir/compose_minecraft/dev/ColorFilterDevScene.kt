@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
@@ -97,9 +98,9 @@ private fun FilterBlock(
     filter: ColorFilter?,
     extra: (DrawScope.() -> Unit)? = null,
 ) {
-    BasicText(title, style = Style.EMPTY.withColor(Color(0xFF1A1A1A)).withBold(true))
+    BasicText(title, style = Style.EMPTY.withColor(Color(0xFF1A1A1A)).withBold(true).toTextStyle())
     if (note.isNotEmpty()) {
-        BasicText(note, style = Style.EMPTY.withColor(Color(0xFF546E7A)))
+        BasicText(note, style = Style.EMPTY.withColor(Color(0xFF546E7A)).toTextStyle())
     }
     Canvas(
         Modifier
@@ -111,7 +112,7 @@ private fun FilterBlock(
         colorStripFiltered(52f, filter)
         extra?.invoke(this)
     }
-    BasicText("", style = Style.EMPTY.withColor(Color(0xFF90A4AE)))
+    BasicText("", style = Style.EMPTY.withColor(Color(0xFF90A4AE)).toTextStyle())
 }
 
 @Composable
@@ -145,12 +146,12 @@ fun ColorFilterDevScene() {
 
             BasicText(
                 "颜色滤镜测试 (ColorFilter, T.21)",
-                style = Style.EMPTY.withColor(Color(0xFF1A1A1A)).withBold(true),
+                style = Style.EMPTY.withColor(Color(0xFF1A1A1A)).withBold(true).toTextStyle(),
             )
             BasicText(
                 "每块:上行原始 8 色条带(红/绿/蓝/黄/青/品红/白/灰),下行滤镜后。\n" +
                     "blendMode 仅 SrcOver 生效(draw 级限制,见 docs §1.6)。",
-                style = Style.EMPTY.withColor(Color(0xFF546E7A)),
+                style = Style.EMPTY.withColor(Color(0xFF546E7A)).toTextStyle(),
             )
 
             // ① 对照(无滤镜)
@@ -186,11 +187,11 @@ fun ColorFilterDevScene() {
             // ⑧ graphicsLayer 级 colorFilter(图层整体反相)
             BasicText(
                 "⑧ graphicsLayer 级反相(图层整体)",
-                style = Style.EMPTY.withColor(Color(0xFF1A1A1A)).withBold(true),
+                style = Style.EMPTY.withColor(Color(0xFF1A1A1A)).withBold(true).toTextStyle(),
             )
             BasicText(
                 "图层内容(条带+圆)整体反相;同滤镜在 2D 回放(replayFrom)路径生效",
-                style = Style.EMPTY.withColor(Color(0xFF546E7A)),
+                style = Style.EMPTY.withColor(Color(0xFF546E7A)).toTextStyle(),
             )
             Canvas(
                 Modifier
@@ -212,11 +213,11 @@ fun ColorFilterDevScene() {
             // ⑨ 三角化路径(圆/圆角矩形)带滤镜
             BasicText(
                 "⑨ 三角化几何(圆/圆角矩形)带滤镜",
-                style = Style.EMPTY.withColor(Color(0xFF1A1A1A)).withBold(true),
+                style = Style.EMPTY.withColor(Color(0xFF1A1A1A)).withBold(true).toTextStyle(),
             )
             BasicText(
                 "左边 tint 红 SrcIn(应全红),右边反相(应补色);走 addTriangles 路径",
-                style = Style.EMPTY.withColor(Color(0xFF546E7A)),
+                style = Style.EMPTY.withColor(Color(0xFF546E7A)).toTextStyle(),
             )
             Canvas(
                 Modifier

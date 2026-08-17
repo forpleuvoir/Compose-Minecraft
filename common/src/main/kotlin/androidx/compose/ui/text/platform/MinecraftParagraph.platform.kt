@@ -514,6 +514,10 @@ internal class MinecraftParagraph(
         // T.1/T.2:记录完整 MC 样式快照;paint 传入的 color 覆盖样式色
         // (shadow/textDecoration 等 Compose 绘制参数已被 MC Style 能力取代,第一版忽略)
         val style = intrinsics.style.withColor(color.copy(alpha = color.alpha * alpha))
+        // 平台适配点(T.28):文本透明度 —— color.alpha(含 TextStyle.alpha 合成)与
+        // 绘制 alpha 相乘,经 recordTextDraw 的 alpha 参数传递(渲染端 text() 消费
+        // command.alpha;MC TextColor 无 alpha 通道,不走样式色)
+        val effectiveAlpha = color.alpha * alpha
         // 平台适配点(T.10):文本缩放 —— 对画布施加缩放,recordTextDraw 记录缩放矩阵,
         // 渲染端 pose 变换字形顶点(MC GUI 渲染为 GPU 矩阵变换)。
         if (scale != 1f) {
@@ -539,9 +543,10 @@ internal class MinecraftParagraph(
                             x = 0f,
                             y = i * layout.lineHeight,
                             style = style,
+                            alpha = effectiveAlpha,
                         )
                     } else {
-                        recordSegmentedTextDraw(mc, drawText, start, i, segments, style)
+                        recordSegmentedTextDraw(mc, drawText, start, i, segments, style, effectiveAlpha)
                     }
                 }
             }
@@ -560,6 +565,7 @@ internal class MinecraftParagraph(
         row: Int,
         segments: List<StyleSegment>,
         fallbackStyle: Style,
+        alpha: Float,
     ) {
         val rowEnd = rowStart + drawText.length
         var cursor = rowStart
@@ -577,6 +583,7 @@ internal class MinecraftParagraph(
                     x = (clipStart - rowStart).toFloat(),
                     y = row * layout.lineHeight,
                     style = seg.style,
+                    alpha = alpha,
                 )
                 cursor = clipEnd
             }
@@ -588,6 +595,7 @@ internal class MinecraftParagraph(
                 x = (cursor - rowStart).toFloat(),
                 y = row * layout.lineHeight,
                 style = fallbackStyle,
+                alpha = alpha,
             )
         }
     }

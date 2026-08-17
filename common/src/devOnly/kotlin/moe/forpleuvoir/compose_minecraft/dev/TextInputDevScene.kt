@@ -28,6 +28,7 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalCharFilter
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
@@ -67,12 +68,12 @@ fun TextInputDevScene() {
 
             BasicText(
                 "文本输入测试",
-                style = Style.EMPTY.withColor(Color.White).withBold(true),
+                style = Style.EMPTY.withColor(Color.White).withBold(true).toTextStyle(),
             )
             BasicText(
                 "直接键入(英文/中文输入法上屏);退格/方向键/Home/End/Delete;\n" +
                         "Shift+方向键选区;Ctrl+C/V/X 剪贴板;输入超出宽度时水平滚动",
-                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
             )
             Row {
                 BasicTextField(
@@ -92,14 +93,14 @@ fun TextInputDevScene() {
                 Spacer(modifier = Modifier.width(8.dp))
                 BasicText(
                     "text = ${textFieldState.text.toString().ifEmpty { "(empty)" }}",
-                    style = Style.EMPTY.withColor(Color(0xFF80CBC4)),
+                    style = Style.EMPTY.withColor(Color(0xFF80CBC4)).toTextStyle(),
                 )
             }
 
             BasicText(
                 "LocalCharFilter 演示(此框屏蔽节号 §):",
                 modifier = Modifier.padding(top = 8.dp),
-                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
             )
             val charFilter: (Int) -> Boolean = remember { { codepoint -> codepoint != 0x00A7 } }
             CompositionLocalProvider(LocalCharFilter provides charFilter) {
@@ -117,7 +118,7 @@ fun TextInputDevScene() {
             }
             BasicText(
                 "text = ${filterFieldState.text.toString().ifEmpty { "(empty)" }}",
-                style = Style.EMPTY.withColor(Color(0xFF80CBC4)),
+                style = Style.EMPTY.withColor(Color(0xFF80CBC4)).toTextStyle(),
             )
         }
     }

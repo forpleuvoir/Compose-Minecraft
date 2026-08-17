@@ -15,7 +15,7 @@
 |---|---|---|
 | 图形绘制命令 | ✅ 已实现 | 矩形/圆角矩形/圆/椭圆/弧/线/路径/点/文本/图片/顶点渐变均已接入 MC 渲染后端(图片 T.16、顶点 T.23);`drawVertices` 已支持 |
 | 图层能力 | 部分 | clip/scissor、translate/scale/rotate/alpha 已通;`saveLayer`、`clipPath`、`clipRect(Difference)`、Path(复合) 不支持 |
-| 文本 | 部分 | 统一 `McTextStyle`,MC 字体度量;`BasicText(fontSize)` 以 sp 缩放(T.19,16sp=1x),`autoSize` 自动缩放(T.20);富文本/多 SpanStyle、BiDi、InlineContent/占位符 不支持;基线行高 9px |
+| 文本 | 部分 | 统一 `BasicText(style: TextStyle)`(T.28,语义经 TextStyleMapper 映射,MC 原版渲染特性经 PlatformSpanStyle 承载);`fontSize` 并入 style(T.19,18sp=2x 平台基准字号),`autoSize` 自动缩放(T.20);段级 SpanStyle 混排、BiDi、InlineContent/占位符 不支持;基线行高 9px |
 | 弹窗 | 局限 | `Popup` 部分可用;`Dialog` 未移植;Popup/Dialog 焦点层级未通 |
 | 焦点/事件 | 部分 | 键盘/鼠标/滚轮/聚焦已通;双击、拖放、触摸、指针图标、IME preedit 组合态提示 未实现或占位 |
 | 平台 API | 居多占位 | 文本输入服务、文本工具栏、无障碍、窗口 inset、触感反馈、软键盘、URI、剪贴板(已接 MC 系统)等。其中多数见 §11「可忽略」,含触感/inset/URI/无障碍 |
@@ -83,11 +83,21 @@
 
 ### 2.1 `MinecraftParagraph.platform.kt`(`ui/text/platform/`)
 平台唯一文本后端(MC 字体度量,行高固定 9px):
-- ❌ **富文本/多样式**:只支持统一 `McTextStyle`;`AnnotatedString` 的 `SpanStyle`/`ParagraphStyle` 差异化未实现。
+- ⚠️ **富文本/多样式**:`BasicText` API 已 TextStyle 化(T.28,见下),但 `AnnotatedString`
+  的 `SpanStyle` 段级差异化混排仍未实现(单样式,整段同色/同字号)。
 - ❌ **BiDi / 排版方向**:固定 `ResolvedTextDirection.Ltr`(L193)。
-- ✅ **fontSize/字号**(T.19):`BasicText(fontSize = …)` 以 sp 驱动,**16sp = 原样 1 倍**
+- ✅ **fontSize/字号**(T.19/T.28):`BasicText(style = TextStyle(fontSize = …))` 以 sp 驱动,
+  **18sp = 2x 平台基准字号**(9sp = 1x 原生像素,16sp ≈ 1.78x 非整数缩放、非自然字号)
   (MC 无原生字号系统,经渲染矩阵缩放:布局尺寸与字形矩阵同步缩放;仅支持 sp,
-  em 抛 `IllegalArgumentException`)。旧的 `scale: Float = 1f` 参数已移除。
+  em 抛 `IllegalArgumentException`)。旧的 `fontSize` 独立参数与 `scale: Float = 1f` 已移除。
+- ✅ **TextStyle 语义映射**(T.28,`platform/ui/text/TextStyleMapper.kt`):`TextStyle → {MC Style,
+  scale, alpha}` —— color(只取 RGB,alpha 走渲染)/alpha(经 recordTextDraw 命令 alpha 合成)/
+  fontWeight(≥600 加粗)/fontStyle(斜体)/textDecoration(下划线/删除线)生效;
+  **`PlatformSpanStyle` 承载 MC 原版 Style 全部渲染特性**(obfuscated/shadowColor/
+  clickEvent/hoverEvent/insertion/font,双向 `Style.toTextStyle()` 不丢失);
+  其余字段(letterSpacing/background/shadow/lineHeight/textAlign/fontFamily/…)
+  收集进 `PlatformTextData.ignored` 文档化忽略。已知边界:selection/onTextLayout/autoSize
+  的 textModifier 分支暂不消费 scale/alpha(纯绘制分支生效)。
 - ❌ **渐变 Brush**:`paint(Brush:…)` 只解析 `SolidColor`,否则回退白(L447)。
 - ❌ **Text 占位符**:`getPathForRange` 返回空 `Path`(L315);`placeholderRects` 返回 `emptyList()`(L293)——InlineContent / Placeholder 排进文本不生效。
 - ❌ `getRangeForRect` 返回整段 `TextRange(0, length)`(简化命中)。
@@ -251,9 +261,9 @@
 2. ~~**CPU 光栅化器**:`GraphicsLayer.toImageBitmap()` 依赖(图层内容 → 位图快照);无离屏渲染下的替代方案~~ —— ✅ 已完成(T.17,`GraphicsLayerRasterizer`;文本/阴影命令不支持)。
 3. ~~**颜色滤镜 / 混合模式**(draw 级近似,不依赖离屏)~~ —— ✅ 已完成(T.21 `colorFilter` ColorMatrix/tint/lighting;T.22 `blendMode` 17 种可表达模式经 `BlendPipelines` 自建 blend pipeline,12 种高级模式回退 SrcOver,详见 §1.6)。
 4. ~~**顶点渐变 `drawVertices`**~~ —— ✅ 已完成(T.23,每顶点色 GPU 插值,Triangles/Strip/Fan + 索引展开)。
-5. ~~**独立渲染工作流**(像素 1:1 投影、像素级裁剪精度、与 HUD 共存)~~ —— ✅ 已完成(T.24,`ComposeGuiRenderer` + `GameRendererMixin`,取代 `GuiRenderStateMixin`,详见 §6)。
+5. ~~**独立渲染工作流**(像素 1:1 投影、像素级裁剪精度、与 HUD 共存)~~ —— ✅ 已完成(T.24,`ComposeGuiRenderer` + `GuiRendererMixin`,取代 `GuiRenderStateMixin`,详见 §6)。
 6. **Dialog + Popup 焦点层级**:移植 `Dialog`,打通多图层焦点/键盘分发。
-7. **富文本**:按 SpanStyle 分条 `DrawTextCommand`,走多 MC `Style`;再考虑 InlineContent 占位矩形。
+7. **富文本段级混排**:`BasicText(text: AnnotatedString)` 的 `spanStyles` 逐段映射为 `StyleSegment`(每段 SpanStyle → MC Style 经 T.28 Mapper;`Segments`/`recordSegmentedTextDraw` 机制已就绪),实现段内多 SpanStyle;再考虑 InlineContent 占位矩形。
 8. **输入补全**:双击、拖放(接 MC 或系统)、软键盘事件、可选的指针图标/系统光标。
 9. ~~**TextAutoSize**:二分搜索最大适配字号(默认 12–112sp)~~ —— ✅ 已完成(T.20,`MultiParagraphLayoutCache` 搜索 + 渲染 scale 驱动)。
 10. **无障碍**:screenReader 接入 MC 的 Toast/讲稿或跳过。

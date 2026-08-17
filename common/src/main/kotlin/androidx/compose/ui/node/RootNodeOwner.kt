@@ -216,13 +216,6 @@ internal class RootNodeOwner(
             forceDispatch = hasPositionOnScreenChanged || hasPositionInWindowChanged
         )
         owner.rectManager.dispatchCallbacks()
-        if (hasPositionInWindowChanged || hasContainerSizeChanged) {
-            graphicsContext.setLightingInfo(
-                canvasOffset = positionInWindow,
-                density = density,
-                containerSize = containerSize
-            )
-        }
     }
 
     fun invalidatePositionInWindow() {

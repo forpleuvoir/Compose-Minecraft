@@ -49,6 +49,7 @@ import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.platform.StyleSegment
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,6 +66,8 @@ import androidx.compose.ui.util.fastMapIndexedNotNull
 import androidx.compose.ui.util.fastRoundToInt
 import kotlin.math.floor
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.flatten
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.obfuscatedRaw
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toPlatformData
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.Style
 
@@ -76,6 +79,14 @@ import net.minecraft.network.chat.Style
  * @param text The text to be displayed.
  * @param modifier [Modifier] to apply to this layout node.
  * @param style Style configuration for the text such as color, font, line height etc.
+ *   平台适配点(T.28):接受 Compose [TextStyle] —— 语义经
+ *   [moe.forpleuvoir.compose_minecraft.platform.ui.text.toPlatformData]
+ *   映射到平台:color/alpha/fontSize(sp,18sp = 2x 平台基准字号,9sp = 1x 原生像素)/
+ *   fontWeight(≥600 加粗)/fontStyle(斜体)/textDecoration(下划线/删除线)生效;
+ *   [androidx.compose.ui.text.PlatformSpanStyle] 承载 MC 原版渲染特性
+ *   (obfuscated/shadowColor/clickEvent/hoverEvent/insertion/font);
+ *   letterSpacing/background/lineHeight/textAlign 等平台无法表达的字段
+ *   文档化忽略(见 [moe.forpleuvoir.compose_minecraft.platform.ui.text.PlatformTextData.ignored])。
  * @param onTextLayout Callback that is executed when a new text layout is calculated. A
  *   [TextLayoutResult] object that callback provides contains paragraph information, size of the
  *   text, baselines and other details. The callback can be used to add additional decoration or
@@ -94,17 +105,13 @@ import net.minecraft.network.chat.Style
  *   fits in the available space and lays the text out with this size. This performs multiple layout
  *   passes and can be slower than using a fixed font size. This takes precedence over sizes defined
  *   through [style]. See [TextAutoSize] and the sample code.
- * @param fontSize 平台适配点(T.19):字体大小,经渲染矩阵缩放实现(布局尺寸与字形
- *   矩阵同步缩放);仅支持 sp 单位。基准行高 [MC_TEXT_SCALE_BASE_PX] = 9px(T.26),
- *   **18sp = 2x 平台基准字号**(整数放大),9sp = 1x 原生像素;
- *   默认 18sp 与 [androidx.compose.foundation.text.input.BasicTextField] 默认一致。
  * @sample androidx.compose.foundation.samples.TextAutoSizeBasicTextSample
  */
 @Composable
 fun BasicText(
     text: String,
     modifier: Modifier = Modifier,
-    style: Style = Style.EMPTY,
+    style: TextStyle = TextStyle.Default,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -112,7 +119,6 @@ fun BasicText(
     minLines: Int = 1,
     color: ColorProducer? = null,
     autoSize: TextAutoSize? = null,
-    fontSize: TextUnit = 18.sp,
 ) {
     validateMinMaxLines(minLines = minLines, maxLines = maxLines)
     val selectionRegistrar = LocalSelectionRegistrar.current
@@ -132,16 +138,24 @@ fun BasicText(
 
     val fontFamilyResolver = LocalFontFamilyResolver.current
 
-    // 平台适配点(T.19/T.26):fontSize(sp) → 渲染缩放(18sp = 2x 基准);布局/绘制端消费 scale
-    val scale = fontSize.toTextScale(LocalDensity.current)
+    // 平台适配点(T.28):TextStyle → {MC Style, scale, alpha}。Compose 语义经
+    // toPlatformData 映射:color/fontWeight/fontStyle/textDecoration/alpha/fontSize
+    // (sp → 渲染缩放)+ PlatformSpanStyle 承载的 MC 渲染特性;平台无法表达的字段
+    // (letterSpacing/background/lineHeight/...) 收集进 PlatformTextData.ignored(文档化忽略)。
+    // 已知边界(T.19):textModifier 分支(selection/onTextLayout/autoSize)暂不消费 scale/alpha。
+    val density = LocalDensity.current
+    val platformData = remember(style, density) { style.toPlatformData(density) }
+    val mcStyle = platformData.mcStyle
+    val scale = platformData.scale
+    val textAlpha = platformData.alpha
 
-    BackgroundTextMeasurement(text = text, style = style, fontFamilyResolver = fontFamilyResolver)
+    BackgroundTextMeasurement(text = text, style = mcStyle, fontFamilyResolver = fontFamilyResolver)
 
     val finalModifier =
         if (selectionController != null || onTextLayout != null || autoSize != null) {
             modifier.textModifier(
                 AnnotatedString(text = text),
-                style = style,
+                style = mcStyle,
                 onTextLayout = onTextLayout,
                 overflow = overflow,
                 softWrap = softWrap,
@@ -159,7 +173,7 @@ fun BasicText(
             modifier then
                 TextStringSimpleElement(
                     text = text,
-                    style = style,
+                    style = mcStyle,
                     fontFamilyResolver = fontFamilyResolver,
                     overflow = overflow,
                     softWrap = softWrap,
@@ -167,6 +181,7 @@ fun BasicText(
                     minLines = minLines,
                     color = color,
                     scale = scale,
+                    alpha = textAlpha,
                 )
         }
     Layout(finalModifier, EmptyMeasurePolicy)
@@ -276,7 +291,7 @@ fun BasicText(
 internal fun BasicText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
-    style: Style = Style.EMPTY,
+    style: TextStyle = TextStyle.Default,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -306,10 +321,15 @@ internal fun BasicText(
 
     val fontFamilyResolver = LocalFontFamilyResolver.current
 
+    // 平台适配点(T.28):TextStyle → MC Style(见公开 String 版注释)
+    val density = LocalDensity.current
+    val platformData = remember(style, density) { style.toPlatformData(density) }
+    val mcStyle = platformData.mcStyle
+
     if (!hasInlineContent && !hasLinks) {
         BackgroundTextMeasurement(
             text = text,
-            style = style,
+            style = mcStyle,
             fontFamilyResolver = fontFamilyResolver,
             placeholders = null,
         )
@@ -319,7 +339,7 @@ internal fun BasicText(
             modifier =
                 modifier.textModifier(
                     text = text,
-                    style = style,
+                    style = mcStyle,
                     onTextLayout = onTextLayout,
                     overflow = overflow,
                     softWrap = softWrap,
@@ -346,7 +366,7 @@ internal fun BasicText(
             onTextLayout = onTextLayout,
             hasInlineContent = hasInlineContent,
             inlineContent = inlineContent,
-            style = style,
+            style = mcStyle,
             overflow = overflow,
             softWrap = softWrap,
             maxLines = maxLines,
@@ -395,7 +415,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: String,
     modifier: Modifier = Modifier,
-    style: Style = Style.EMPTY,
+    style: TextStyle = TextStyle.Default,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -436,7 +456,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
-    style: Style = Style.EMPTY,
+    style: TextStyle = TextStyle.Default,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -464,7 +484,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: String,
     modifier: Modifier = Modifier,
-    style: Style = Style.EMPTY,
+    style: TextStyle = TextStyle.Default,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -487,7 +507,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
-    style: Style = Style.EMPTY,
+    style: TextStyle = TextStyle.Default,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -512,7 +532,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: String,
     modifier: Modifier = Modifier,
-    style: Style = Style.EMPTY,
+    style: TextStyle = TextStyle.Default,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -525,7 +545,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
-    style: Style = Style.EMPTY,
+    style: TextStyle = TextStyle.Default,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,

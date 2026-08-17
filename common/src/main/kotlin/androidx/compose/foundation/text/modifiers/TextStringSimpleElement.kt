@@ -45,6 +45,8 @@ internal class TextStringSimpleElement(
     private val segments: List<StyleSegment> = emptyList(),
     /** 平台适配点(T.10):文本缩放;1f = 原样。 */
     private val scale: Float = 1f,
+    /** 平台适配点(T.28):文本透明度(TextStyle.alpha,默认 1f),绘制时合成进颜色。 */
+    private val alpha: Float = 1f,
 ) : ModifierNodeElement<TextStringSimpleNode>() {
 
     override fun create(): TextStringSimpleNode =
@@ -59,11 +61,12 @@ internal class TextStringSimpleElement(
             color,
             segments,
             scale,
+            alpha,
         )
 
     override fun update(node: TextStringSimpleNode) {
         node.doInvalidations(
-            drawChanged = node.updateDraw(color, style),
+            drawChanged = node.updateDraw(color, style, alpha),
             textChanged = node.updateText(text = text),
             layoutChanged =
                 node.updateLayoutRelatedArgs(
@@ -88,6 +91,7 @@ internal class TextStringSimpleElement(
         if (color != other.color) return false
         if (text != other.text) return false /* expensive to check, do after color */
         if (style != other.style) return false
+        if (alpha != other.alpha) return false
 
         // these are equally unlikely to change
         if (fontFamilyResolver != other.fontFamilyResolver) return false
@@ -108,6 +112,7 @@ internal class TextStringSimpleElement(
         result = 31 * result + maxLines
         result = 31 * result + minLines
         result = 31 * result + (color?.hashCode() ?: 0)
+        result = 31 * result + alpha.hashCode()
         return result
     }
 

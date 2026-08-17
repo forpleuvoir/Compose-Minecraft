@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Style
@@ -35,11 +36,11 @@ fun MinecraftDevSceneContent() {
         Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
             BasicText(
                 "Compose Minecraft Dev Menu",
-                style = Style.EMPTY.withColor(Color.White).withBold(true),
+                style = Style.EMPTY.withColor(Color.White).withBold(true).toTextStyle(),
             )
             BasicText(
                 "选择一项测试:",
-                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
             )
 
             DevMenuButton(
@@ -165,7 +166,7 @@ internal fun DevMenuButton(
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
-        BasicText(title, style = Style.EMPTY.withColor(Color.White).withBold(true))
-        BasicText(subtitle, style = Style.EMPTY.withColor(Color(0xFF90A4AE)))
+        BasicText(title, style = Style.EMPTY.withColor(Color.White).withBold(true).toTextStyle())
+        BasicText(subtitle, style = Style.EMPTY.withColor(Color(0xFF90A4AE)).toTextStyle())
     }
 }

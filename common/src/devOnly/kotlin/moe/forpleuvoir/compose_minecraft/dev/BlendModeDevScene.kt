@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.TextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
 
 /**
@@ -73,12 +74,12 @@ internal fun BlendModeDevScene() {
         ) {
             BasicText(
                 text = "混合模式测试 (T.22)",
-                fontSize = 22.sp,
+                style = TextStyle(fontSize = 22.sp),
                 color = { Color(0xFF1A1A1A) },
             )
             BasicText(
                 text = "灰底 + 半透明红(alpha 0.66)叠加;圆 = 三角化几何。12 种高级模式(Overlay/Difference/...)回退 SrcOver。请按编号报告每块颜色。",
-                fontSize = 12.sp,
+                style = TextStyle(fontSize = 12.sp),
                 color = { Color(0xFF455A64) },
             )
             DevMenuButton(
@@ -136,7 +137,7 @@ private fun BlendCell(num: String, mode: BlendMode, useCircle: Boolean) {
         Spacer(Modifier.height(2.dp))
         BasicText(
             text = "$num ${mode.toString()}",
-            fontSize = 13.sp,
+            style = TextStyle(fontSize = 13.sp),
             color = { Color(0xFF1A1A1A) },
         )
     }

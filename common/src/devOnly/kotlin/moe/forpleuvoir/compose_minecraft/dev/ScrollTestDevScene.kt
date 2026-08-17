@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
 import androidx.compose.foundation.text.BasicText
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
@@ -48,11 +49,11 @@ fun ScrollTestDevScene() {
 
             BasicText(
                 "滚动测试(scrollState.value = ${scrollState.value} / max = ${scrollState.maxValue})",
-                style = Style.EMPTY.withColor(Color(0xFF80CBC4)),
+                style = Style.EMPTY.withColor(Color(0xFF80CBC4)).toTextStyle(),
             )
             BasicText(
                 "滚轮上下滚动,上方数字必须变化;列表 40 行,超出部分被裁剪",
-                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
             )
 
             Column(
@@ -75,7 +76,7 @@ fun ScrollTestDevScene() {
                         BasicText(
                             "scroll item $index",
                             modifier = Modifier.padding(horizontal = 8.dp),
-                            style = Style.EMPTY.withColor(Color.White),
+                            style = Style.EMPTY.withColor(Color.White).toTextStyle(),
                         )
                     }
                 }
@@ -84,7 +85,7 @@ fun ScrollTestDevScene() {
             BasicText(
                 "列表底部标记(滚动到末尾时应可见)",
                 modifier = Modifier.padding(top = 8.dp),
-                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
             )
         }
     }

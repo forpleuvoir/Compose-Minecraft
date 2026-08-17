@@ -31,6 +31,7 @@ import net.minecraft.client.renderer.state.gui.BlitRenderState
 import net.minecraft.client.renderer.state.gui.ColoredRectangleRenderState
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState
 import net.minecraft.locale.Language
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.obfuscatedRaw
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toComponent
 import org.joml.Matrix3x2f
 import kotlin.math.max

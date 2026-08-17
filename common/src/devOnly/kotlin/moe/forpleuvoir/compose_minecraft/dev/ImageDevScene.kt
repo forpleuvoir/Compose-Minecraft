@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Style
@@ -69,11 +70,11 @@ fun ImageDevScene() {
         ) {
             BasicText(
                 "Image Pipeline Test(图片管线)",
-                style = Style.EMPTY.withColor(Color(0xFF1A1A1A)).withBold(true),
+                style = Style.EMPTY.withColor(Color(0xFF1A1A1A)).withBold(true).toTextStyle(),
             )
             BasicText(
                 "棋盘格/渐变/半透明为程序生成位图;草方块来自 MC 资源 PNG 解码",
-                style = Style.EMPTY.withColor(Color(0xFF546E7A)),
+                style = Style.EMPTY.withColor(Color(0xFF546E7A)).toTextStyle(),
             )
 
             // ── 棋盘格:原样 / 放大 2x / 缩小 0.5x(验证 UV 与缩放)──
@@ -113,7 +114,7 @@ fun ImageDevScene() {
             }
             BasicText(
                 "① 1x1 红/白放大参考(左二);棋盘 64px:原样 / 放大 2x / 缩小 0.5x",
-                style = Style.EMPTY.withColor(Color(0xFF455A64)),
+                style = Style.EMPTY.withColor(Color(0xFF455A64)).toTextStyle(),
             )
 
             // ── 渐变:原样 / 纵向拉伸(颜色通道与采样)──
@@ -136,7 +137,7 @@ fun ImageDevScene() {
             }
             BasicText(
                 "② 渐变 128x32:原样(左)/ 纵向拉伸 64x80(右)",
-                style = Style.EMPTY.withColor(Color(0xFF455A64)),
+                style = Style.EMPTY.withColor(Color(0xFF455A64)).toTextStyle(),
             )
 
             // ── src 子矩形:只取棋盘左上 1/4(32x32)──
@@ -157,7 +158,7 @@ fun ImageDevScene() {
             }
             BasicText(
                 "③ src 子矩形:棋盘左上 1/4 放大到 64px",
-                style = Style.EMPTY.withColor(Color(0xFF455A64)),
+                style = Style.EMPTY.withColor(Color(0xFF455A64)).toTextStyle(),
             )
 
             // ── 半透明位图:叠加在色块上(验证 alpha 通道合成)──
@@ -182,7 +183,7 @@ fun ImageDevScene() {
             }
             BasicText(
                 "④ 半透明径向渐变图叠在蓝/橙块上(边缘透明、中心不透明)",
-                style = Style.EMPTY.withColor(Color(0xFF455A64)),
+                style = Style.EMPTY.withColor(Color(0xFF455A64)).toTextStyle(),
             )
 
             // ── MC 资源 PNG 解码:原样 / 放大 / 缩小 ──
@@ -222,7 +223,7 @@ fun ImageDevScene() {
                     "⑤ MC 资源 grass_block_side.png:原样 / 放大 3x / 缩小 0.5x(解码 PNG)"
                 else
                     "⑤ 资源读取失败:检查 minecraft:textures/block/grass_block_side.png",
-                style = Style.EMPTY.withColor(Color(0xFF455A64)),
+                style = Style.EMPTY.withColor(Color(0xFF455A64)).toTextStyle(),
             )
 
             // ── alpha 调制:同图 4 档透明度 ──
@@ -243,7 +244,7 @@ fun ImageDevScene() {
             }
             BasicText(
                 "⑥ alpha 调制:1.0 / 0.7 / 0.4 / 0.15",
-                style = Style.EMPTY.withColor(Color(0xFF455A64)),
+                style = Style.EMPTY.withColor(Color(0xFF455A64)).toTextStyle(),
             )
 
             // ── 采样对比:棋盘放大 4x,双线性 vs 最近邻 ──
@@ -268,7 +269,7 @@ fun ImageDevScene() {
             }
             BasicText(
                 "⑦ 采样对比(棋盘放大 4x):左 LOW 双线性 / 右 None 最近邻",
-                style = Style.EMPTY.withColor(Color(0xFF455A64)),
+                style = Style.EMPTY.withColor(Color(0xFF455A64)).toTextStyle(),
             )
 
             // ── 采样对比:资源图放大 3x,双线性 vs 最近邻 ──
@@ -296,7 +297,7 @@ fun ImageDevScene() {
             }
             BasicText(
                 "⑧ 采样对比(资源图放大 3x):左 LOW 双线性 / 右 None 最近邻",
-                style = Style.EMPTY.withColor(Color(0xFF455A64)),
+                style = Style.EMPTY.withColor(Color(0xFF455A64)).toTextStyle(),
             )
 
             // ── ChatGPT 测试图(devOnly 资源,classpath 解码)──
@@ -350,7 +351,7 @@ fun ImageDevScene() {
                     "⑨ ChatGPT 测试图(devOnly 资源):等比缩放 + 中心 3x 放大,右为最近邻"
                 else
                     "⑨ devOnly 资源读取失败:检查 ChatGPT Image 2026年8月2日 10_07_59.png",
-                style = Style.EMPTY.withColor(Color(0xFF455A64)),
+                style = Style.EMPTY.withColor(Color(0xFF455A64)).toTextStyle(),
             )
 
             // ── 旋转 45°:图片与纯色块同一变换语义 ──
@@ -385,7 +386,7 @@ fun ImageDevScene() {
             }
             BasicText(
                 "⑩ 旋转:棋盘 45°(左)/ 资源图 -30°(右),黄色方块为旋转参考",
-                style = Style.EMPTY.withColor(Color(0xFF455A64)),
+                style = Style.EMPTY.withColor(Color(0xFF455A64)).toTextStyle(),
             )
 
             // ── graphicsLayer:缩放 + alpha + 裁剪组合 ──
@@ -429,7 +430,7 @@ fun ImageDevScene() {
             }
             BasicText(
                 "⑪ graphicsLayer:棋盘 scale 1.6 + alpha 0.8(左)/ clipRect 裁剪 60x50(右)",
-                style = Style.EMPTY.withColor(Color(0xFF455A64)),
+                style = Style.EMPTY.withColor(Color(0xFF455A64)).toTextStyle(),
             )
         }
     }

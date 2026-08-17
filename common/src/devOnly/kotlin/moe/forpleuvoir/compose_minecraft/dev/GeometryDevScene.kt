@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.BasicText
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
@@ -48,15 +49,15 @@ fun GeometryDevScene() {
         ) {
             BasicText(
                 "Geometry Draw Test(图形绘制)",
-                style = Style.EMPTY.withColor(Color.White).withBold(true),
+                style = Style.EMPTY.withColor(Color.White).withBold(true).toTextStyle(),
             )
             BasicText(
                 "填充:圆/椭圆/大扇区(useCenter,披萨缺角)/弧/圆角矩形/Path",
-                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
             )
             BasicText(
                 "描边:圆/椭圆/弧/圆角矩形/线/Path;点:Points/Lines/Polygon",
-                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
             )
 
             // ── 填充:同心大扇区(useCenter 扇形,像被拿走一块的披萨)──

@@ -38,9 +38,11 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.TextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.ui.graphics.graphicsLayer
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
@@ -99,31 +101,31 @@ fun StyleMatrixDevScene() {
             // ── BasicText 样式矩阵 ──
             BasicText(
                 "BasicText 样式矩阵:",
-                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
             )
-            BasicText("Default white (默认白色)", style = Style.EMPTY)
-            BasicText("Color (颜色)", style = Style.EMPTY.withColor(Color(0xFFFF5252)))
-            BasicText("Bold (加粗)", style = Style.EMPTY.withColor(Color.White).withBold(true))
-            BasicText("Italic (斜体)", style = Style.EMPTY.withColor(Color.White).withItalic(true))
+            BasicText("Default white (默认白色)", style = Style.EMPTY.toTextStyle())
+            BasicText("Color (颜色)", style = Style.EMPTY.withColor(Color(0xFFFF5252)).toTextStyle())
+            BasicText("Bold (加粗)", style = Style.EMPTY.withColor(Color.White).withBold(true).toTextStyle())
+            BasicText("Italic (斜体)", style = Style.EMPTY.withColor(Color.White).withItalic(true).toTextStyle())
             BasicText(
                 "Underlined (下划线)",
-                style = Style.EMPTY.withColor(Color.White).withUnderlined(true),
+                style = Style.EMPTY.withColor(Color.White).withUnderlined(true).toTextStyle(),
             )
             BasicText(
                 "Strikethrough (删除线)",
-                style = Style.EMPTY.withColor(Color.White).withStrikethrough(true),
+                style = Style.EMPTY.withColor(Color.White).withStrikethrough(true).toTextStyle(),
             )
             BasicText(
                 "Obfuscated (乱码)",
-                style = Style.EMPTY.withColor(Color.White).withObfuscated(true),
+                style = Style.EMPTY.withColor(Color.White).withObfuscated(true).toTextStyle(),
             )
             BasicText(
                 "Shadow (阴影)",
-                style = Style.EMPTY.withColor(Color(0xFFFFF59D)),
+                style = Style.EMPTY.withColor(Color(0xFFFFF59D)).toTextStyle(),
             )
             BasicText(
                 "Background (文本背景)",
-                style = Style.EMPTY.withColor(Color.Black),
+                style = Style.EMPTY.withColor(Color.Black).toTextStyle(),
             )
             BasicText(
                 "All: bold+italic+under+strike (组合)",
@@ -132,7 +134,8 @@ fun StyleMatrixDevScene() {
                         .withBold(true)
                         .withItalic(true)
                         .withUnderlined(true)
-                        .withStrikethrough(true),
+                        .withStrikethrough(true)
+                        .toTextStyle(),
             )
 
             // ── 鼠标点击验证 ──
@@ -145,7 +148,7 @@ fun StyleMatrixDevScene() {
                 BasicText(
                     "Click me: $clickCount",
                     modifier = Modifier.padding(8.dp),
-                    style = Style.EMPTY.withColor(Color.White),
+                    style = Style.EMPTY.withColor(Color.White).toTextStyle(),
                 )
             }
 
@@ -171,9 +174,10 @@ fun StyleMatrixDevScene() {
                 BasicText(
                     "Focus A: $focusStateText | Key: $focusedKey",
                     modifier = Modifier.padding(8.dp),
-                    style = Style.EMPTY.withColor(Color.White),
-                    // T.19:scale 参数已移除 → fontSize(sp);0.85 * 16sp = 13.6sp
-                    fontSize = if (focusPanelFocused) 13.6.sp else 16.sp
+                    // T.19:scale 参数已移除 → fontSize(sp) 并入 style;0.85 * 16sp = 13.6sp
+                    style = Style.EMPTY.withColor(Color.White).toTextStyle().merge(
+                        TextStyle(fontSize = if (focusPanelFocused) 13.6.sp else 16.sp)
+                    )
                 )
             }
 
@@ -234,7 +238,7 @@ fun StyleMatrixDevScene() {
                                 strokeWidth = 2f,
                             )
                         },
-                    style = Style.EMPTY.withColor(Color.White),
+                    style = Style.EMPTY.withColor(Color.White).toTextStyle(),
                 )
             }
 
@@ -283,7 +287,7 @@ fun StyleMatrixDevScene() {
                     BasicText(
                         "scroll item $index",
                         modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp).background(Color(0xFF2F0000)),
-                        style = Style.EMPTY.withColor(Color.White),
+                        style = Style.EMPTY.withColor(Color.White).toTextStyle(),
                     )
                 }
             }

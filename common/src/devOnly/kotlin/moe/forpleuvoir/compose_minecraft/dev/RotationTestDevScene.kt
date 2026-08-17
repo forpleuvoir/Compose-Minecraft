@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
 import moe.forpleuvoir.compose_minecraft.platform.LocalShadowLight
 import moe.forpleuvoir.compose_minecraft.platform.shadow
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
@@ -100,7 +101,7 @@ fun RotationTestDevScene() {
             ) {
                 BasicText(
                     "Focus B: true (tab to move)",
-                    style = Style.EMPTY.withColor(Color(0xFF1A1A1A)),
+                    style = Style.EMPTY.withColor(Color(0xFF1A1A1A)).toTextStyle(),
                 )
             }
 
@@ -134,11 +135,11 @@ fun RotationTestDevScene() {
             BasicText(
                 "长文本与方块无限旋转(2s/圈);红十字/红点为固定中心参考",
                 modifier = Modifier.padding(top = 24.dp),
-                style = Style.EMPTY.withColor(Color(0xFF455A64)),
+                style = Style.EMPTY.withColor(Color(0xFF455A64)).toTextStyle(),
             )
             BasicText(
                 "红十字不动 = 文本绕自身中心转;红点不动 = 方块绕自身中心转",
-                style = Style.EMPTY.withColor(Color(0xFF455A64)),
+                style = Style.EMPTY.withColor(Color(0xFF455A64)).toTextStyle(),
             )
 
             // ── 3. 阴影演示:shadowElevation + 圆角矩形 outline(CPU 离屏真模糊)──
@@ -172,7 +173,7 @@ fun RotationTestDevScene() {
                 BasicText(
                     "阴影:shadowElevation=4 + RectangleShape(直角矩形投影)",
                     modifier = Modifier.padding(top = 6.dp),
-                    style = Style.EMPTY.withColor(Color(0xFF455A64)),
+                    style = Style.EMPTY.withColor(Color(0xFF455A64)).toTextStyle(),
                 )
                 // ── 3b. 阴影颜色演示(T.18):Modifier.shadow 的 ambientColor/spotColor ──
                 // ambient(无偏移)= 蓝色、spot(投影偏移)= 橙红色;两张网格颜色各自生效。
@@ -191,7 +192,7 @@ fun RotationTestDevScene() {
                 BasicText(
                     "阴影颜色:ambient 蓝(无偏移)+ spot 橙红(投影偏移)",
                     modifier = Modifier.padding(top = 6.dp),
-                    style = Style.EMPTY.withColor(Color(0xFF455A64)),
+                    style = Style.EMPTY.withColor(Color(0xFF455A64)).toTextStyle(),
                 )
             }
             BasicText(
@@ -201,7 +202,7 @@ fun RotationTestDevScene() {
                     .background(Color(0xFF37474F))
                     .clickable { lightIndex = (lightIndex + 1) % lights.size }
                     .padding(horizontal = 6.dp, vertical = 2.dp),
-                style = Style.EMPTY.withColor(Color(0xFFFFD54F)),
+                style = Style.EMPTY.withColor(Color(0xFFFFD54F)).toTextStyle(),
             )
         }
     }

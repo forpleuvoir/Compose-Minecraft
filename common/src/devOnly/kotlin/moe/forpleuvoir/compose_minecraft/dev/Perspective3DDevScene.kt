@@ -26,6 +26,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
@@ -68,7 +69,7 @@ fun Perspective3DDevScene() {
         ) {
             BasicText(
                 "3D 透视测试 (T.15):rotationX / rotationY / rotationZ",
-                style = Style.EMPTY.withColor(Color.White).withBold(true),
+                style = Style.EMPTY.withColor(Color.White).withBold(true).toTextStyle(),
             )
 
             Row(
@@ -159,21 +160,21 @@ fun Perspective3DDevScene() {
                 modifier = Modifier
                     .padding(top = 12.dp)
                     .width(620.dp),
-                style = Style.EMPTY.withColor(Color(0xFFFFD54F)),
+                style = Style.EMPTY.withColor(Color(0xFFFFD54F)).toTextStyle(),
             )
             BasicText(
                 "拖动滑块或点击轨道设置角度(-90° ~ 90°)",
                 modifier = Modifier.padding(top = 4.dp),
-                style = Style.EMPTY.withColor(Color(0xFF90A4AE)),
+                style = Style.EMPTY.withColor(Color(0xFF90A4AE)).toTextStyle(),
             )
             BasicText(
                 "红十字不随方块移动 = 绕自身中心旋转;背景为真透视,文字为 2D 仿射近似",
                 modifier = Modifier.padding(top = 8.dp),
-                style = Style.EMPTY.withColor(Color(0xFF90A4AE)),
+                style = Style.EMPTY.withColor(Color(0xFF90A4AE)).toTextStyle(),
             )
             BasicText(
                 "0° 时与普通 2D 渲染完全一致;非 0° 时呈透视四边形(近大远小)",
-                style = Style.EMPTY.withColor(Color(0xFF90A4AE)),
+                style = Style.EMPTY.withColor(Color(0xFF90A4AE)).toTextStyle(),
             )
         }
     }
@@ -217,7 +218,7 @@ private fun AngleBox(
         BasicText(
             label,
             modifier = Modifier.align(Alignment.Center),
-            style = Style.EMPTY.withColor(labelColor).withBold(true),
+            style = Style.EMPTY.withColor(labelColor).withBold(true).toTextStyle(),
         )
     }
 }

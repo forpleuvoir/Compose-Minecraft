@@ -25,7 +25,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.TextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
@@ -65,27 +67,27 @@ fun DensityDevScene() {
 
             BasicText(
                 "密度参数测试 (density)",
-                style = Style.EMPTY.withColor(Color.White).withBold(true),
+                style = Style.EMPTY.withColor(Color.White).withBold(true).toTextStyle(),
             )
             BasicText(
                 "T.26:场景 density 可配置。本屏经 ComposeScreen.open(density = 2f) 打开 ——\n" +
                     "dp 尺寸与 sp 字号全部放大 2 倍(官方桌面 density 语义)。",
-                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
             )
 
             // ── ① density 读数 ──
             SectionLabel("① density 读数")
             BasicText(
                 "LocalDensity.density = ${density.density}",
-                style = Style.EMPTY.withColor(Color.White),
+                style = Style.EMPTY.withColor(Color.White).toTextStyle(),
             )
             BasicText(
                 "fontScale = ${density.fontScale}",
-                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
             )
             BasicText(
                 "100.dp.toPx() = $px100 px (1f 时应为 100,2f 应为 200)",
-                style = Style.EMPTY.withColor(Color(0xFF80CBC4)),
+                style = Style.EMPTY.withColor(Color(0xFF80CBC4)).toTextStyle(),
             )
 
             // ── ② 固定 dp 参考物(视觉 2 倍大)──
@@ -106,7 +108,7 @@ fun DensityDevScene() {
             )
             BasicText(
                 "蓝线 = 50% 宽 × 2dp",
-                style = Style.EMPTY.withColor(Color(0xFF90A4AE)),
+                style = Style.EMPTY.withColor(Color(0xFF90A4AE)).toTextStyle(),
             )
 
             // ── ③ 字号阶梯(sp 含 density 放大)──
@@ -114,8 +116,7 @@ fun DensityDevScene() {
             listOf(9.sp, 18.sp, 36.sp).forEach { s ->
                 BasicText(
                     "${s.value}sp 文字",
-                    style = Style.EMPTY.withColor(Color.White),
-                    fontSize = s,
+                    style = Style.EMPTY.withColor(Color.White).toTextStyle().merge(TextStyle(fontSize = s)),
                 )
             }
 
@@ -135,7 +136,7 @@ fun DensityDevScene() {
             )
             BasicText(
                 "text = ${textFieldState.text.toString().ifEmpty { "(empty)" }}",
-                style = Style.EMPTY.withColor(Color(0xFF80CBC4)),
+                style = Style.EMPTY.withColor(Color(0xFF80CBC4)).toTextStyle(),
             )
         }
     }
@@ -147,6 +148,6 @@ private fun SectionLabel(text: String) {
     Spacer(modifier = Modifier.height(8.dp))
     BasicText(
         text,
-        style = Style.EMPTY.withColor(Color(0xFF80CBC4)).withBold(true),
+        style = Style.EMPTY.withColor(Color(0xFF80CBC4)).withBold(true).toTextStyle(),
     )
 }

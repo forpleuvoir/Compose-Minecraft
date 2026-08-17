@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.components.Button
@@ -64,15 +65,15 @@ fun VanillaParentComposeContent(onClose: () -> Unit) {
         Column(Modifier.padding(16.dp)) {
             BasicText(
                 "原版父屏渲染测试",
-                style = Style.EMPTY.withColor(Color.White).withBold(true),
+                style = Style.EMPTY.withColor(Color.White).withBold(true).toTextStyle(),
             )
             BasicText(
                 "父屏 = 原版 Screen,下方应透出:原版按钮 + 菜单遮罩背景(模糊/半透明黑)",
-                style = Style.EMPTY.withColor(Color(0xFF90A4AE)),
+                style = Style.EMPTY.withColor(Color(0xFF90A4AE)).toTextStyle(),
             )
             BasicText(
                 "本屏背景半透明 0x80 —— 透出部分即原版父屏的渲染结果",
-                style = Style.EMPTY.withColor(Color(0xFF90A4AE)),
+                style = Style.EMPTY.withColor(Color(0xFF90A4AE)).toTextStyle(),
             )
             DevMenuButton(
                 title = "← 返回 (onClose → setScreen(parent))",
