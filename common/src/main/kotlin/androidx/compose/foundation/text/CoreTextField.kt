@@ -485,20 +485,9 @@ internal fun CoreTextField(
             }
         }
 
-    val autofillHighlightBrush =
-        resolveAutofillHighlight(
-            brush = LocalAutofillHighlightBrush.current,
-            color = LocalAutofillHighlightColor.current,
-            defaultColor = autofillHighlightColor(),
-        )
     val drawDecorationModifier =
         Modifier.drawWithContent {
             drawContent()
-            // Autofill highlight is drawn on top of the content — this way the coloring appears
-            // over any Material background applied.
-            if (state.autofillHighlightOn || state.justAutofilled) {
-                drawRect(brush = autofillHighlightBrush)
-            }
         }
 
     val overscrollEffect = rememberTextFieldOverscrollEffect()
@@ -820,10 +809,6 @@ internal class LegacyTextFieldState(
     private val keyboardActionRunner: KeyboardActionRunner =
         KeyboardActionRunner(keyboardController)
 
-    /** Autofill related values we need to save between */
-    var autofillHighlightOn by mutableStateOf(false)
-    var justAutofilled by mutableStateOf(false)
-
     /**
      * DO NOT USE, use [onValueChange] instead. This is original callback provided to the TextField.
      * In order the CoreTextField to work, the recompose.invalidate() has to be called when we call
@@ -835,13 +820,6 @@ internal class LegacyTextFieldState(
         if (it.text != untransformedText?.text) {
             // Text has been changed, enter the HandleState.None and hide the cursor handle.
             handleState = HandleState.None
-
-            // Autofill logic
-            if (justAutofilled) {
-                justAutofilled = false
-            } else {
-                autofillHighlightOn = false
-            }
         }
         selectionPreviewHighlightRange = TextRange.Zero
         deletionPreviewHighlightRange = TextRange.Zero

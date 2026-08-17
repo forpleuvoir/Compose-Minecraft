@@ -24,7 +24,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.TextStyle
-import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 
 /**
  * 顶点渐变测试 (T.23):Canvas.drawVertices —— 每顶点色 GPU 插值。

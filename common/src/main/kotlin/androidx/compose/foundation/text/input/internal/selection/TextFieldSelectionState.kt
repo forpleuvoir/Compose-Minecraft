@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,7 +29,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.internal.checkPreconditionNotNull
-import androidx.compose.foundation.internal.isAutofillAvailable
 import androidx.compose.foundation.internal.isReadSupported
 import androidx.compose.foundation.internal.isWriteSupported
 import androidx.compose.foundation.internal.readText
@@ -38,7 +37,6 @@ import androidx.compose.foundation.text.DefaultCursorThickness
 import androidx.compose.foundation.text.Handle
 import androidx.compose.foundation.text.MenuItemsAvailability
 import androidx.compose.foundation.text.TextContextMenuItems
-import androidx.compose.foundation.text.TextContextMenuItems.Autofill
 import androidx.compose.foundation.text.TextContextMenuItems.Copy
 import androidx.compose.foundation.text.TextContextMenuItems.Cut
 import androidx.compose.foundation.text.TextContextMenuItems.Paste
@@ -160,9 +158,6 @@ internal class TextFieldSelectionState(
 
     /** Whether user is interacting with the UI in touch mode. */
     var isInTouchMode: Boolean by mutableStateOf(true)
-
-    /** The action to invoke when autofill is requested in text toolbar. */
-    var requestAutofillAction: (() -> Unit)? = null
 
     /**
      * Reduced [ReceiveContentConfiguration] from the attached modifier node hierarchy. This value
@@ -1642,22 +1637,6 @@ internal class TextFieldSelectionState(
     }
 
     /**
-     * Whether autofill can execute upon this text field. The autofill action only appears when the
-     * text field is editable and no text is currently selected.
-     */
-    fun canShowAutofillMenuItem(): Boolean =
-        editable && textFieldState.visualText.selection.collapsed
-
-    /**
-     * The method for autofilling.
-     *
-     * Inserts credentials (if there exist any that match this field type) into the text field.
-     */
-    fun autofill() {
-        requestAutofillAction?.invoke()
-    }
-
-    /**
      * This function get the selected region as a Rectangle region, and pass it to [TextToolbar] to
      * make the FloatingToolbar show up in the proper place. In addition, this function passes the
      * copy, paste and cut method as callbacks when "copy", "cut" or "paste" is clicked.
@@ -1933,9 +1912,6 @@ internal fun TextFieldSelectionState.contextMenuBuilder(
     textFieldItem(Copy, enabled = availability.canCopy)
     textFieldItem(Paste, enabled = availability.canPaste)
     textFieldItem(SelectAll, enabled = availability.canSelectAll)
-    if (isAutofillAvailable()) {
-        textFieldItem(Autofill, enabled = availability.canAutofill)
-    }
 }
 
 internal fun Modifier.addBasicTextFieldTextContextMenuComponents(

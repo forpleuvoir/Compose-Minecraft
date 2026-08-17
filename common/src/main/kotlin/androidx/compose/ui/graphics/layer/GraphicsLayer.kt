@@ -456,7 +456,7 @@ class GraphicsLayer internal constructor() {
     internal fun draw(canvas: Canvas, parentLayer: GraphicsLayer?) {
         if (canvas !is MinecraftCanvas) {
             throw UnsupportedOperationException(
-                "GraphicsLayer.draw 仅支持 MinecraftCanvas,实际: ${canvas::class.simpleName}"
+                "GraphicsLayer.draw only supports MinecraftCanvas, actual: ${canvas::class.simpleName}"
             )
         }
         val recording = recordingCanvas ?: return
@@ -602,7 +602,7 @@ class GraphicsLayer internal constructor() {
      * 绘制软阴影(T.14,CPU 离屏真模糊 + 方向性投影)。
      * 记录一条 [DrawShadowCommand]:内容矩形 + 扩散距离 + 投影偏移 + 圆角半径。
      * 投影偏移 = 光源反方向 × elevation × 0.5(光源方向默认右上角,
-     * 经 [moe.forpleuvoir.compose_minecraft.platform.LocalShadowLight]
+     * 经 [moe.forpleuvoir.compose_minecraft.platform.render.LocalShadowLight]
      * CompositionLocal 可配置,由业务方在 graphicsLayer block 赋值)。
      * Path outline 阴影后续阶段补齐。
      */

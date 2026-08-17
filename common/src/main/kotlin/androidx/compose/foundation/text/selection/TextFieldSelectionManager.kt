@@ -21,7 +21,6 @@ import androidx.compose.foundation.ComposeFoundationFlags
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.contextmenu.ContextMenuScope
 import androidx.compose.foundation.contextmenu.ContextMenuState
-import androidx.compose.foundation.internal.isAutofillAvailable
 import androidx.compose.foundation.internal.isReadSupported
 import androidx.compose.foundation.internal.isWriteSupported
 import androidx.compose.foundation.internal.readAnnotatedString
@@ -35,7 +34,6 @@ import androidx.compose.foundation.text.HandleState.Selection
 import androidx.compose.foundation.text.LegacyTextFieldState
 import androidx.compose.foundation.text.MenuItemsAvailability
 import androidx.compose.foundation.text.TextContextMenuItems
-import androidx.compose.foundation.text.TextContextMenuItems.Autofill
 import androidx.compose.foundation.text.TextContextMenuItems.Copy
 import androidx.compose.foundation.text.TextContextMenuItems.Cut
 import androidx.compose.foundation.text.TextContextMenuItems.Paste
@@ -126,9 +124,6 @@ internal class TextFieldSelectionManager(val undoManager: UndoManager? = null) {
      * permitted. For example, 'cut' will not be available is it is password transformation.
      */
     internal var visualTransformation: VisualTransformation = VisualTransformation.None
-
-    /** The action to invoke when autofill is requested in text toolbar. */
-    internal var requestAutofillAction: (() -> Unit)? = null
 
     /** [Clipboard] to perform clipboard features. */
     internal var clipboard: Clipboard? = null
@@ -868,8 +863,6 @@ internal class TextFieldSelectionManager(val undoManager: UndoManager? = null) {
 
     internal fun canShowSelectAllMenuItem(): Boolean = value.selection.length != value.text.length
 
-    internal fun canShowAutofillMenuItem(): Boolean = editable && value.selection.collapsed
-
     /**
      * The method for copying text.
      *
@@ -1006,10 +999,6 @@ internal class TextFieldSelectionManager(val undoManager: UndoManager? = null) {
         enterSelectionMode(showFloatingToolbar = true)
     }
 
-    internal fun autofill() {
-        requestAutofillAction?.invoke()
-    }
-
     internal fun getHandlePosition(isStartHandle: Boolean): Offset {
         val textLayoutResult = state?.layoutResult?.value ?: return Offset.Unspecified
 
@@ -1110,18 +1099,12 @@ internal class TextFieldSelectionManager(val undoManager: UndoManager? = null) {
                         { selectAll() }
                     } else null
 
-                val autofill: (() -> Unit)? =
-                    if (canShowAutofillMenuItem()) {
-                        { autofill() }
-                    } else null
-
                 textToolbar?.showMenu(
                     rect = getContentRect(),
                     onCopyRequested = copy,
                     onPasteRequested = paste,
                     onCutRequested = cut,
                     onSelectAllRequested = selectAll,
-                    onAutofillRequested = autofill,
                 )
             }
         }
@@ -1437,9 +1420,6 @@ internal fun TextFieldSelectionManager.contextMenuBuilder(
     textFieldItem(Copy, enabled = availability.canCopy) { copy(cancelSelection = false) }
     textFieldItem(Paste, enabled = availability.canPaste) { paste() }
     textFieldItem(SelectAll, enabled = availability.canSelectAll) { selectAll() }
-    if (isAutofillAvailable()) {
-        textFieldItem(Autofill, enabled = availability.canAutofill) { autofill() }
-    }
 }
 
 /**

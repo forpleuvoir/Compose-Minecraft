@@ -42,7 +42,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.launch
-import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 import moe.forpleuvoir.compose_minecraft.platform.ui.popup.AnchorBoundsPositionProvider
 import moe.forpleuvoir.compose_minecraft.platform.ui.popup.AnchorPosition
 import moe.forpleuvoir.compose_minecraft.platform.ui.popup.LocalPopupHost

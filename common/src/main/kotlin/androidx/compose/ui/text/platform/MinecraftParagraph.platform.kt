@@ -509,7 +509,7 @@ internal class MinecraftParagraph(
     private fun paint(canvas: Canvas, color: Color, alpha: Float) {
         val mc = canvas as? MinecraftCanvas
             ?: throw UnsupportedOperationException(
-                "MinecraftParagraph.paint 仅支持 MinecraftCanvas,实际: ${canvas::class.simpleName}"
+                "MinecraftParagraph.paint only supports MinecraftCanvas, actual: ${canvas::class.simpleName}"
             )
         // T.1/T.2:记录完整 MC 样式快照;paint 传入的 color 覆盖样式色
         // (shadow/textDecoration 等 Compose 绘制参数已被 MC Style 能力取代,第一版忽略)

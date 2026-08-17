@@ -39,7 +39,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.TextStyle
-import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.ui.graphics.graphicsLayer
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle

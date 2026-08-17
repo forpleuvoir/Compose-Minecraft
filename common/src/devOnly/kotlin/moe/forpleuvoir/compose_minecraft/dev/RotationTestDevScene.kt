@@ -29,12 +29,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
-import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
-import moe.forpleuvoir.compose_minecraft.platform.LocalShadowLight
-import moe.forpleuvoir.compose_minecraft.platform.shadow
+import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.render.LocalShadowLight
+import moe.forpleuvoir.compose_minecraft.platform.render.shadow
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style

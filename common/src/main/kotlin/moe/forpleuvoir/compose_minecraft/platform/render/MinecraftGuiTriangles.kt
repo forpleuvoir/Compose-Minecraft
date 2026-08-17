@@ -132,7 +132,7 @@ internal object MinecraftGuiTriangles {
             try {
                 resourceProvider.getResourceOrThrow(location).openAsReader().use { it.readText() }
             } catch (e: Exception) {
-                LOGGER.error("Compose-Minecraft: 无法读取 shader {}", location, e)
+                LOGGER.error("Compose-Minecraft: failed to read shader {}", location, e)
                 null
             }
         }

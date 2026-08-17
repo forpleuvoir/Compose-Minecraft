@@ -367,10 +367,6 @@ internal fun BasicTextField(
                                 menuItem(canShowSelectAllMenuItem(), TextToolbarState.Selection) {
                                     selectAll()
                                 },
-                            onAutofillRequested =
-                                menuItem(canShowAutofillMenuItem(), TextToolbarState.None) {
-                                    autofill()
-                                },
                         )
                     }
 

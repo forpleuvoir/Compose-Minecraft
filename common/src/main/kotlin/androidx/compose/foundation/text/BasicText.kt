@@ -947,7 +947,7 @@ internal const val MC_TEXT_SCALE_BASE_PX = 9f
 // 平台适配点(T.26):internal —— BasicTextField 同包复用(fontSize → 渲染缩放)
 internal fun TextUnit.toTextScale(density: Density): Float {
     require(type == TextUnitType.Sp) {
-        "平台适配点(T.19):fontSize 仅支持 sp 单位(MC 无原生字号系统,em 无法解析)"
+        "Platform (T.19): fontSize only supports sp units (MC has no native font size system, em cannot be resolved)"
     }
     // sp → px(密度 1 下 18sp = 18px)→ 缩放 = px / MC 1x 行高(9px),18sp → 2x
     return value * density.density * density.fontScale / MC_TEXT_SCALE_BASE_PX

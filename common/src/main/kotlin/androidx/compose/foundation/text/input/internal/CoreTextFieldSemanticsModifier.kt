@@ -20,31 +20,22 @@ import androidx.compose.foundation.text.LegacyTextFieldState
 import androidx.compose.foundation.text.TextFieldDelegate
 import androidx.compose.foundation.text.requestFocusAndShowKeyboardIfNeeded
 import androidx.compose.foundation.text.selection.TextFieldSelectionManager
-import androidx.compose.ui.autofill.ContentDataType
-import androidx.compose.ui.autofill.ContentType
-import androidx.compose.ui.autofill.FillableData
-import androidx.compose.ui.autofill.createFromText
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.node.DelegatingNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.SemanticsModifierNode
 import androidx.compose.ui.node.invalidateSemantics
-import androidx.compose.ui.node.requestAutofill
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.semantics.SemanticsPropertyReceiver
-import androidx.compose.ui.semantics.contentDataType
-import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.copyText
 import androidx.compose.ui.semantics.cutText
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.editableText
-import androidx.compose.ui.semantics.fillableData
 import androidx.compose.ui.semantics.getTextLayoutResult
 import androidx.compose.ui.semantics.inputText
 import androidx.compose.ui.semantics.insertTextAtCursor
 import androidx.compose.ui.semantics.isEditable
 import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.onFillData
 import androidx.compose.ui.semantics.onImeAction
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.password
@@ -57,7 +48,6 @@ import androidx.compose.ui.text.input.CommitTextCommand
 import androidx.compose.ui.text.input.DeleteAllCommand
 import androidx.compose.ui.text.input.FinishComposingTextCommand
 import androidx.compose.ui.text.input.ImeOptions
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
@@ -120,10 +110,6 @@ internal class CoreTextFieldSemanticsModifierNode(
     var imeOptions: ImeOptions,
     var focusRequester: FocusRequester,
 ) : DelegatingNode(), SemanticsModifierNode {
-    init {
-        manager.requestAutofillAction = { requestAutofill() }
-    }
-
     override val shouldMergeDescendantSemantics: Boolean
         get() = true
 
@@ -131,35 +117,6 @@ internal class CoreTextFieldSemanticsModifierNode(
         this.inputText = value.annotatedString
         this.editableText = transformedText.text
         this.textSelectionRange = value.selection
-
-        // The developer will set `contentType`. CTF populates the other autofill-related
-        // semantics. And since we're in a TextField, set the `contentDataType` to be "Text".
-        this.contentDataType = ContentDataType.Text
-        FillableData.createFromText(value.annotatedString)?.let { this.fillableData = it }
-        onFillData { fillableData ->
-            state.justAutofilled = true
-            state.autofillHighlightOn = true
-            handleTextUpdateFromSemantics(
-                state,
-                fillableData.textValue as String,
-                readOnly,
-                enabled,
-            )
-            true
-        }
-
-        when (imeOptions.keyboardType) {
-            KeyboardType.Email -> {
-                contentType = ContentType.EmailAddress
-            }
-            KeyboardType.Password,
-            KeyboardType.NumberPassword -> {
-                contentType = ContentType.Password
-            }
-            KeyboardType.Phone -> {
-                contentType = ContentType.PhoneNumber
-            }
-        }
 
         if (!enabled) this.disabled()
         if (isPassword) this.password()
@@ -306,7 +263,6 @@ internal class CoreTextFieldSemanticsModifierNode(
         val previousEnabled = this.enabled
         val previousIsPassword = this.isPassword
         val previousImeOptions = this.imeOptions
-        val previousManager = this.manager
         val editable = enabled && !readOnly
 
         // Apply the diff.
@@ -328,10 +284,6 @@ internal class CoreTextFieldSemanticsModifierNode(
                 !value.selection.collapsed
         ) {
             invalidateSemantics()
-        }
-
-        if (manager != previousManager) {
-            manager.requestAutofillAction = { requestAutofill() }
         }
     }
 

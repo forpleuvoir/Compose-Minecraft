@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright 2021 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -837,7 +837,6 @@ internal class SelectionManager(private val selectionRegistrar: SelectionRegistr
                 rect = rect,
                 onCopyRequested = if (canCopy()) ::toolbarCopy else null,
                 onSelectAllRequested = if (isEntireContainerSelected()) null else ::selectAll,
-                onAutofillRequested = null,
             )
         } else if (textToolbar.status == TextToolbarStatus.Shown) {
             textToolbar.hide()

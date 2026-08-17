@@ -61,11 +61,6 @@ class MinecraftPaint(
     // 暴露 internal 类型)。
     internal var nativeColorFilter: NativeColorFilter? = null
 
-    @Deprecated("Use platform-specific extension to get platform reference")
-    override fun asFrameworkPaint(): NativePaint {
-        throw UnsupportedOperationException("asFrameworkPaint 第一版不支持")
-    }
-
     override fun equals(other: Any?): Boolean = other is Paint && hashCode() == other.hashCode()
 
     override fun hashCode(): Int {
@@ -299,7 +294,7 @@ internal class MinecraftPath(
 
     override fun addPath(path: Path, offset: Offset) {
         if (path !is MinecraftPath) {
-            throw UnsupportedOperationException("addPath 仅支持 MinecraftPath,实际: ${path::class.simpleName}")
+            throw UnsupportedOperationException("addPath only supports MinecraftPath, actual: ${path::class.simpleName}")
         }
         for (command in path.commands) {
             when (command) {
@@ -395,7 +390,7 @@ internal class MinecraftPath(
     }
 
     override fun op(path1: Path, path2: Path, operation: PathOperation): Boolean {
-        throw UnsupportedOperationException("Path.op($operation) 第一版不支持")
+        throw UnsupportedOperationException("Path.op($operation) is not supported in v1")
     }
 
     /** 供 [PathIterator] 遍历的扁平化点序列 */
@@ -500,7 +495,7 @@ internal class MinecraftPathMeasure : PathMeasure {
         destination: Path,
         startWithMoveTo: Boolean,
     ): Boolean {
-        throw UnsupportedOperationException("PathMeasure.getSegment 第一版不支持")
+        throw UnsupportedOperationException("PathMeasure.getSegment is not supported in v1")
     }
 
     override fun setPath(path: Path?, forceClosed: Boolean) {
@@ -509,11 +504,11 @@ internal class MinecraftPathMeasure : PathMeasure {
     }
 
     override fun getPosition(distance: Float): Offset {
-        throw UnsupportedOperationException("PathMeasure.getPosition 第一版不支持")
+        throw UnsupportedOperationException("PathMeasure.getPosition is not supported in v1")
     }
 
     override fun getTangent(distance: Float): Offset {
-        throw UnsupportedOperationException("PathMeasure.getTangent 第一版不支持")
+        throw UnsupportedOperationException("PathMeasure.getTangent is not supported in v1")
     }
 
     private fun calculateLength(): Float {
@@ -1381,7 +1376,7 @@ internal class MinecraftCanvas internal constructor(
     }
 
     override fun saveLayer(bounds: Rect, paint: Paint) {
-        throw UnsupportedOperationException("saveLayer 第一版不支持(不允许离屏图层)")
+        throw UnsupportedOperationException("saveLayer is not supported in v1 (no offscreen layers)")
     }
 
     override fun translate(dx: Float, dy: Float) {
@@ -1445,7 +1440,7 @@ internal class MinecraftCanvas internal constructor(
         left: Float, top: Float, right: Float, bottom: Float, clipOp: ClipOp,
     ) {
         if (clipOp == ClipOp.Difference) {
-            throw UnsupportedOperationException("clipRect(Difference) 第一版不支持")
+            throw UnsupportedOperationException("clipRect(Difference) is not supported in v1")
         }
         // 平台适配点(T.9 修复):裁剪一律换算到**屏幕空间**再入栈。
         // 不同矩阵状态下的局部矩形不能直接相交(会得到退化矩形,如 336x0,
@@ -1455,7 +1450,7 @@ internal class MinecraftCanvas internal constructor(
     }
 
     override fun clipPath(path: Path, clipOp: ClipOp) {
-        throw UnsupportedOperationException("clipPath 第一版不支持")
+        throw UnsupportedOperationException("clipPath is not supported in v1")
     }
 
     override fun drawLine(p1: Offset, p2: Offset, paint: Paint) {
@@ -1529,7 +1524,7 @@ internal class MinecraftCanvas internal constructor(
     override fun drawPath(path: Path, paint: Paint) {
         validatePaint(paint)
         if (path !is MinecraftPath) {
-            throw UnsupportedOperationException("drawPath 仅支持 MinecraftPath,实际: ${path::class.simpleName}")
+            throw UnsupportedOperationException("drawPath only support MinecraftPath,actual: ${path::class.simpleName}")
         }
         record(
             DrawPathCommand(
@@ -1610,7 +1605,7 @@ internal class MinecraftCanvas internal constructor(
         paint: Paint,
     ) {
         if (image !is MinecraftImageBitmap) {
-            throw UnsupportedOperationException("drawImageRect 仅支持 MinecraftImageBitmap,实际: ${image::class.simpleName}")
+            throw UnsupportedOperationException("drawImageRect only support MinecraftImageBitmap,actual: ${image::class.simpleName}")
         }
         validatePaint(paint)
         record(
@@ -1631,7 +1626,7 @@ internal class MinecraftCanvas internal constructor(
 
     private fun validatePaint(paint: Paint) {
         if (paint.shader != null) {
-            throw UnsupportedOperationException("Paint.shader 第一版不支持")
+            throw UnsupportedOperationException("Paint.shader is not supported in v1")
         }
         // T.22:blendMode 支持 17 种可表达模式(渲染端经 BlendPipelines 切换 pipeline),
         // 其余 12 种高级模式(Overlay/Difference/...)渲染端回退 SrcOver —— 记录端不拦截。
@@ -1649,7 +1644,3 @@ private val Close = MinecraftPath.PathSegmentType.Close
 class NativeCanvasHolder {
     val canvas: Canvas = MinecraftCanvas()
 }
-
-/** NativePaint 与 NativeCanvas 类型别名(官方 Deprecated API) */
-internal typealias NativePaintImpl = MinecraftPaint
-internal typealias NativeCanvasImpl = NativeCanvasHolder

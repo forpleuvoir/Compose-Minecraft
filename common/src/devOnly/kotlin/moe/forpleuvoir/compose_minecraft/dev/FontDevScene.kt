@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
-import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFont
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFontSize
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.MinecraftCustomFonts

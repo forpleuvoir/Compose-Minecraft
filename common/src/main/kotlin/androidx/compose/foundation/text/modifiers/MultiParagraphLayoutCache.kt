@@ -477,7 +477,7 @@ internal class MultiParagraphLayoutCache(
                 TextUnitType.Unspecified -> 0f
                 else ->
                     throw IllegalArgumentException(
-                        "TextAutoSize 仅支持 sp 字号(收到 $this)"
+                        "TextAutoSize only supports sp font sizes (received $this)"
                     )
             }
 

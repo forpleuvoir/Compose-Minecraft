@@ -12,7 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
@@ -59,6 +59,12 @@ fun MinecraftDevSceneContent() {
                 title = "指针图标测试 (PointerIcon / I9)",
                 subtitle = "悬停切换 Default/Crosshair/Text/Hand 光标;输入框 I 形、链接手型、overrideDescendants",
                 onClick = { ComposeScreen.open { PointerIconDevScene() } },
+            )
+
+            DevMenuButton(
+                title = "复述系统测试 (Narration)",
+                subtitle = "Compose 语义树 → MC 原版朗读:焦点优先 + 悬停回退,Tab/悬停即读",
+                onClick = { ComposeScreen.open { NarrationDevScene() } },
             )
 
             DevMenuButton(

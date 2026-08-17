@@ -17,9 +17,6 @@
 package androidx.compose.ui.semantics
 
 import androidx.compose.runtime.Immutable
-import androidx.compose.ui.autofill.ContentDataType
-import androidx.compose.ui.autofill.ContentType
-import androidx.compose.ui.autofill.FillableData
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.state.ToggleableState
@@ -116,36 +113,6 @@ object SemanticsProperties {
         SemanticsPropertyKey<Unit>(
             name = "HideFromAccessibility",
             mergePolicy = { parentValue, _ -> parentValue },
-        )
-
-    /** @see SemanticsPropertyReceiver.contentType */
-    val ContentType =
-        SemanticsPropertyKey<ContentType>(
-            name = "ContentType",
-            mergePolicy = { parentValue, _ ->
-                // Never merge autofill types
-                parentValue
-            },
-        )
-
-    /** @see SemanticsPropertyReceiver.contentDataType */
-    val ContentDataType =
-        SemanticsPropertyKey<ContentDataType>(
-            name = "ContentDataType",
-            mergePolicy = { parentValue, _ ->
-                // Never merge autofill data types
-                parentValue
-            },
-        )
-
-    /** @see SemanticsPropertyReceiver.fillableData */
-    val FillableData =
-        SemanticsPropertyKey<FillableData>(
-            name = "FillableData",
-            mergePolicy = { parentValue, _ ->
-                // Never merge autofill types
-                parentValue
-            },
         )
 
     /** @see SemanticsPropertyReceiver.traversalIndex */
@@ -316,18 +283,6 @@ object SemanticsActions {
 
     /** @see SemanticsPropertyReceiver.scrollToIndex */
     val ScrollToIndex = ActionPropertyKey<(Int) -> Boolean>("ScrollToIndex")
-
-    @Suppress("unused")
-    @Deprecated(
-        message = "Use `SemanticsActions.OnFillData` instead.",
-        replaceWith =
-            ReplaceWith("OnFillData", "androidx.compose.ui.semantics.SemanticsActions.OnFillData"),
-        level = DeprecationLevel.WARNING,
-    )
-    val OnAutofillText = ActionPropertyKey<(AnnotatedString) -> Boolean>("OnAutofillText")
-
-    /** @see SemanticsPropertyReceiver.onFillData */
-    val OnFillData = ActionPropertyKey<(FillableData) -> Boolean>("OnFillData")
 
     /** @see SemanticsPropertyReceiver.setProgress */
     val SetProgress = ActionPropertyKey<(progress: Float) -> Boolean>("SetProgress")
@@ -1051,40 +1006,6 @@ fun SemanticsPropertyReceiver.hideFromAccessibility() {
 }
 
 /**
- * Content field type information.
- *
- * This API can be used to indicate to Autofill services what _kind of field_ is associated with
- * this node. Not to be confused with the _data type_ to be entered into the field.
- *
- * @see SemanticsProperties.ContentType
- */
-var SemanticsPropertyReceiver.contentType by SemanticsProperties.ContentType
-
-/**
- * Content data type information.
- *
- * This API can be used to indicate to Autofill services what _kind of data_ is meant to be
- * suggested for this field. Not to be confused with the _type_ of the field.
- *
- * @see SemanticsProperties.ContentType
- */
-var SemanticsPropertyReceiver.contentDataType by SemanticsProperties.ContentDataType
-
-/**
- * The current value of a component that can be autofilled.
- *
- * This property is used to expose the component's current data *to* the autofill service. The
- * service can then read this value, for example, to save it for future autofill suggestions.
- *
- * This is the counterpart to the [onFillData] action, which is used to *receive* data from the
- * autofill service.
- *
- * @sample androidx.compose.ui.samples.AutofillableTextFieldWithFillableDataSemantics
- * @see SemanticsProperties.FillableData
- */
-var SemanticsPropertyReceiver.fillableData by SemanticsProperties.FillableData
-
-/**
  * A value to manually control screenreader traversal order.
  *
  * This API can be used to customize TalkBack traversal order. When the `traversalIndex` property is
@@ -1372,48 +1293,6 @@ fun SemanticsPropertyReceiver.scrollByOffset(action: suspend (offset: Offset) ->
  */
 fun SemanticsPropertyReceiver.scrollToIndex(label: String? = null, action: (Int) -> Boolean) {
     this[SemanticsActions.ScrollToIndex] = AccessibilityAction(label, action)
-}
-
-/**
- * Action to autofill a TextField.
- *
- * Expected to be used in conjunction with [contentType] and [contentDataType] properties.
- *
- * @param label Optional label for this action.
- * @param action Action to be performed when the [SemanticsActions.OnAutofillText] is called.
- */
-@Deprecated(
-    message = "Use onFillData instead",
-    replaceWith = ReplaceWith("onFillData"),
-    level = DeprecationLevel.WARNING,
-)
-fun SemanticsPropertyReceiver.onAutofillText(
-    label: String? = null,
-    action: ((AnnotatedString) -> Boolean)?,
-) {
-    @Suppress("DEPRECATION")
-    this[SemanticsActions.OnAutofillText] = AccessibilityAction(label, action)
-}
-
-/**
- * Action that an autofill service can invoke to fill the component with data.
- *
- * The [action] will be called by the system, passing the [FillableData] that should be used to
- * update the component's state.
- *
- * This is the counterpart to the [fillableData] property, which is used to *provide* the
- * component's current data to the autofill service.
- *
- * @sample androidx.compose.ui.samples.AutofillableTextFieldWithFillableDataSemantics
- * @param label Optional label for this action.
- * @param action Action to be performed when [SemanticsActions.OnFillData] is called. The lambda
- *   receives the [FillableData] from the autofill service.
- */
-fun SemanticsPropertyReceiver.onFillData(
-    label: String? = null,
-    action: ((FillableData) -> Boolean)?,
-) {
-    this[SemanticsActions.OnFillData] = AccessibilityAction(label, action)
 }
 
 /**

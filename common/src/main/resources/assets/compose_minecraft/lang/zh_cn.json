@@ -1,0 +1,19 @@
+{
+  "compose_minecraft.narration.navigation_hint": "使用 Tab 键在界面元素之间导航,鼠标悬停也可朗读",
+  "compose_minecraft.narration.toggleable.on": "已开启",
+  "compose_minecraft.narration.toggleable.off": "已关闭",
+  "compose_minecraft.narration.toggleable.indeterminate": "不确定状态",
+  "compose_minecraft.narration.selected": "已选择",
+  "compose_minecraft.narration.progress": "进度 %s%%",
+  "compose_minecraft.narration.heading": "标题",
+  "compose_minecraft.narration.disabled_suffix": "(禁用)",
+  "compose_minecraft.narration.role.button": "按钮",
+  "compose_minecraft.narration.role.checkbox": "复选框",
+  "compose_minecraft.narration.role.switch": "开关",
+  "compose_minecraft.narration.role.radio_button": "单选按钮",
+  "compose_minecraft.narration.role.tab": "标签页",
+  "compose_minecraft.narration.role.image": "图片",
+  "compose_minecraft.narration.role.dropdown_list": "下拉列表",
+  "compose_minecraft.narration.role.value_picker": "数值选择器",
+  "compose_minecraft.narration.role.carousel": "轮播"
+}

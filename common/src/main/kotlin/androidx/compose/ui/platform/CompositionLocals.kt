@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright 2020 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,18 +20,9 @@ package androidx.compose.ui.platform
 
 import androidx.annotation.RestrictTo
 import androidx.annotation.VisibleForTesting
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocal
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.ProvidableCompositionLocal
-import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.compositionLocalWithComputedDefaultOf
+import androidx.compose.runtime.*
 import androidx.compose.runtime.retain.LocalRetainedValuesStore
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.autofill.Autofill
-import androidx.compose.ui.autofill.AutofillManager
-import androidx.compose.ui.autofill.AutofillTree
 import androidx.compose.ui.draw.DrawModifier
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.graphics.GraphicsContext
@@ -49,38 +40,6 @@ import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.LifecycleOwner
-
-/**
- * The CompositionLocal that can be used to trigger autofill actions. Eg.
- * [Autofill.requestAutofillForNode].
- */
-@Deprecated(
-    """
-        Use the new semantics-based Autofill APIs androidx.compose.ui.autofill.ContentType and
-        androidx.compose.ui.autofill.ContentDataType instead.
-        """
-)
-val LocalAutofill = staticCompositionLocalOf<Autofill?> { null }
-
-/**
- * The CompositionLocal that can be used to add [AutofillNode][import
- * androidx.compose.ui.autofill.AutofillNode]s to the autofill tree. The [AutofillTree] is a
- * temporary data structure that will be replaced by Autofill Semantics (b/138604305).
- */
-@Deprecated(
-    """
-        Use the new semantics-based Autofill APIs androidx.compose.ui.autofill.ContentType and
-        androidx.compose.ui.autofill.ContentDataType instead.
-        """
-)
-val LocalAutofillTree =
-    staticCompositionLocalOf<AutofillTree> { noLocalProvidedFor("LocalAutofillTree") }
-
-/**
- * The CompositionLocal that can be used to trigger autofill actions. Eg. [AutofillManager.commit].
- */
-val LocalAutofillManager =
-    staticCompositionLocalOf<AutofillManager?> { noLocalProvidedFor("LocalAutofillManager") }
 
 /** The CompositionLocal to provide communication with platform clipboard service. */
 val LocalClipboard = staticCompositionLocalOf<Clipboard> { noLocalProvidedFor("LocalClipboard") }
@@ -230,9 +189,6 @@ internal fun ProvideCommonCompositionLocals(
     content: @Composable () -> Unit,
 ) {
     CompositionLocalProvider(
-        LocalAutofill provides owner.autofill,
-        LocalAutofillManager provides owner.autofillManager,
-        LocalAutofillTree provides owner.autofillTree,
         LocalClipboard provides owner.clipboard,
         LocalDensity provides owner.density,
         LocalFocusManager provides owner.focusOwner,

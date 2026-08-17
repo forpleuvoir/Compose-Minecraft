@@ -21,7 +21,7 @@ package androidx.compose.ui.input.pointer
  *
  * 四种标准图标([PointerIcon.Default]/[PointerIcon.Crosshair]/[PointerIcon.Text]/
  * [PointerIcon.Hand])以此区分;平台接入点
- * [moe.forpleuvoir.compose_minecraft.platform.MinecraftComposeScene] 的
+ * [moe.forpleuvoir.compose_minecraft.platform.screen.MinecraftComposeScene] 的
  * `PlatformContext.setPointerIcon` 据此映射到 MC 原版光标
  * (`com.mojang.blaze3d.platform.cursor.CursorTypes`)。
  */

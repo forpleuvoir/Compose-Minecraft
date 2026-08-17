@@ -46,7 +46,6 @@ internal class MinecraftTextInputService : PlatformTextInputService {
     // ── 会话绑定 ──
 
     /** 新版 API 会话(BasicTextField(state))经自定义 PlatformContext.startInputMethod 绑定 */
-    @OptIn(ExperimentalComposeUiApi::class)
     private var request: PlatformTextInputMethodRequest? = null
 
     /** 旧版 API 会话(BasicTextField(value))经 startInput(value, ...) 绑定 */
@@ -130,7 +129,6 @@ internal class MinecraftTextInputService : PlatformTextInputService {
 
     // ── 新版 API 会话绑定(由自定义 PlatformContext.startInputMethod 调用)──
 
-    @OptIn(ExperimentalComposeUiApi::class)
     fun bindRequest(newRequest: PlatformTextInputMethodRequest) {
         legacyOnEditCommand = null
         request = newRequest
@@ -140,7 +138,6 @@ internal class MinecraftTextInputService : PlatformTextInputService {
         textInputManager.startTextInput()
     }
 
-    @OptIn(ExperimentalComposeUiApi::class)
     fun unbindRequest(newRequest: PlatformTextInputMethodRequest) {
         if (request === newRequest) {
             stopInput()

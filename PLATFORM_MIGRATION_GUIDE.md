@@ -8,12 +8,16 @@
 **Compose Minecraft Platform Mod** 是一个双 Loader(Fabric + NeoForge)基座 Mod,
 把 Compose Multiplatform 1.11 的 UI 运行时移植到 Minecraft 客户端:
 
-- **无 Skia / Skiko / Desktop / Material**:所有绘制直接进入 Minecraft 当前帧的
-  `GuiRenderState`(Vulkan/OpenGL 渲染后端无关,天然双后端支持);
+- **无 Skia / Skiko / Desktop / Material**:所有绘制经 `ComposeGuiRenderer` 提交到
+  当前主帧缓冲,不走原版 `GuiRenderState` 节点树(独立渲染工作流,T.24,
+  Vulkan/OpenGL 渲染后端无关,天然双后端支持);
 - **原版 `Screen` 桥接**:Compose 场景通过 `net.minecraft.client.gui.screens.Screen`
-  挂入 Minecraft,渲染、输入、生命周期全部走原版屏幕机制(无帧钩子 mixin、
-  无渲染注入 mixin;仅 StyleAccessor 只读字段 mixin);
-- **密度 1**:场景坐标 = Minecraft GUI 单位,`1dp == 1 GUI 单位`。
+  挂入 Minecraft,渲染、输入、生命周期全部走原版屏幕机制;渲染经
+  `GuiRendererMixin` 帧钩子(`@Inject` 在 `GuiRenderer.render()` 的 draw() 调用之后)
+  提交,mixin 清单:GuiRendererMixin(帧钩子)+ StyleAccessor(只读字段)+
+  FontManagerAccessor / FontSetAccessor / MinecraftAccessor(T.32 自定义字体);
+- **场景密度可配置(T.26)**:默认 `1f`(1dp == 1 像素,场景尺寸 = 窗口像素,T.24
+  1:1 不再除 guiScale),`ComposeScreen.open(density = …)` 可传 >1f 放大 UI。
 
 | 属性 | 值 |
 |---|---|
@@ -21,7 +25,7 @@
 | 版本 | `26.2-0.1.0` |
 | Loader | Fabric(0.19.x+ / Loom 1.17.x)、NeoForge(26.2.x) |
 | 运行时依赖 | Kotlin for Forge(Fabric 端 Fabric Kotlin) |
-| 平台包 | `moe.forpleuvoir.compose_minecraft.minecraft` |
+| 平台包 | `moe.forpleuvoir.compose_minecraft.platform` |
 
 ## 2. 依赖平台 Mod
 
@@ -63,10 +67,11 @@ side = "CLIENT"
 ## 3. 开始使用
 
 ```kotlin
-import moe.forpleuvoir.compose_minecraft.minecraft.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
 
-// 在任意主线程位置打开 Compose 屏幕(等价于原版 minecraft.gui.setScreen)
-ComposeScreen.open {
+// 在任意主线程位置打开 Compose 屏幕(等价于原版 minecraft.gui.setScreen);
+// 可传 density >1f 放大 UI(默认 1f)
+ComposeScreen.open(density = 1f) {
     MyComposeUi()
 }
 ```
@@ -86,9 +91,10 @@ ComposeScreen.open {
 
 ### 基础组件
 
-`Canvas`(绘制命令直通 GuiRenderState)、`background`、`border`、`clickable`、
-`Image`(CPU 位图)、`focusable`、`Hoverable`、`ContextMenuArea`、`DragAndDropTarget`、
-`BasicMarquee`、`ReceiveContent`。
+`Canvas`(绘制命令经 MinecraftCanvas 直通 ComposeGuiRenderer)、`background`、
+`border`、`clickable`、`Image`(CPU 位图)、`focusable`、`Hoverable`、
+`ContextMenuArea`、`BasicMarquee`、`ReceiveContent`。
+(系统拖放 `DragAndDropTarget` / `DragAndDropSource` 未接通,见 §5)
 
 ### 滚动与列表
 
@@ -100,9 +106,17 @@ ComposeScreen.open {
 
 `BasicText`(推荐,`Text` 未移植)、`ClickableText`、`SelectionContainer` 等。
 
-- 字体 = Minecraft 字体,行高 9px(固定),`fontSize` 第一版被忽略;
-- 颜色经 `TextStyle(color = ...)` 生效;
-- 测量与绘制统一使用 MC Font(`font.width` / `font.lineHeight`),结果一致。
+- 字体 = Minecraft 字体,行高 9px(固定 1x 行盒);
+- `fontSize`(sp)驱动字号(T.19):16sp = 1 倍平台基准(9sp = 1x 原生像素),
+  布局尺寸随缩放联动;`autoSize`(T.20)自动缩放(二分搜索最大适配字号);
+- 颜色经 `TextStyle(color = ...)` 生效;`BasicTextField(fontSize)` 输入框字号
+  (T.26,默认 18sp = 2x);
+- 富文本:段级混排(T.29,`BasicText(text: AnnotatedString)`)、
+  `PlatformSpanStyle` 承载 MC 原版 Style 渲染特性(obfuscated/shadowColor/
+  clickEvent/hoverEvent/insertion/font,T.28);
+- 默认字体/样式/字号 CompositionLocal(T.30/T.32):`LocalDefaultFont` /
+  `LocalDefaultTextStyle` / `LocalDefaultFontSize` 可 Provider 覆盖;
+  自定义字体经 `rememberCustomFont(path)` 注册(T.32)。
 
 ### 输入与焦点
 
@@ -129,7 +143,8 @@ ComposeScreen.open {
 | 剪贴板 | 已接通(经 MC `KeyboardHandler`,纯文本) | `LocalClipboard.current` 读写文本 |
 | 指针图标 `PointerIcon` | 已实现(I9) | `Modifier.pointerHoverIcon` 生效:Default→ARROW、Crosshair→CROSSHAIR、Text→IBEAM、Hand→POINTING_HAND(MC 原版 `CursorTypes`,经原版 per-frame 光标管线;自定义图标回退 ARROW) |
 | 动画库 `animation` / `material3` 动效 | 未经受控验证 | 先验证再使用 |
-| 远程图片/自定义字体加载 | 未移植(`FontFamily.Resolver` 未接通) | 仅用 MC 内置字体与 CPU 位图 |
+| 远程图片加载 | 未移植(`FontFamily.Resolver` 未接通) | 仅用 CPU 位图(`Image`) |
+| 自定义字体 | 已实现(T.32):FreeType 加载任意 ttf/otf/ttc 注册进 MC FontManager | `rememberCustomFont(path)` 自动注册/注销,`LocalDefaultFont provides …` 或 `PlatformSpanStyle(font = …)` 切换 |
 
 ## 6. 从 Desktop/Skiko 迁移时删除的依赖
 
@@ -157,8 +172,11 @@ implementation(compose.components.resources)      // 资源加载(未移植)
 
 ## 8. 坐标与密度
 
-- 场景密度固定 `1f`,`1dp == 1 GUI 单位 == 窗口像素 / guiScale`;
-- 指针坐标直接使用 MC 传入的 GUI 坐标,无需换算;
+- 默认密度 `1f`:场景坐标 = 窗口像素,`1dp == 1 像素`,场景尺寸 = 窗口像素
+  (T.24,不再除 guiScale);
+- 密度可配置(T.26):`ComposeScreen.open(density = 2f)` 时 UI 元素视觉放大,
+  1dp = 2 像素,文本字号随 scale 同步放大,与官方桌面 density 语义一致;
+- 指针坐标直接使用 MC 传入的像素坐标,无需换算(scene 内部按 density 换算 dp);
 - 窗口尺寸变化(含 GUI Scale 调整)自动同步,`resize` 由 `renderFrame` 每帧驱动。
 
 ## 9. 已知限制与后续计划

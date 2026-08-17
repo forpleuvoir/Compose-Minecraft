@@ -43,6 +43,6 @@ class FontLoader : Font.ResourceLoader {
         ReplaceWith("FontFamily.Resolver.resolve(font, )"),
     )
     override fun load(font: Font): Any {
-        throw UnsupportedOperationException("FontLoader.load 阶段 E 实现(Minecraft 字体渲染器)")
+        throw UnsupportedOperationException("FontLoader.load is implemented in phase E (Minecraft font renderer)")
     }
 }

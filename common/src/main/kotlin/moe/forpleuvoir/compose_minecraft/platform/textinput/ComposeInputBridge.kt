@@ -1,4 +1,4 @@
-package moe.forpleuvoir.compose_minecraft.platform
+package moe.forpleuvoir.compose_minecraft.platform.textinput
 
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.geometry.Offset
@@ -12,7 +12,7 @@ import net.minecraft.client.input.KeyEvent as MCKeyEvent
 /**
  * MC 输入 → Compose 输入的桥接工具。
  *
- * 从 [ComposeScreen] 抽离:MC 的键盘/鼠标事件统一在这里转换为 Compose 事件结构,
+ * 从 [moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen] 抽离:MC 的键盘/鼠标事件统一在这里转换为 Compose 事件结构,
  * 键码/修饰键的映射逻辑集中维护。
  */
 object ComposeInputBridge {

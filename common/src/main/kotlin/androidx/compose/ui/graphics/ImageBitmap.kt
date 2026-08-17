@@ -262,7 +262,7 @@ internal fun createImageBitmap(bytes: ByteArray): ImageBitmap {
     val native = try {
         NativeImage.read(bytes)
     } catch (e: IOException) {
-        throw IllegalArgumentException("图片解码失败(NativeImage.read)", e)
+        throw IllegalArgumentException("Failed to decode image (NativeImage.read)", e)
     }
     try {
         val width = native.width

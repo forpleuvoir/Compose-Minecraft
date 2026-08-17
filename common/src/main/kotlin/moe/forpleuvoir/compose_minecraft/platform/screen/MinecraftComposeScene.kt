@@ -1,4 +1,4 @@
-package moe.forpleuvoir.compose_minecraft.platform
+package moe.forpleuvoir.compose_minecraft.platform.screen
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.WindowInfo
 import androidx.compose.ui.scene.CanvasLayersComposeScene
 import androidx.compose.ui.scene.ComposeScene
 import androidx.compose.ui.scene.PointerEventResult
+import androidx.compose.ui.semantics.SemanticsOwner
 import androidx.compose.ui.text.input.PlatformTextInputService
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
@@ -96,6 +97,23 @@ class MinecraftComposeScene(
      */
     private var sceneContainerSize = IntSize.Zero
 
+    /**
+     * 已捕获的语义树所有者(复述系统数据源):由 [PlatformContext.semanticsOwnerListener]
+     * 在场景/图层附着时登记,ComposeScreen 朗读时遍历全部 owner 的语义节点。
+     * 主场景 owner 最先(init 时 onOwnerAppended),其后每个 Popup/Dialog 图层
+     * 各一个 owner(顺序 = 图层栈)。
+     */
+    private val capturedSemanticsOwners = mutableListOf<SemanticsOwner>()
+
+    /**
+     * 语义树变化回调(复述系统):owner 语义变化时触发,ComposeScreen 借此在
+     * 焦点变化时补触发原版朗读调度。注意此回调在语义快照提交时被调用,非合成期间。
+     */
+    internal var onSemanticsChanged: (() -> Unit)? = null
+
+    /** 全部已登记语义树(复述系统读取入口) */
+    internal fun getSemanticsOwners(): List<SemanticsOwner> = capturedSemanticsOwners.toList()
+
     private val scene: ComposeScene = CanvasLayersComposeScene(
         density = Density(density),
         size = IntSize(width.coerceAtLeast(1), height.coerceAtLeast(1)),
@@ -142,6 +160,27 @@ class MinecraftComposeScene(
             override fun setPointerIcon(pointerIcon: PointerIcon) {
                 desiredCursorType = pointerIcon.toMinecraftCursorType()
             }
+
+            // 复述系统:捕获语义树所有者(mainOwner 与每个图层 owner),语义变化时
+            // 通知 ComposeScreen(焦点变化 → 补触发原版朗读调度)
+            override val semanticsOwnerListener: PlatformContext.SemanticsOwnerListener
+                get() = object : PlatformContext.SemanticsOwnerListener {
+                    override fun onSemanticsOwnerAppended(semanticsOwner: SemanticsOwner) {
+                        capturedSemanticsOwners += semanticsOwner
+                    }
+
+                    override fun onSemanticsOwnerRemoved(semanticsOwner: SemanticsOwner) {
+                        capturedSemanticsOwners -= semanticsOwner
+                    }
+
+                    override fun onSemanticsChange(semanticsOwner: SemanticsOwner) {
+                        onSemanticsChanged?.invoke()
+                    }
+
+                    override fun onLayoutChange(semanticsOwner: SemanticsOwner, semanticsNodeId: Int) {
+                        // 位置/尺寸变化不触发朗读;朗读文本来源是语义属性,非几何
+                    }
+                }
         },
         // MC 每帧都会调用 render(),无需额外 invalidate 调度
         invalidate = {},

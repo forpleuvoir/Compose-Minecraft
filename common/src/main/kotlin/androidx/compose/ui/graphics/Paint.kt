@@ -19,17 +19,9 @@ package androidx.compose.ui.graphics
 /** Default alpha value used on [Paint]. This value will draw source content fully opaque. */
 const val DefaultAlpha: Float = 1.0f
 
-@Deprecated("Use direct reference to platform type instead of typealias")
-typealias NativePaint = MinecraftPaint
-
 fun Paint(): Paint = MinecraftPaint()
 
 interface Paint {
-    @Suppress("DEPRECATION")
-    @Deprecated("Use platform-specific extension to get platform reference")
-    fun asFrameworkPaint(): NativePaint {
-        throw NotImplementedError()
-    }
 
     /**
      * Configures the alpha value between 0f to 1f representing fully transparent to fully opaque

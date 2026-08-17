@@ -29,7 +29,6 @@ internal value class ContextMenuStrings(val value: Int) {
         val Copy: ContextMenuStrings = ContextMenuStrings(2)
         val Paste: ContextMenuStrings = ContextMenuStrings(3)
         val SelectAll: ContextMenuStrings = ContextMenuStrings(4)
-        val Autofill: ContextMenuStrings = ContextMenuStrings(5)
     }
 }
 
@@ -40,7 +39,6 @@ internal fun getString(string: ContextMenuStrings): String = when (string) {
     ContextMenuStrings.Copy -> "Copy"
     ContextMenuStrings.Paste -> "Paste"
     ContextMenuStrings.SelectAll -> "Select All"
-    ContextMenuStrings.Autofill -> "Autofill"
     else -> "Unknown"
 }
 
@@ -50,6 +48,5 @@ internal fun getLocalizedString(string: ContextMenuStrings): String = when (stri
     ContextMenuStrings.Copy -> "Copy"
     ContextMenuStrings.Paste -> "Paste"
     ContextMenuStrings.SelectAll -> "Select All"
-    ContextMenuStrings.Autofill -> "Autofill"
     else -> "Unknown"
 }

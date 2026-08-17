@@ -1,4 +1,4 @@
-package moe.forpleuvoir.compose_minecraft.platform
+package moe.forpleuvoir.compose_minecraft.platform.render
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.Dp
  *
  * [LocalShadowLight] 为光源方向(归一化向量,屏幕坐标:y 向下,
  * 默认右上角 = (1, -1))。业务方用 [androidx.compose.runtime.CompositionLocalProvider]
- * 覆盖光源;平台提供的 [Modifier.shadow] 在组合期自动读取,阴影向光源
+ * 覆盖光源;平台提供的 [shadow] 在组合期自动读取,阴影向光源
  * 反方向偏移投射,业务方无需手动指定任何光源属性:
  *
  * ```

@@ -68,7 +68,4 @@ object TextContextMenuKeys {
 
     /** Key for the context menu "Select All" item. */
     val SelectAllKey = Any()
-
-    /** Key for the context menu "Autofill" item. */
-    val AutofillKey = Any()
 }

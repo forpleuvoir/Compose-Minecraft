@@ -22,7 +22,7 @@ import androidx.compose.runtime.Stable
  * Signals the keyboard what type of action should be displayed. It is not guaranteed that the
  * keyboard will show the requested action.
  */
-@kotlin.jvm.JvmInline
+@JvmInline
 value class ImeAction private constructor(@Suppress("unused") private val value: Int) {
 
     override fun toString(): String {

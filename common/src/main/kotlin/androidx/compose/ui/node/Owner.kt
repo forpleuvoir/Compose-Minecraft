@@ -20,8 +20,6 @@ import androidx.annotation.RestrictTo
 import androidx.collection.IntObjectMap
 import androidx.compose.runtime.Applier
 import androidx.compose.runtime.retain.RetainedValuesStore
-import androidx.compose.ui.InternalComposeUiApi
-import androidx.compose.ui.autofill.AutofillManager
 import androidx.compose.ui.draganddrop.DragAndDropManager
 import androidx.compose.ui.focus.FocusOwner
 import androidx.compose.ui.geometry.Offset
@@ -35,12 +33,7 @@ import androidx.compose.ui.input.pointer.PositionCalculator
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.PlacementScope
 import androidx.compose.ui.modifier.ModifierLocalManager
-import androidx.compose.ui.platform.Clipboard
-import androidx.compose.ui.platform.PlatformTextInputSessionScope
-import androidx.compose.ui.platform.SoftwareKeyboardController
-import androidx.compose.ui.platform.TextToolbar
-import androidx.compose.ui.platform.ViewConfiguration
-import androidx.compose.ui.platform.WindowInfo
+import androidx.compose.ui.platform.*
 import androidx.compose.ui.semantics.SemanticsOwner
 import androidx.compose.ui.spatial.RectManager
 import androidx.compose.ui.text.font.Font
@@ -93,24 +86,6 @@ internal interface Owner : PositionCalculator {
 
     /** Provide toolbar for text-related actions, such as copy, paste, cut etc. */
     val textToolbar: TextToolbar
-
-    /**
-     * A data structure used to store autofill information. It is used by components that want to
-     * provide autofill semantics.
-     */
-    val autofillTree: @Suppress("Deprecation") androidx.compose.ui.autofill.AutofillTree
-
-    /**
-     * The [Autofill][androidx.compose.ui.autofill.Autofill] class can be used to perform autofill
-     * operations. It is used as a CompositionLocal.
-     */
-    val autofill: @Suppress("Deprecation") androidx.compose.ui.autofill.Autofill?
-
-    /**
-     * The [AutofillManager] class can be used to perform autofill operations. It is used as a
-     * CompositionLocal.
-     */
-    val autofillManager: AutofillManager?
 
     val density: Density
 
@@ -233,9 +208,6 @@ internal interface Owner : PositionCalculator {
      * window, this will not be a simple translation.
      */
     fun calculateLocalPosition(positionInWindow: Offset): Offset
-
-    /** Ask the system to request autofill values to this owner. */
-    fun requestAutofill(node: LayoutNode)
 
     /**
      * Iterates through all LayoutNodes that have requested layout and measures and lays them out.

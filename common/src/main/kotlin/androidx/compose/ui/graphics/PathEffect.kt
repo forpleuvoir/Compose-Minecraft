@@ -79,20 +79,20 @@ interface PathEffect {
 }
 
 internal fun actualCornerPathEffect(radius: Float): PathEffect =
-    throw UnsupportedOperationException("PathEffect.cornerPathEffect 第一版不支持")
+    throw UnsupportedOperationException("PathEffect.cornerPathEffect is not supported in v1")
 
 internal fun actualDashPathEffect(intervals: FloatArray, phase: Float): PathEffect =
-    throw UnsupportedOperationException("PathEffect.dashPathEffect 第一版不支持")
+    throw UnsupportedOperationException("PathEffect.dashPathEffect is not supported in v1")
 
 internal fun actualChainPathEffect(outer: PathEffect, inner: PathEffect): PathEffect =
-    throw UnsupportedOperationException("PathEffect.chainPathEffect 第一版不支持")
+    throw UnsupportedOperationException("PathEffect.chainPathEffect is not supported in v1")
 
 internal fun actualStampedPathEffect(
     shape: Path,
     advance: Float,
     phase: Float,
     style: StampedPathEffectStyle,
-): PathEffect = throw UnsupportedOperationException("PathEffect.stampedPathEffect 第一版不支持")
+): PathEffect = throw UnsupportedOperationException("PathEffect.stampedPathEffect is not supported in v1")
 
 /**
  * Strategy for transforming each point of the shape along the drawn path

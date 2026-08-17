@@ -189,7 +189,7 @@ object MinecraftCustomFonts {
     fun registerCustomFont(identifier: Identifier, path: Path): Boolean {
         val accessor = fontManagerAccessor
         if (accessor == null) {
-            LOGGER.error("[ComposeMinecraft] 无法访问 FontManager,自定义字体注册被跳过: {}", identifier)
+            LOGGER.error("[ComposeMinecraft] cannot access FontManager, custom font registration skipped: {}", identifier)
             return false
         }
         // 已注册且仍有效 → 直接复用
@@ -240,7 +240,7 @@ object MinecraftCustomFonts {
                 throw t
             }
         }.getOrElse { e ->
-            LOGGER.error("[ComposeMinecraft] 注册自定义字体失败 {} ({})", identifier, path, e)
+            LOGGER.error("[ComposeMinecraft] failed to register custom font {} ({})", identifier, path, e)
             false
         }
     }
@@ -251,9 +251,9 @@ object MinecraftCustomFonts {
      */
     fun ensureAlive() {
         val accessor = fontManagerAccessor ?: return
-        for (entry in entries.values.toList()) {
-            if (accessor.fontSets()[entry.identifier] !== entry.fontSet) {
-                registerCustomFont(entry.identifier, entry.path)
+        for ((identifier, path, _, fontSet) in entries.values.toList()) {
+            if (accessor.fontSets()[identifier] !== fontSet) {
+                registerCustomFont(identifier, path)
             }
         }
     }

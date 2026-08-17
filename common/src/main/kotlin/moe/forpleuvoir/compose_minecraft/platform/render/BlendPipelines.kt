@@ -176,7 +176,7 @@ internal object BlendPipelines {
             try {
                 resourceProvider.getResourceOrThrow(location).openAsReader().use { it.readText() }
             } catch (e: Exception) {
-                LOGGER.error("Compose-Minecraft: 无法读取 shader {}", location, e)
+                LOGGER.error("Compose-Minecraft: failed to read shader {}", location, e)
                 null
             }
         }
@@ -189,7 +189,7 @@ internal object BlendPipelines {
             try {
                 device.precompilePipeline(p, shaderSource)
             } catch (e: Exception) {
-                LOGGER.error("Compose-Minecraft: 编译 blend pipeline {} 失败", p.getLocation(), e)
+                LOGGER.error("Compose-Minecraft: failed to compile blend pipeline {}", p.getLocation(), e)
             }
         }
     }

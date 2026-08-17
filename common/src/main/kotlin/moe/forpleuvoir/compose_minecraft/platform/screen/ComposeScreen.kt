@@ -1,28 +1,29 @@
-package moe.forpleuvoir.compose_minecraft.platform
+package moe.forpleuvoir.compose_minecraft.platform.screen
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEvent as ComposeKeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
-import moe.forpleuvoir.compose_minecraft.platform.ComposeInputBridge.scrollDelta
-import moe.forpleuvoir.compose_minecraft.platform.ComposeInputBridge.toCompose
-import moe.forpleuvoir.compose_minecraft.platform.ComposeInputBridge.toPointerKeyboardModifiers
-import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiRenderer
 import com.mojang.blaze3d.platform.InputConstants
 import com.mojang.blaze3d.platform.cursor.CursorType
+import moe.forpleuvoir.compose_minecraft.platform.textinput.ComposeInputBridge.scrollDelta
+import moe.forpleuvoir.compose_minecraft.platform.textinput.ComposeInputBridge.toCompose
+import moe.forpleuvoir.compose_minecraft.platform.textinput.ComposeInputBridge.toPointerKeyboardModifiers
+import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiRenderer
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.narration.NarrationElementOutput
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.CharacterEvent
-import net.minecraft.client.input.KeyEvent as MCKeyEvent
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.client.input.PreeditEvent
 import net.minecraft.network.chat.Component
+import androidx.compose.ui.input.key.KeyEvent as ComposeKeyEvent
+import net.minecraft.client.input.KeyEvent as MCKeyEvent
 
 /**
  * 原版 [Screen] 桥接(参考 ibuki_gourd 的 ComposeScreen 模式):
@@ -42,7 +43,7 @@ import net.minecraft.network.chat.Component
  * 父屏幕能力(T.25):
  * - [parent]:打开本屏之前的 Screen。关闭时([onClose],Esc 或业务调用)自动
  *   `setScreen(parent)` 返回父屏 —— 与原版各 Screen 的 lastScreen 约定一致
- *   (原版 [Screen.onClose] 默认 `setScreen(null)`,[Gui.setScreen] 无自动记忆,
+ *   (原版 [Screen.onClose] 默认 `setScreen(null)`,[net.minecraft.client.gui.Gui.setScreen] 无自动记忆,
  *   lastScreen 是子类约定);
  * - [renderParentScreen]:开关,控制本屏打开时是否把父屏内容渲染在 Compose 之下
  *   (Compose 内容在最上层,半透明背景可透出父屏)。原版父屏走原版 GuiRenderState
@@ -75,6 +76,18 @@ class ComposeScreen(
      */
     var reopenable: Boolean = false
 
+    // ── 复述系统(Narration)桥接状态 ──────────────────────────
+    // 最近一次鼠标位置(像素,经 toPixels 换算):悬停朗读回退用
+    private var lastMousePixelX: Float = 0f
+    private var lastMousePixelY: Float = 0f
+
+    // 上一次朗读的焦点语义节点 id:语义变化时检测焦点迁移 → 补触发原版朗读
+    private var lastFocusedSemanticsId: Int = -1
+
+    // 语义变化暂存:onSemanticsChanged 回调发生在语义快照提交期(合成/测量阶段),
+    // 不能直接调 triggerImmediateNarration,改为标记后在下一帧 extractRenderState 处理
+    private var narrationPending: Boolean = false
+
     init {
         ensureScene()
     }
@@ -86,6 +99,13 @@ class ComposeScreen(
     private fun ensureScene() {
         if (composeScene == null) {
             val scene = MinecraftComposeScene(width = 1, height = 1, density = density)
+            // 复述系统:语义树变化(焦点迁移等)时标记,下一帧 extractRenderState 补触发
+            // 原版朗读调度(不能在语义快照提交期直接触发,会递归)
+            scene.onSemanticsChanged = {
+                if (NarratedHelper.currentFocusedSemanticsId(composeScene) != lastFocusedSemanticsId) {
+                    narrationPending = true
+                }
+            }
             scene.setContent(content)
             composeScene = scene
         }
@@ -120,6 +140,14 @@ class ComposeScreen(
             }
         }
         composeScene?.renderFrame()
+        // 复述系统:语义变化(Compose 内部焦点迁移)补触发原版朗读。extractRenderState
+        // 帧内调用是安全的(不在语义快照提交期,不会递归);triggerImmediateNarration
+        // 内部只在 Narrator.isActive() 或 DEBUG 时执行,静默无副作用。
+        if (narrationPending) {
+            narrationPending = false
+            lastFocusedSemanticsId = NarratedHelper.currentFocusedSemanticsId(composeScene)
+            triggerImmediateNarration(false)
+        }
         // I9 指针图标:把 Compose 场景的光标请求并入原版 per-frame 光标管线
         // (extractor 构造时 pendingCursor = CursorType.DEFAULT,这里覆写请求值,
         // 帧末由原版 applyCursor → Window.selectCursor 生效,带去重、尊重
@@ -154,6 +182,8 @@ class ComposeScreen(
     private fun toPixels(x: Double): Float = (x * guiScale()).toFloat()
 
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
+        lastMousePixelX = toPixels(event.x)
+        lastMousePixelY = toPixels(event.y)
         val consumed = composeScene?.sendPointerEvent(
             eventType = PointerEventType.Press,
             position = Offset(toPixels(event.x), toPixels(event.y)),
@@ -176,6 +206,8 @@ class ComposeScreen(
     }
 
     override fun mouseMoved(x: Double, y: Double) {
+        lastMousePixelX = toPixels(x)
+        lastMousePixelY = toPixels(y)
         composeScene?.sendPointerEvent(
             eventType = PointerEventType.Move,
             position = Offset(toPixels(x), toPixels(y)),
@@ -185,6 +217,8 @@ class ComposeScreen(
     }
 
     override fun mouseDragged(event: MouseButtonEvent, dx: Double, dy: Double): Boolean {
+        lastMousePixelX = toPixels(event.x)
+        lastMousePixelY = toPixels(event.y)
         val consumed = composeScene?.sendPointerEvent(
             eventType = PointerEventType.Move,
             position = Offset(toPixels(event.x), toPixels(event.y)),
@@ -216,19 +250,17 @@ class ComposeScreen(
      * 组合期间按键不达应用的行为一致)。
      */
     override fun keyPressed(event: MCKeyEvent): Boolean {
-        if (composeScene?.textInputService?.isComposing == true && event.key in IME_COMPOSITION_KEYS) {
-            return true
-        }
-        return composeScene?.sendKeyEvent(event.toCompose(KeyEventType.KeyDown)) == true ||
-                super.keyPressed(event)
+        return composeScene?.textInputService?.isComposing == true
+                && event.key in IME_COMPOSITION_KEYS
+                || composeScene?.sendKeyEvent(event.toCompose(KeyEventType.KeyDown)) == true
+                || super.keyPressed(event)
     }
 
     override fun keyReleased(event: MCKeyEvent): Boolean {
-        if (composeScene?.textInputService?.isComposing == true && event.key in IME_COMPOSITION_KEYS) {
-            return true
-        }
-        return composeScene?.sendKeyEvent(event.toCompose(KeyEventType.KeyUp)) == true ||
-                super.keyReleased(event)
+        return composeScene?.textInputService?.isComposing == true
+                && event.key in IME_COMPOSITION_KEYS
+                || composeScene?.sendKeyEvent(event.toCompose(KeyEventType.KeyUp)) == true
+                || super.keyReleased(event)
     }
 
     /**
@@ -259,7 +291,7 @@ class ComposeScreen(
 
     /**
      * IME 组合态(preedit)转发(实施计划 §3.2/§4-3):系统输入法的组合串变化(含提交/取消
-     * 后的 null)转发到 [MinecraftTextInputService.onPreeditChanged],由 service 转换为
+     * 后的 null)转发到 [moe.forpleuvoir.compose_minecraft.platform.textinput.MinecraftTextInputService.onPreeditChanged],由 service 转换为
      * Compose EditCommand 写入编辑缓冲(下划线组合文本/组合区清理/光标定位)。
      */
     override fun preeditUpdated(event: PreeditEvent?): Boolean {
@@ -290,6 +322,12 @@ class ComposeScreen(
             composeScene = null
         }
         super.removed()
+    }
+
+    // ── 复述系统(Narration)桥接 ──────────────────────────────
+
+    override fun updateNarratedWidget(output: NarrationElementOutput) {
+        NarratedHelper.updateNarratedWidget(composeScene, Offset(lastMousePixelX, lastMousePixelY), output)
     }
 
     companion object {

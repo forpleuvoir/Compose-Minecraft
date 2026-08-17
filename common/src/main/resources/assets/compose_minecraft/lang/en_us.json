@@ -1,0 +1,19 @@
+{
+  "compose_minecraft.narration.navigation_hint": "Use the Tab key to navigate between elements on the screen; hovering with the mouse also narrates them",
+  "compose_minecraft.narration.toggleable.on": "On",
+  "compose_minecraft.narration.toggleable.off": "Off",
+  "compose_minecraft.narration.toggleable.indeterminate": "Indeterminate",
+  "compose_minecraft.narration.selected": "Selected",
+  "compose_minecraft.narration.progress": "Progress: %s%%",
+  "compose_minecraft.narration.heading": "Heading",
+  "compose_minecraft.narration.disabled_suffix": " (disabled)",
+  "compose_minecraft.narration.role.button": "Button",
+  "compose_minecraft.narration.role.checkbox": "Checkbox",
+  "compose_minecraft.narration.role.switch": "Switch",
+  "compose_minecraft.narration.role.radio_button": "Radio button",
+  "compose_minecraft.narration.role.tab": "Tab",
+  "compose_minecraft.narration.role.image": "Image",
+  "compose_minecraft.narration.role.dropdown_list": "Dropdown list",
+  "compose_minecraft.narration.role.value_picker": "Value picker",
+  "compose_minecraft.narration.role.carousel": "Carousel"
+}

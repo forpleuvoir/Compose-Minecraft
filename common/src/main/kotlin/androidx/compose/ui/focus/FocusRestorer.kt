@@ -107,18 +107,6 @@ internal fun FocusTargetNode.pinFocusedChild(): PinnedHandle? {
 fun Modifier.focusRestorer(fallback: FocusRequester = Default): Modifier =
     this then FocusRestorerElement(fallback)
 
-/**
- * Deprecated focusRestorer API. Use the version accepting [FocusRequester] instead of the lambda.
- * This method will be removed soon after submitting.
- */
-@ExperimentalComposeUiApi
-@Deprecated(
-    "Use focusRestorer(FocusRequester) instead",
-    ReplaceWith("this.focusRestorer(onRestoreFailed())"),
-    DeprecationLevel.WARNING,
-)
-fun Modifier.focusRestorer(onRestoreFailed: (() -> FocusRequester)?): Modifier =
-    focusRestorer(fallback = onRestoreFailed?.invoke() ?: Default)
 
 internal class FocusRestorerNode(var fallback: FocusRequester) :
     CompositionLocalConsumerModifierNode,

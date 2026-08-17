@@ -61,7 +61,7 @@ internal fun ActualLinearGradientShader(
     colors: List<Color>,
     colorStops: List<Float>?,
     tileMode: TileMode,
-): Shader = throw UnsupportedOperationException("Shader(LinearGradient) 第一版不支持")
+): Shader = throw UnsupportedOperationException("Shader(LinearGradient) is not supported in v1")
 
 /**
  * Creates a radial gradient centered at `center` that ends at `radius` distance from the center.
@@ -91,7 +91,7 @@ internal fun ActualRadialGradientShader(
     colors: List<Color>,
     colorStops: List<Float>?,
     tileMode: TileMode,
-): Shader = throw UnsupportedOperationException("Shader(RadialGradient) 第一版不支持")
+): Shader = throw UnsupportedOperationException("Shader(RadialGradient) is not supported in v1")
 
 /**
  * Creates a circular gradient that sweeps around a provided center point. The sweep begins relative
@@ -115,7 +115,7 @@ internal fun ActualSweepGradientShader(
     center: Offset,
     colors: List<Color>,
     colorStops: List<Float>?,
-): Shader = throw UnsupportedOperationException("Shader(SweepGradient) 第一版不支持")
+): Shader = throw UnsupportedOperationException("Shader(SweepGradient) is not supported in v1")
 
 /**
  * Creates a Shader using the given [ImageBitmap] as an input texture. If the shader is to be drawn
@@ -132,7 +132,7 @@ internal fun ActualImageShader(
     image: ImageBitmap,
     tileModeX: TileMode,
     tileModeY: TileMode,
-): Shader = throw UnsupportedOperationException("Shader(Image) 第一版不支持")
+): Shader = throw UnsupportedOperationException("Shader(Image) is not supported in v1")
 
 /**
  * Creates a composited result between 2 shaders and the specified BlendMode. The specified
@@ -148,4 +148,4 @@ fun CompositeShader(dst: Shader, src: Shader, blendMode: BlendMode): Shader =
     ActualCompositeShader(dst, src, blendMode)
 
 internal fun ActualCompositeShader(dst: Shader, src: Shader, blendMode: BlendMode): Shader =
-    throw UnsupportedOperationException("Shader(Composite) 第一版不支持")
+    throw UnsupportedOperationException("Shader(Composite) is not supported in v1")

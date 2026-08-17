@@ -106,7 +106,6 @@ internal fun CommonContextMenuArea(
                             TextContextMenuItems.Copy -> copy(false)
                             TextContextMenuItems.Paste -> paste()
                             TextContextMenuItems.SelectAll -> selectAll()
-                            TextContextMenuItems.Autofill -> autofill()
                         }
                     }
                 },
@@ -168,12 +167,6 @@ internal enum class TextContextMenuItems(
         key = TextContextMenuKeys.SelectAllKey,
         stringId = ContextMenuStrings.SelectAll,
         drawableId = ContextMenuIcons.ActionModeSelectAllDrawable,
-    ),
-    Autofill(
-        key = TextContextMenuKeys.AutofillKey,
-        stringId = ContextMenuStrings.Autofill,
-        // Platform also doesn't have an icon for the autofill item.
-        drawableId = ContextMenuIcons.ID_NULL,
     );
 
     @ReadOnlyComposable @Composable fun resolvedString(): String = getString(stringId)
@@ -203,7 +196,6 @@ internal suspend fun TextFieldSelectionState.getContextMenuItemsAvailability():
         canPaste = canShowPasteMenuItem(),
         canCut = canShowCutMenuItem(),
         canSelectAll = canShowSelectAllMenuItem(),
-        canAutofill = canShowAutofillMenuItem(),
     )
 }
 
@@ -215,7 +207,6 @@ internal suspend fun TextFieldSelectionManager.getContextMenuItemsAvailability()
         canPaste = canShowPasteMenuItem(),
         canCut = canShowCutMenuItem(),
         canSelectAll = canShowSelectAllMenuItem(),
-        canAutofill = canShowAutofillMenuItem(),
     )
 }
 
@@ -226,13 +217,11 @@ internal value class MenuItemsAvailability private constructor(val value: Int) {
         canPaste: Boolean,
         canCut: Boolean,
         canSelectAll: Boolean,
-        canAutofill: Boolean,
     ) : this(
         (if (canCopy) COPY else 0) or
             (if (canPaste) PASTE else 0) or
             (if (canCut) CUT else 0) or
-            (if (canSelectAll) SELECT_ALL else 0) or
-            (if (canAutofill) AUTO_FILL else 0)
+            (if (canSelectAll) SELECT_ALL else 0)
     )
 
     companion object {
@@ -240,7 +229,6 @@ internal value class MenuItemsAvailability private constructor(val value: Int) {
         private const val PASTE = 0b0010
         private const val CUT = 0b0100
         private const val SELECT_ALL = 0b1000
-        private const val AUTO_FILL = 0b10000
         private const val NONE = 0
 
         val None = MenuItemsAvailability(NONE)
@@ -257,7 +245,4 @@ internal value class MenuItemsAvailability private constructor(val value: Int) {
 
     val canSelectAll
         get() = value and SELECT_ALL == SELECT_ALL
-
-    val canAutofill
-        get() = value and AUTO_FILL == AUTO_FILL
 }

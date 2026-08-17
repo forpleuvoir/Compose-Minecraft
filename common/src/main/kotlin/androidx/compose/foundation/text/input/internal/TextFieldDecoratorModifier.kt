@@ -30,22 +30,10 @@ import androidx.compose.foundation.text.Handle
 import androidx.compose.foundation.text.KeyCommand
 import androidx.compose.foundation.text.KeyboardActionScope
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.LocalAutofillHighlightBrush
-import androidx.compose.foundation.text.LocalAutofillHighlightColor
-import androidx.compose.foundation.text.autofillHighlightColor
 import androidx.compose.foundation.text.input.InputTransformation
 import androidx.compose.foundation.text.input.KeyboardActionHandler
 import androidx.compose.foundation.text.input.internal.selection.TextFieldSelectionState
 import androidx.compose.foundation.text.input.internal.selection.TextToolbarState
-import androidx.compose.foundation.text.resolveAutofillHighlight
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.autofill.ContentDataType
-import androidx.compose.ui.autofill.ContentType
-import androidx.compose.ui.autofill.FillableData
-import androidx.compose.ui.autofill.createFromText
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusProperties
 import androidx.compose.ui.focus.FocusPropertiesModifierNode
@@ -53,9 +41,6 @@ import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyInputModifierNode
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.isShiftPressed
-import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.SuspendingPointerInputModifierNode
@@ -73,7 +58,6 @@ import androidx.compose.ui.node.SemanticsModifierNode
 import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.node.invalidateSemantics
 import androidx.compose.ui.node.observeReads
-import androidx.compose.ui.node.requestAutofill
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalInputModeManager
@@ -81,27 +65,21 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.PlatformTextInputModifierNode
-import androidx.compose.ui.platform.PlatformTextInputSession
 import androidx.compose.ui.platform.SoftwareKeyboardController
-import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.platform.WindowInfo
 import androidx.compose.ui.platform.establishTextInputSession
 import androidx.compose.ui.semantics.InputTextSuggestionState
 import androidx.compose.ui.semantics.SemanticsPropertyReceiver
-import androidx.compose.ui.semantics.contentDataType
-import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.copyText
 import androidx.compose.ui.semantics.cutText
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.editableText
-import androidx.compose.ui.semantics.fillableData
 import androidx.compose.ui.semantics.getTextLayoutResult
 import androidx.compose.ui.semantics.inputText
 import androidx.compose.ui.semantics.inputTextSuggestionState
 import androidx.compose.ui.semantics.insertTextAtCursor
 import androidx.compose.ui.semantics.isEditable
 import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.onFillData
 import androidx.compose.ui.semantics.onImeAction
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.password
@@ -113,16 +91,12 @@ import androidx.compose.ui.semantics.textSelectionRange
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.ImeOptions
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class) private val MediaTypesText = setOf(MediaType.Text)
@@ -216,10 +190,6 @@ internal class TextFieldDecoratorModifierNode(
     ObserverModifierNode,
     LayoutAwareModifierNode,
     FocusPropertiesModifierNode {
-
-    init {
-        textFieldSelectionState.requestAutofillAction = { requestAutofill() }
-    }
 
     private val focusableNode =
         FocusableNode(
@@ -410,32 +380,8 @@ internal class TextFieldDecoratorModifierNode(
         getReceiveContentConfiguration()
     }
 
-    // Mutable state to hold the autofillHighlightOn value
-    private var autofillHighlightOn by mutableStateOf(false)
-
     override fun ContentDrawScope.draw() {
         drawContent()
-
-        // Autofill highlight is drawn on top of the content — this way the coloring appears over
-        // any Material background applied.
-        if (autofillHighlightOn) {
-            @Suppress("DEPRECATION")
-            drawRect(
-                brush =
-                    resolveAutofillHighlight(
-                        brush = currentValueOf(LocalAutofillHighlightBrush),
-                        color = currentValueOf(LocalAutofillHighlightColor),
-                        defaultColor = autofillHighlightColor(),
-                    )
-            )
-        }
-    }
-
-    private suspend fun observeUntransformedTextChanges() {
-        snapshotFlow { textFieldState.untransformedText.toString() }
-            .drop(1)
-            .take(1)
-            .collect { autofillHighlightOn = false }
     }
 
     /** Updates all the related properties and invalidates internal state based on the changes. */
@@ -518,7 +464,6 @@ internal class TextFieldDecoratorModifierNode(
                         }
                 }
             }
-            textFieldSelectionState.requestAutofillAction = { requestAutofill() }
         }
 
         if (interactionSource != previousInteractionSource) {
@@ -557,33 +502,6 @@ internal class TextFieldDecoratorModifierNode(
 
         val editable = enabled && !readOnly
         isEditable = editable
-
-        // The developer will set `contentType`. TF populates the other autofill-related
-        // semantics. And since we're in a TextField, set the `contentDataType` to be "Text".
-        this.contentDataType = ContentDataType.Text
-        FillableData.createFromText(text)?.let { this.fillableData = it }
-        onFillData { dataValue ->
-            if (!editable) return@onFillData false
-            dataValue.textValue?.let { textFieldState.replaceAll(it) }
-            autofillHighlightOn = true
-            coroutineScope.launch { observeUntransformedTextChanges() }
-            true
-        }
-
-        when (keyboardOptions.keyboardType) {
-            KeyboardType.Email -> {
-                contentType = ContentType.EmailAddress
-            }
-            KeyboardType.Password -> {
-                contentType = ContentType.Password
-            }
-            KeyboardType.NumberPassword -> {
-                contentType = ContentType.Password
-            }
-            KeyboardType.Phone -> {
-                contentType = ContentType.PhoneNumber
-            }
-        }
 
         getTextLayoutResult {
             textLayoutState.layoutResult?.let { result -> it.add(result) } ?: false

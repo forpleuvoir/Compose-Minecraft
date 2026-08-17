@@ -29,7 +29,6 @@ import androidx.compose.ui.ComposeUiFlags
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.SessionMutex
 import androidx.compose.ui.areWindowInsetsRulersEnabled
-import androidx.compose.ui.autofill.AutofillManager
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -44,7 +43,6 @@ import androidx.compose.ui.layout.RootMeasurePolicy
 import androidx.compose.ui.layout.RulerProviderModifierElement
 import androidx.compose.ui.modifier.ModifierLocalManager
 import androidx.compose.ui.platform.*
-import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftGraphicsContext
 import androidx.compose.ui.scene.ComposeScene
 import androidx.compose.ui.scene.ComposeSceneInputHandler
 import androidx.compose.ui.scene.ComposeScenePointer
@@ -61,10 +59,11 @@ import androidx.compose.ui.unit.*
 import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastMaxOfOrDefault
 import androidx.compose.ui.util.trace
+import kotlinx.coroutines.*
+import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftGraphicsContext
 import kotlin.coroutines.CoroutineContext
 import kotlin.math.max
 import kotlin.math.min
-import kotlinx.coroutines.*
 
 /**
  * Owner of root [LayoutNode].
@@ -81,7 +80,7 @@ internal class RootNodeOwner(
     private val snapshotInvalidationTracker: SnapshotInvalidationTracker,
     private val inputHandler: ComposeSceneInputHandler,
 ) {
-    val focusOwner: FocusOwner get() = _owner.focusOwner
+    val focusOwner: FocusOwner get() = owner.focusOwner
     val dragAndDropOwner = DragAndDropOwner(platformContext.dragAndDropManager)
 
     private val rootSemanticsNode = EmptySemanticsModifier()
@@ -91,8 +90,8 @@ internal class RootNodeOwner(
     private val graphicsContext = MinecraftGraphicsContext()
     private val coroutineScope = CoroutineScope(coroutineContext + Job(parent = coroutineContext[Job]))
 
-    private val _owner = OwnerImpl(layoutDirection, coroutineContext)
-    val owner: Owner get() = _owner
+    val owner: Owner
+        field = OwnerImpl(layoutDirection, coroutineContext)
 
     val semanticsOwner get() = owner.semanticsOwner
     var size: IntSize? = size
@@ -143,7 +142,7 @@ internal class RootNodeOwner(
         platformContext.rootForTestListener?.onRootForTestDisposed(rootForTest)
         snapshotObserver.stopObserving()
         graphicsContext.dispose()
-        _owner.dispose()
+        owner.dispose()
         // we don't need to call root.detach() because root will be garbage collected
         isDisposed = true
     }
@@ -233,7 +232,7 @@ internal class RootNodeOwner(
     }
 
     fun setRootModifier(modifier: Modifier) {
-        owner.root.modifier = _owner.rootModifier then modifier
+        owner.root.modifier = owner.rootModifier then modifier
     }
 
     private fun onRootConstrainsChanged(constraints: Constraints?) {
@@ -247,7 +246,6 @@ internal class RootNodeOwner(
         pointerInputEventProcessor.processCancel()
     }
 
-    @OptIn(InternalCoreApi::class)
     fun onPointerInput(event: PointerInputEvent): PointerEventResult {
         if (event.button != null) {
             platformContext.inputModeManager.requestInputMode(InputMode.Touch)
@@ -289,7 +287,7 @@ internal class RootNodeOwner(
     }
 
     fun onRotaryEvent(event: RotaryScrollEvent): Boolean {
-        return _owner.focusOwner.dispatchRotaryEvent(event)
+        return owner.focusOwner.dispatchRotaryEvent(event)
     }
 
     private fun isInBounds(localPosition: Offset): Boolean =
@@ -370,15 +368,6 @@ internal class RootNodeOwner(
         override val graphicsContext get() = this@RootNodeOwner.graphicsContext
         override val textToolbar get() = platformContext.textToolbar
 
-        @Suppress("DEPRECATION")
-        override val autofillTree = androidx.compose.ui.autofill.AutofillTree()
-
-        @Suppress("DEPRECATION")
-        override val autofill: androidx.compose.ui.autofill.Autofill?
-            get() = null
-
-        // TODO https://youtrack.jetbrains.com/issue/CMP-1572
-        override val autofillManager: AutofillManager? get() = null
         override val density get() = this@RootNodeOwner.density
         override val textInputService =
             TextInputService(platformContext.textInputService)
@@ -394,7 +383,7 @@ internal class RootNodeOwner(
 
             @OptIn(InternalTextApi::class)
             override suspend fun startInputMethod(request: PlatformTextInputMethodRequest): Nothing {
-                innerSessionMutex.withSessionCancellingPrevious<Nothing>(
+                innerSessionMutex.withSessionCancellingPrevious(
                     sessionInitializer = { null }
                 ) {
                     coroutineScope {
@@ -445,11 +434,6 @@ internal class RootNodeOwner(
         override val snapshotObserver get() = this@RootNodeOwner.snapshotObserver
         override val viewConfiguration get() = platformContext.viewConfiguration
         override val measureIteration: Long get() = measureAndLayoutDelegate.measureIteration
-
-        override fun requestAutofill(node: LayoutNode) {
-            // TODO: 1.8.0-beta01 Adopt requestAutofill API
-            //  https://youtrack.jetbrains.com/issue/CMP-7485
-        }
 
         override fun onPreAttach(node: LayoutNode) {
             layoutNodes[node.semanticsId] = node
@@ -843,9 +827,8 @@ internal class RootNodeOwner(
             // So, we applying it before drawing to reflect the changes from previous phases.
             // Changes that requires another round of invalidation will be scheduled to next frame.
             if (dirtyLayers.isNotEmpty()) {
-                for (i in 0 until dirtyLayers.size) {
-                    val layer = dirtyLayers[i]
-                    layer.updateDisplayList()
+                for (element in dirtyLayers) {
+                    element.updateDisplayList()
                 }
             }
             dirtyLayers.clear()

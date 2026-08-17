@@ -373,13 +373,6 @@ internal fun DelegatableNode.requireOwner(): Owner =
     checkPreconditionNotNull(requireLayoutNode().owner) { "This node does not have an owner." }
 
 /**
- * Requests autofill for the LayoutNode that this [DelegatableNode] is attached to. If the node does
- * not have any autofill semantic properties set, then the request still may be sent to the Autofill
- * service, but no response is expected.
- */
-fun DelegatableNode.requestAutofill() = requireLayoutNode().requestAutofill()
-
-/**
  * Returns the current [Density] of the LayoutNode that this [DelegatableNode] is attached to. If
  * the node is not attached, this function will throw an [IllegalStateException].
  */
