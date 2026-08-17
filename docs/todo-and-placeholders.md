@@ -15,7 +15,7 @@
 |---|---|---|
 | 图形绘制命令 | ✅ 已实现 | 矩形/圆角矩形/圆/椭圆/弧/线/路径/点/文本/图片/顶点渐变均已接入 MC 渲染后端(图片 T.16、顶点 T.23);`drawVertices` 已支持 |
 | 图层能力 | 部分 | clip/scissor、translate/scale/rotate/alpha 已通;`saveLayer`、`clipPath`、`clipRect(Difference)`、Path(复合) 不支持 |
-| 文本 | 部分 | 统一 `BasicText(style: TextStyle)`(T.28,语义经 TextStyleMapper 映射,MC 原版渲染特性经 PlatformSpanStyle 承载);`fontSize` 并入 style(T.19,18sp=2x 平台基准字号),`autoSize` 自动缩放(T.20);段级 SpanStyle 混排、BiDi、InlineContent/占位符 不支持;基线行高 9px |
+| 文本 | 部分 | 统一 `BasicText(style: TextStyle)`(T.28,语义经 TextStyleMapper 映射,MC 原版渲染特性经 PlatformSpanStyle 承载);`fontSize` 并入 style(T.19,18sp=2x 平台基准字号),`autoSize` 自动缩放(T.20);段级 SpanStyle 混排(T.29)、BiDi、InlineContent/占位符 不支持;基线行高 9px。默认字体/默认样式/默认字号均可经 CompositionLocal 覆盖(`LocalDefaultFont`/`LocalDefaultTextStyle`/`LocalDefaultFontSize`,T.30/T.32);自定义字体文件注册(T.32,FreeType 加载 ttf/otf/ttc) |
 | 弹窗 | 局限 | `Popup` 部分可用;`Dialog` 未移植;Popup/Dialog 焦点层级未通 |
 | 焦点/事件 | 部分 | 键盘/鼠标/滚轮/聚焦已通;双击、拖放、触摸、指针图标、IME preedit 组合态提示 未实现或占位 |
 | 平台 API | 居多占位 | 文本输入服务、文本工具栏、无障碍、窗口 inset、触感反馈、软键盘、URI、剪贴板(已接 MC 系统)等。其中多数见 §11「可忽略」,含触感/inset/URI/无障碍 |
@@ -187,7 +187,7 @@
 
 ## 7. 输入 / 事件(`androidx.compose.ui.input.*`, `ComposeScreen`)
 
-- ✅ 鼠标:click/release/move/drag/scroll 已转发;滚轮 27px/格(MC 语义 3 行)。
+- ✅ 鼠标:click/release/move/drag/scroll 已转发;滚轮 54px/格(T.32,对齐官方桌面 ≈53px/格,原 27px = MC 3 行语义)。
 - ✅ 键盘:keyPressed/Released、charTyped(含中文 IME 上屏 → typed KeyEvent)已通。
 - ❌ **双击**:`ComposeScreen.mouseClicked` 传 `doubleClick=false` 路径未验证/未实现。
 - ❌ **触摸 / 多指 / 触控笔**:`PointerButton`/`PointerType` 只覆盖鼠标;`PointerEvent.platform.kt` 注释 `TODO(CMP-2184) support more buttons`。⚠️ 纯鼠标 GUI 场景通常用不到,视业务决定。
@@ -275,3 +275,9 @@
 8. **输入补全**:双击、拖放(接 MC 或系统)、软键盘事件、可选的指针图标/系统光标。
 9. ~~**TextAutoSize**:二分搜索最大适配字号(默认 12–112sp)~~ —— ✅ 已完成(T.20,`MultiParagraphLayoutCache` 搜索 + 渲染 scale 驱动)。
 10. **无障碍**:screenReader 接入 MC 的 Toast/讲稿或跳过。
+11. ~~**默认字体/默认样式 CompositionLocal + 系统字体读取**~~ —— ✅ 已完成(T.30/T.31/T.32):
+    - T.30 `LocalDefaultFont`(默认 minecraft:default)/`LocalDefaultTextStyle`,MC 内置字体清单
+      `MinecraftFonts`(Default/Alt/UniFont/IllagerAlt/Missing,经 `FontDescription.Resource` 引用);
+    - T.31 IME 候选窗位置修复(`setTextInputArea` 内部乘 guiScale,场景像素化后先除回再传);
+    - T.32 自定义字体注册(`MinecraftCustomFonts` + `rememberCustomFont`)、字号 Local
+      (`LocalDefaultFontSize`)

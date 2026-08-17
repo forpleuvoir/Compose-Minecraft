@@ -58,6 +58,18 @@ Agent 的 IDE 工具集中以 `mcp__idea__*` 前缀暴露。**所有代码阅读
   增量叠加 base MC Style(段级 color/bold/italic/decoration/PlatformSpanStyle 生效,
   段级字号暂不支持);行内段 x 用 1x `prefixWidth`(渲染端 pose 会再缩放,传 ×scale
   值会间隔翻倍);
+  **默认字体/默认样式/默认字号 CompositionLocal**(T.30/T.32):`LocalDefaultFont`
+  (默认 `MinecraftFonts.Default` = minecraft:default)、`LocalDefaultTextStyle`
+  (默认 `TextStyle.Default`)、`LocalDefaultFontSize`(默认 18sp,未显式 fontSize 时
+  兜底,显式优先)—— 业务可 Provider 覆盖,`BasicText` 未指定 style/fontSize 时生效;
+  **自定义字体注册**(T.32):`MinecraftCustomFonts`(platform/ui/text/):FreeType 加载
+  任意 ttf/otf/ttc 字体文件注册进 FontManager(3 个 accessor mixin:
+  FontManagerAccessor 暴露 fontSets / FontSetAccessor 暴露 allProviders 实现缺字回滚
+  默认字体 / MinecraftAccessor 暴露 fontManager),oversample=4 高清晰度,
+  `ensureAlive()` 资源重载自愈(ComposeGuiRenderer 每帧调用);便捷接口
+  `rememberCustomFont(path)`(组合退出自动注销);`systemFontDir()/listSystemFonts()`
+  枚举系统字体目录(辅助入口);`LocalDefaultFont provides rememberCustomFont(path)` 或
+  `PlatformSpanStyle(font = …)` 切换渲染;
 - **发布 JAR 内嵌完整 Compose 运行时**(约 4000+ 个 `androidx.compose.*` 类),
   消费者无需引入任何 Compose/Skiko 依赖。
 
