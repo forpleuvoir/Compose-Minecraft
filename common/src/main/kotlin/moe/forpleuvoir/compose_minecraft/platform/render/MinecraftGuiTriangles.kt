@@ -150,6 +150,8 @@ internal object MinecraftGuiTriangles {
  *   每 3 个顶点一个三角形;几何变换由 [pose](命令矩阵的 2D 部分)在 GPU 端
  *   完成,与 BlitRenderState 一致;
  * - 颜色:统一 0xAARRGGBB(三角化器已把 Compose Color 与 Paint.alpha 折算好);
+ *   或 T.23 [vertexColors]:每顶点 0xAARRGGBB(与 [vertices] 顶点数等长,
+ *   GPU 顶点色插值渐变,drawVertices 用;非空时优先于 [colorArgb]);
  * - coverage:与顶点一一对应的「到最近真实轮廓的有符号屏幕像素距离」
  *   (LineWidth 属性槽):外侧为负、轮廓上为 0、内侧为正;内部实心三角形为大数;
  * - [stroke] = true 走描边专用 pipeline(gui_triangles_stroke,固定过渡无
@@ -168,6 +170,8 @@ internal class GuiTriangleRenderState(
     val stroke: Boolean = false,
     /** T.22:混合模式(≠ SrcOver 时选 blend 变体 pipeline) */
     val blendMode: androidx.compose.ui.graphics.BlendMode = androidx.compose.ui.graphics.BlendMode.SrcOver,
+    /** T.23:每顶点 0xAARRGGBB(与顶点数等长,drawVertices 逐顶点色插值;null = 统一 [colorArgb]) */
+    val vertexColors: IntArray? = null,
 ) : GuiElementRenderState {
 
     private val elementBounds: ScreenRectangle = computeBounds(pose, scissor, vertices)
@@ -189,12 +193,14 @@ internal class GuiTriangleRenderState(
     override fun bounds(): ScreenRectangle = elementBounds
 
     override fun buildVertices(vertexConsumer: VertexConsumer) {
+        var vi = 0
         var i = 0
         while (i + 2 < vertices.size) {
             vertexConsumer
                 .addVertexWith2DPose(pose, vertices[i], vertices[i + 1])
-                .setColor(colorArgb)
+                .setColor(vertexColors?.get(vi) ?: colorArgb)
                 .setLineWidth(vertices[i + 2])
+            vi++
             i += 3
         }
     }

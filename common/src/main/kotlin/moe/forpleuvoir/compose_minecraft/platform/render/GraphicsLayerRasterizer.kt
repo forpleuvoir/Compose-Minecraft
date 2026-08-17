@@ -17,7 +17,9 @@ import androidx.compose.ui.graphics.MinecraftCanvas.DrawRectCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawRoundRectCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawShadowCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand
+import androidx.compose.ui.graphics.MinecraftCanvas.DrawVerticesCommand
 import androidx.compose.ui.graphics.PaintingStyle
+import androidx.compose.ui.graphics.VertexMode
 import moe.forpleuvoir.compose_minecraft.platform.render.GeometryTessellator.Sink
 import kotlin.math.max
 import kotlin.math.min
@@ -131,6 +133,8 @@ internal object GraphicsLayerRasterizer {
                 is DrawImageRectCommand -> fillImage(out, width, height, cmd)
 
                 is DrawGradientRectCommand -> fillGradient(out, width, height, cmd)
+
+                is DrawVerticesCommand -> fillVertices(out, width, height, cmd)
 
                 is DrawTextCommand, is DrawShadowCommand -> Unit // 不支持,跳过
             }
@@ -347,6 +351,69 @@ internal object GraphicsLayerRasterizer {
         val a = (p00 ushr 24 and 0xFF) * a00 + (p10 ushr 24 and 0xFF) * a10 +
             (p01 ushr 24 and 0xFF) * a01 + (p11 ushr 24 and 0xFF) * a11
         return (a.toInt() shl 24) or (r.toInt() shl 16) or (g.toInt() shl 8) or b.toInt()
+    }
+
+    // ── 顶点渐变:按 vertexMode + 索引展开三角形,逐顶点色重心插值 ───────────
+
+    private fun fillVertices(out: IntArray, width: Int, height: Int, cmd: DrawVerticesCommand) {
+        val positions = cmd.positions
+        val srcColors = cmd.colors
+        val indices = cmd.indices
+        val vc = positions.size / 2
+        if (vc < 3) return
+        // 顶点色 × paint.alpha(与 GPU 回放 scaleAlpha 一致)
+        val alphaMul = cmd.paint?.alpha ?: 1f
+        fun scaled(argb: Int): Int {
+            val a = (((argb ushr 24) and 0xFF) * alphaMul + 0.5f).toInt().coerceIn(0, 255)
+            return (argb and 0x00FFFFFF) or (a shl 24)
+        }
+
+        // 三角形顶点索引展开(与 MinecraftRenderContext.addVertices 同一套逻辑)
+        val tris = ArrayList<Int>(vc)
+        when (cmd.vertexMode) {
+            VertexMode.Triangles -> {
+                if (indices.isNotEmpty()) {
+                    var i = 0
+                    while (i + 2 < indices.size) {
+                        tris += indices[i].toInt(); tris += indices[i + 1].toInt(); tris += indices[i + 2].toInt()
+                        i += 3
+                    }
+                } else {
+                    var i = 0
+                    while (i + 2 < vc) {
+                        tris += i; tris += i + 1; tris += i + 2
+                        i += 3
+                    }
+                }
+            }
+            VertexMode.TriangleStrip -> {
+                for (i in 0 until vc - 2) { tris += i; tris += i + 1; tris += i + 2 }
+            }
+            VertexMode.TriangleFan -> {
+                for (i in 1 until vc - 1) { tris += 0; tris += i; tris += i + 1 }
+            }
+        }
+        if (tris.size < 9) return
+
+        val m = cmd.matrix
+        val m00 = m[0]; val m10 = m[1]; val m01 = m[4]; val m11 = m[5]; val m20 = m[12]; val m21 = m[13]
+        val clip = cmd.clip
+        var k = 0
+        while (k + 2 < tris.size) {
+            val ai = tris[k]; val bi = tris[k + 1]; val ci = tris[k + 2]; k += 3
+            val ax = positions[ai * 2] * m00 + positions[ai * 2 + 1] * m01 + m20
+            val ay = positions[ai * 2] * m10 + positions[ai * 2 + 1] * m11 + m21
+            val bx = positions[bi * 2] * m00 + positions[bi * 2 + 1] * m01 + m20
+            val by = positions[bi * 2] * m10 + positions[bi * 2 + 1] * m11 + m21
+            val cx = positions[ci * 2] * m00 + positions[ci * 2 + 1] * m01 + m20
+            val cy = positions[ci * 2] * m10 + positions[ci * 2 + 1] * m11 + m21
+            fillGradientTriangle(
+                out, width, height, clip,
+                ax, ay, scaled(srcColors[ai]),
+                bx, by, scaled(srcColors[bi]),
+                cx, cy, scaled(srcColors[ci]),
+            )
+        }
     }
 
     // ── 渐变矩形:双三角形 + 顶点色重心插值 ─────────────────────────────────

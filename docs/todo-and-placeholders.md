@@ -13,7 +13,7 @@
 
 | 类别 | 状态 | 说明 |
 |---|---|---|
-| 图形绘制命令 | ✅ 已实现 | 矩形/圆角矩形/圆/椭圆/弧/线/路径/点/文本/图片均已接入 MC 渲染后端(图片 T.16);`drawVertices` 不支持 |
+| 图形绘制命令 | ✅ 已实现 | 矩形/圆角矩形/圆/椭圆/弧/线/路径/点/文本/图片/顶点渐变均已接入 MC 渲染后端(图片 T.16、顶点 T.23);`drawVertices` 已支持 |
 | 图层能力 | 部分 | clip/scissor、translate/scale/rotate/alpha 已通;`saveLayer`、`clipPath`、`clipRect(Difference)`、Path(复合) 不支持 |
 | 文本 | 部分 | 统一 `McTextStyle`,MC 字体度量;`BasicText(fontSize)` 以 sp 缩放(T.19,16sp=1x),`autoSize` 自动缩放(T.20);富文本/多 SpanStyle、BiDi、InlineContent/占位符 不支持;基线行高 9px |
 | 弹窗 | 局限 | `Popup` 部分可用;`Dialog` 未移植;Popup/Dialog 焦点层级未通 |
@@ -32,7 +32,7 @@
 - ✅ 矩形 `drawRect`
 - ✅ 圆角矩形 `drawRoundRect`(圆角 > 1px 走 `GeometryTessellator.roundRect` 三角化)
 - ✅ 文本 `drawText`
-- ✅ 圆 `drawCircle` / 椭圆 `drawOval` / 弧 `drawArc` / 线 `drawLine` / 路径 `drawPath` / 点 `drawPoints` / 图片 `drawImageRect` —— 几何命令经 `GeometryTessellator` CPU 三角化提交;图片(T.16)经 `MinecraftImageTextureCache` 上传 GpuTexture 后以带 UV 的 `BlitRenderState(GUI_TEXTURED)` 提交
+- ✅ 圆 `drawCircle` / 椭圆 `drawOval` / 弧 `drawArc` / 线 `drawLine` / 路径 `drawPath` / 点 `drawPoints` / 图片 `drawImageRect` / 顶点 `drawVertices` —— 几何命令经 `GeometryTessellator` CPU 三角化提交;图片(T.16)经 `MinecraftImageTextureCache` 上传 GpuTexture 后以带 UV 的 `BlitRenderState(GUI_TEXTURED)` 提交;顶点渐变(T.23)按 vertexMode(Triangles/Strip/Fan)+ 索引展开,每顶点色 0xAARRGGBB 走 `GuiTriangleRenderState.vertexColors`(POSITION_COLOR_LINE_WIDTH 每顶点色,GPU 插值),纹理坐标忽略(平台 GUI shader 无纹理),blendMode 独立优先于 paint
 
 平台侧明确抛 `UnsupportedOperationException` 的 API:
 - `asFrameworkPaint`(L65)
@@ -43,7 +43,7 @@
 - `clipPath`(L893)
 - `drawVertices`(L1004)
 - `Paint.shader`(L1048)— 渐变/纹理 paint 不支持
-- `Paint.blendMode` 仅支持 `SrcOver`(L1051)
+- `Paint.blendMode` 仅支持 `SrcOver`(L1051)— 记录端校验已放宽(T.22 渲染端按模式选 blend pipeline,超出 17 种可表达范围回退 SrcOver)
 
 ### 1.2 `EmptyCanvas`(`ui/graphics/drawscope/EmptyCanvas.kt`)
 完整 `Canvas` 的**无操作占位实现**,所有方法抛 `UnsupportedOperationException`。用于 `DrawContext` 内部保证非空 canvas,业务代码不应触达。
@@ -75,7 +75,7 @@
 ### 1.9 `CompositionLocals.platform.kt`(`ui/platform/`)
 - `HostDefaultProvider` 相关 `TODO(CMP-9752)`:未完整实现,当前为占位对齐。
 
-**后续建议**:`drawVertices`(顶点绘制)与离屏合成(saveLayer/colorFilter/renderEffect/blendMode)依赖离屏渲染能力,暂不实现;`toImageBitmap` 已由 CPU 光栅化器支撑(T.17,见 §13)。
+**后续建议**:离屏合成(saveLayer/compositingStrategy/renderEffect)依赖离屏渲染能力,暂不实现;`toImageBitmap` 已由 CPU 光栅化器支撑(T.17,含顶点渐变命令 T.23,见 §13)。
 
 ---
 

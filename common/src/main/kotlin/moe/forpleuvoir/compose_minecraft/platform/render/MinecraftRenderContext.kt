@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.NativeColorFilter
 import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.VertexMode
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.client.gui.render.TextureSetup
@@ -218,6 +219,7 @@ internal class MinecraftRenderContext {
                 is DrawImageRectCommand -> renderState.addBlitToCurrentLayer(
                     blitImage(command, scissor)
                 )
+                is MinecraftCanvas.DrawVerticesCommand -> addVertices(renderState, command, scissor, guiScale)
             }
         }
     }
@@ -245,6 +247,8 @@ internal class MinecraftRenderContext {
         val colorArgb = paint.toArgb()
         var output = FloatArray(384)
         var count = 0
+        /** T.23:DrawVerticesCommand 的逐顶点色(其余命令为 null) */
+        var outColors3D: IntArray? = null
 
         /** 追加一个 3D 变换后的三角形;返回 false 表示任一顶点在相机后方 */
         fun emitTriangle(ax: Float, ay: Float, bx: Float, by: Float, cx: Float, cy: Float) {
@@ -352,6 +356,63 @@ internal class MinecraftRenderContext {
                     sink = sink,
                 )
             }
+            is MinecraftCanvas.DrawVerticesCommand -> {
+                // T.23:顶点网格 3D 透视 —— 逐顶点 map3D + 逐顶点色(alpha + colorFilter)
+                val vc = command.positions.size / 2
+                if (vc >= 3) {
+                    val alphaMul = paint.alpha
+                    var outColors = IntArray(384)
+                    fun emitV(ai: Int, bi: Int, ci: Int) {
+                        val pa = map3D(m2, layer3D, command.positions[ai * 2], command.positions[ai * 2 + 1]) ?: return
+                        val pb = map3D(m2, layer3D, command.positions[bi * 2], command.positions[bi * 2 + 1]) ?: return
+                        val pc = map3D(m2, layer3D, command.positions[ci * 2], command.positions[ci * 2 + 1]) ?: return
+                        if (count + 9 > output.size) {
+                            output = output.copyOf(output.size * 2)
+                            outColors = outColors.copyOf(outColors.size * 2)
+                        }
+                        output[count] = pa[0]; output[count + 1] = pa[1]; output[count + 2] = OPAQUE_COVERAGE
+                        output[count + 3] = pb[0]; output[count + 4] = pb[1]; output[count + 5] = OPAQUE_COVERAGE
+                        output[count + 6] = pc[0]; output[count + 7] = pc[1]; output[count + 8] = OPAQUE_COVERAGE
+                        outColors[count / 3] = applyColorFilter(scaleAlpha(command.colors[ai], alphaMul), paint.colorFilter)
+                        outColors[count / 3 + 1] = applyColorFilter(scaleAlpha(command.colors[bi], alphaMul), paint.colorFilter)
+                        outColors[count / 3 + 2] = applyColorFilter(scaleAlpha(command.colors[ci], alphaMul), paint.colorFilter)
+                        count += 9
+                    }
+                    val idx = command.indices
+                    if (idx.isNotEmpty()) {
+                        when (command.vertexMode) {
+                            VertexMode.Triangles -> {
+                                var i = 0
+                                while (i + 2 < idx.size) {
+                                    emitV(idx[i].toInt(), idx[i + 1].toInt(), idx[i + 2].toInt()); i += 3
+                                }
+                            }
+                            VertexMode.TriangleStrip -> {
+                                for (i in 0 until idx.size - 2) emitV(idx[i].toInt(), idx[i + 1].toInt(), idx[i + 2].toInt())
+                            }
+                            VertexMode.TriangleFan -> {
+                                for (i in 1 until idx.size - 1) emitV(idx[0].toInt(), idx[i].toInt(), idx[i + 1].toInt())
+                            }
+                        }
+                    } else {
+                        when (command.vertexMode) {
+                            VertexMode.Triangles -> {
+                                var i = 0
+                                while (i + 2 < vc) {
+                                    emitV(i, i + 1, i + 2); i += 3
+                                }
+                            }
+                            VertexMode.TriangleStrip -> {
+                                for (i in 0 until vc - 2) emitV(i, i + 1, i + 2)
+                            }
+                            VertexMode.TriangleFan -> {
+                                for (i in 1 until vc - 1) emitV(0, i, i + 1)
+                            }
+                        }
+                    }
+                    outColors3D = outColors
+                }
+            }
             else -> return // 文本/阴影/渐变在记录端已降级为 2D 近似,不会到这里
         }
 
@@ -365,6 +426,7 @@ internal class MinecraftRenderContext {
                     scissor = null,
                     vertices = output.copyOf(count),
                     blendMode = paint.blendMode,
+                    vertexColors = outColors3D?.copyOf(count / 3),
                 )
             )
         }
@@ -431,6 +493,106 @@ internal class MinecraftRenderContext {
                 blendMode = paint.blendMode,
             )
         )
+    }
+
+    /**
+     * 顶点网格命令回放(T.23):按 [DrawVerticesCommand.vertexMode] 与索引展开
+     * 三角形,逐顶点色(源色 × Paint.alpha + colorFilter)提交
+     * [GuiTriangleRenderState(vertexColors)] —— GPU 顶点色插值产生渐变。
+     *
+     * - 无 AA:内部实心 coverage = 大数(顶点网格无轮廓距离场);
+     * - 纹理坐标忽略(平台 GUI shader 无纹理采样);
+     * - 3D 图层下走 [render3D] 的 CPU 透视路径(见 render3D 内分支)。
+     */
+    private fun addVertices(
+        renderState: GuiRenderState,
+        command: MinecraftCanvas.DrawVerticesCommand,
+        scissor: Rect?,
+        guiScale: Int,
+    ) {
+        val paint = command.paint
+        val vc = command.positions.size / 2
+        if (vc < 3) return
+        val alphaMul = paint.alpha
+        val srcColors = command.colors
+        // 逐顶点:alpha 叠加 + colorFilter(T.21)
+        val vertColors = IntArray(vc) { i -> applyColorFilter(scaleAlpha(srcColors[i], alphaMul), paint.colorFilter) }
+        // 预估输出:indices 非空按索引数,否则按顶点数
+        val maxTris = if (command.indices.isNotEmpty()) command.indices.size else vc
+        var out = FloatArray(maxTris * 9)
+        var outColors = IntArray(maxTris * 3)
+        var count = 0
+        fun emit(ai: Int, bi: Int, ci: Int) {
+            if (count + 9 > out.size) {
+                out = out.copyOf(out.size * 2)
+                outColors = outColors.copyOf(outColors.size * 2)
+            }
+            out[count] = command.positions[ai * 2]
+            out[count + 1] = command.positions[ai * 2 + 1]
+            out[count + 2] = OPAQUE_COVERAGE
+            outColors[count / 3] = vertColors[ai]
+            out[count + 3] = command.positions[bi * 2]
+            out[count + 4] = command.positions[bi * 2 + 1]
+            out[count + 5] = OPAQUE_COVERAGE
+            outColors[count / 3 + 1] = vertColors[bi]
+            out[count + 6] = command.positions[ci * 2]
+            out[count + 7] = command.positions[ci * 2 + 1]
+            out[count + 8] = OPAQUE_COVERAGE
+            outColors[count / 3 + 2] = vertColors[ci]
+            count += 9
+        }
+        val idx = command.indices
+        if (idx.isNotEmpty()) {
+            when (command.vertexMode) {
+                VertexMode.Triangles -> {
+                    var i = 0
+                    while (i + 2 < idx.size) {
+                        emit(idx[i].toInt(), idx[i + 1].toInt(), idx[i + 2].toInt()); i += 3
+                    }
+                }
+                VertexMode.TriangleStrip -> {
+                    for (i in 0 until idx.size - 2) emit(idx[i].toInt(), idx[i + 1].toInt(), idx[i + 2].toInt())
+                }
+                VertexMode.TriangleFan -> {
+                    for (i in 1 until idx.size - 1) emit(idx[0].toInt(), idx[i].toInt(), idx[i + 1].toInt())
+                }
+            }
+        } else {
+            when (command.vertexMode) {
+                VertexMode.Triangles -> {
+                    var i = 0
+                    while (i + 2 < vc) {
+                        emit(i, i + 1, i + 2); i += 3
+                    }
+                }
+                VertexMode.TriangleStrip -> {
+                    for (i in 0 until vc - 2) emit(i, i + 1, i + 2)
+                }
+                VertexMode.TriangleFan -> {
+                    for (i in 1 until vc - 1) emit(0, i, i + 1)
+                }
+            }
+        }
+        if (count < 9) return
+        MinecraftGuiTriangles.ensureCompiled()
+        BlendPipelines.ensureCompiled()
+        renderState.addGuiElement(
+            GuiTriangleRenderState(
+                pose = command.matrix.toMatrix3x2f(),
+                colorArgb = -1, // 0xFFFFFFFF;vertexColors 优先,此值仅占位
+                scissor = scissor?.toScreenRectangle(),
+                vertices = out.copyOf(count),
+                blendMode = paint.blendMode,
+                vertexColors = outColors.copyOf(count / 3),
+            )
+        )
+    }
+
+    /** 0xAARRGGBB 的 alpha 通道乘系数(用于 drawVertices 逐顶点 alpha 叠加) */
+    private fun scaleAlpha(argb: Int, alpha: Float): Int {
+        if (alpha >= 1f) return argb
+        val a = (((argb ushr 24) and 0xFF) * alpha).roundToInt().coerceIn(0, 255)
+        return (argb and 0x00FFFFFF) or (a shl 24)
     }
 
     /**

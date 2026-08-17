@@ -106,6 +106,12 @@ fun MinecraftDevSceneContent() {
                 subtitle = "17 种可表达 blendMode:灰底 + 半透明红叠加,矩形/圆形双几何",
                 onClick = { ComposeScreen.open { BlendModeDevScene() } },
             )
+
+            DevMenuButton(
+                title = "顶点渐变测试 (drawVertices)",
+                subtitle = "每顶点色 GPU 插值:四边形/圆形渐变、strip/fan、Plus 叠合、乱序索引",
+                onClick = { ComposeScreen.open { VerticesDevScene() } },
+            )
         }
     }
 }

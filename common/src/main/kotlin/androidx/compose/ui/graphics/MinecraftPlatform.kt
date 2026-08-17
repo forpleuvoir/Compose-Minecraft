@@ -738,6 +738,29 @@ internal class MinecraftCanvas internal constructor(
         override val layer3D: FloatArray? = null,
     ) : DrawCommand
 
+    /**
+     * 顶点网格绘制命令(T.23):`Canvas.drawVertices`。
+     *
+     * - [vertexMode]:Triangles / TriangleStrip / TriangleFan;
+     * - [positions]:交错 x,y 平铺(顶点数 = size / 2);
+     * - [colors]:每顶点 0xAARRGGBB,与顶点数等长(渲染端乘 Paint.alpha、
+     *   应用 colorFilter 后逐顶点提交 → GPU 顶点色插值渐变);
+     * - [indices]:可选,非空时按 [vertexMode] 解释索引(每 3 个一个三角形 /
+     *   strip / fan),空时按顶点顺序展开;
+     * - 纹理坐标忽略(平台 GUI shader 无纹理采样,与图片管线无关);
+     * - [layer3D]:3D 图层下 CPU 透视变换(逐顶点),同纯色几何。
+     */
+    class DrawVerticesCommand(
+        override val matrix: FloatArray,
+        override val clip: Rect?,
+        override val paint: PaintSnapshot,
+        val vertexMode: VertexMode,
+        val positions: FloatArray,
+        val colors: IntArray,
+        val indices: ShortArray,
+        override val layer3D: FloatArray? = null,
+    ) : DrawCommand
+
     class DrawImageRectCommand(
         override val matrix: FloatArray,
         override val clip: Rect?,
@@ -1035,6 +1058,13 @@ internal class MinecraftCanvas internal constructor(
                                 layer3D = layer3DWithBase,
                             )
                         )
+                        is DrawVerticesCommand -> record(
+                            DrawVerticesCommand(
+                                origM, clipNow, paintSnap,
+                                command.vertexMode, command.positions, command.colors, command.indices,
+                                layer3D = layer3DWithBase,
+                            )
+                        )
                         is DrawImageRectCommand -> drawImageRect(
                             command.image,
                             IntOffset(command.srcOffsetX, command.srcOffsetY),
@@ -1082,6 +1112,13 @@ internal class MinecraftCanvas internal constructor(
 
                     is DrawPointsCommand    ->
                         drawPoints(command.pointMode, command.points, paint)
+
+                    is DrawVerticesCommand  -> record(
+                        DrawVerticesCommand(
+                            snapshot(), currentClip, paint.snapshot(),
+                            command.vertexMode, command.positions, command.colors, command.indices,
+                        )
+                    )
 
                     is DrawImageRectCommand ->
                         drawImageRect(
@@ -1275,6 +1312,10 @@ internal class MinecraftCanvas internal constructor(
             )
             is DrawPointsCommand -> DrawPointsCommand(
                 matrix, clip, paint3D(), pointMode, points,
+                layer3D = layer3D,
+            )
+            is DrawVerticesCommand -> DrawVerticesCommand(
+                matrix, clip, paint3D(), vertexMode, positions, colors, indices,
                 layer3D = layer3D,
             )
             is DrawTextCommand -> DrawTextCommand(
@@ -1525,7 +1566,28 @@ internal class MinecraftCanvas internal constructor(
     }
 
     override fun drawVertices(vertices: Vertices, blendMode: BlendMode, paint: Paint) {
-        throw UnsupportedOperationException("drawVertices 第一版不支持")
+        validatePaint(paint)
+        // T.23:drawVertices 的 blendMode 是独立参数,优先于 paint.blendMode
+        // (官方 Skia 语义:drawVertices(vertices, blendMode, paint) 的 blendMode 覆盖画笔);
+        // SrcOver 时直接用画笔快照,非 SrcOver 时覆盖快照的 blendMode。
+        val snap = paint.snapshot()
+        val effective = if (blendMode == BlendMode.SrcOver || snap.blendMode != BlendMode.SrcOver) {
+            snap
+        } else {
+            PaintSnapshot(
+                snap.color, snap.alpha, snap.style, snap.strokeWidth, snap.strokeCap,
+                snap.filterQuality, snap.colorFilter, blendMode,
+            )
+        }
+        record(
+            DrawVerticesCommand(
+                matrix = snapshot(), clip = currentClip, paint = effective,
+                vertexMode = vertices.vertexMode,
+                positions = vertices.positions,
+                colors = vertices.colors,
+                indices = vertices.indices,
+            )
+        )
     }
 
     override fun drawImage(image: ImageBitmap, topLeftOffset: Offset, paint: Paint) {
