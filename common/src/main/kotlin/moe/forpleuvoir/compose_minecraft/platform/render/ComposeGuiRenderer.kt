@@ -50,13 +50,16 @@ interface GuiCommandSink {
  * - 排序自管:阴影命令最先(最底),其余保持 Compose 记录顺序(z 序),不再需要
  *   原 GuiRenderStateMixin 的排序 hack(该 mixin 已随独立工作流删除);
  * - 文本复用原版字体渲染:GuiTextRenderState.ensurePrepared() → GlyphRenderState;
- * - 与原版**共存**:Compose 屏打开时本渲染器先提交 Compose 内容,原版 guiRenderer
- *   随后提交 HUD/toasts(盖在 Compose 之上,与原版「Screen 打开时 HUD 可见」一致)。
+ * - 与原版共存:Compose 屏打开时本渲染器先提交 Compose 内容(Compose 先画),
+ *   原版 guiRenderer 随后绘制 —— F3 调试覆盖层(debug overlay)是原版
+ *   Gui.extractRenderState 中独立调用,以最后一个 stratum 画在 Compose 之上
+ *   (FPS 信息最上可见);原版 HUD/toast 提取逻辑完全不变。
  *
  * 挂载:extract 阶段由 [MinecraftComposeScene.renderFrame] 填充本收集器;
  * gui 阶段由 [moe.forpleuvoir.compose_minecraft.mixin.GuiRendererMixin] 在
- * 原版 GuiRenderer.render 的 draw() 调用**之后**调用 [render](原版 GUI 画完后
- * Compose 画在最上层;不依赖原版 draws 状态,注入点必触发)。
+ * 原版 GuiRenderer.render 的 draw() 调用**之前**调用 [render](Compose 先画,
+ * 原版随后绘制,F3 调试覆盖层盖在 Compose 之上;不依赖原版 draws 状态,
+ * 注入点必触发)。
  */
 class ComposeGuiRenderer : GuiCommandSink {
 
@@ -112,8 +115,9 @@ class ComposeGuiRenderer : GuiCommandSink {
 
     /**
      * 提交当前帧收集的 Compose 内容。由 [GuiRendererMixin] 在 gui 阶段、
-     * 原版 GuiRenderer.render 的 draw() 调用**之后**调用
-     * (原版 GUI 画完后 Compose 画在最上层;注入点不依赖原版 draws 状态)。
+     * 原版 GuiRenderer.render 的 draw() 调用**之前**调用
+     * (Compose 先画,原版随后绘制,F3 调试覆盖层盖在 Compose 之上;
+     * 注入点不依赖原版 draws 状态)。
      */
     fun render() {
         // T.32:自定义字体自愈 —— 资源重载清空 FontManager.fontSets 后重建已注册字体
@@ -218,8 +222,8 @@ class ComposeGuiRenderer : GuiCommandSink {
                 }
             }
         // T.24 修复:setProjectionMatrix 是全局渲染状态。Compose 画完后恢复原版
-        // guiscale 投影,避免影响其后可能存在的原版 GUI 段(当前注入点在原版
-        // GUI 之后,无后续段,恢复为防御性保留)。
+        // guiscale 投影,避免影响随后的原版 GUI 段(draw() 会重设自身投影,
+        // 此处恢复为防御性保留,保证后续原版 HUD/F3 段投影正确)。
         restoreVanillaProjection(windowState)
     }
 
@@ -286,8 +290,9 @@ class ComposeGuiRenderer : GuiCommandSink {
     companion object {
         /**
          * 当前打开的 Compose 屏渲染器([ComposeScreen] init/removed 维护,渲染线程读写)。
-         * [GuiRendererMixin] 在 GuiRenderer.draw 的 HUD 段之前读取:非 null 时先提交
-         * Compose 内容(并恢复原版投影),原版 guiRenderer 随后画 HUD。
+         * [moe.forpleuvoir.compose_minecraft.mixin.GuiRendererMixin] 在 GuiRenderer.render
+         * 的 draw() 调用之前读取:非 null 时先提交 Compose 内容(并恢复原版投影),
+         * 原版 guiRenderer 随后绘制 —— F3 调试覆盖层画在 Compose 之上。
          */
         @JvmStatic
         var active: ComposeGuiRenderer? = null
