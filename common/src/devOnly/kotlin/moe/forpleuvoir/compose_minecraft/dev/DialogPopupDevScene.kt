@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -17,14 +18,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -37,9 +43,16 @@ import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.launch
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.ui.popup.AnchorBoundsPositionProvider
+import moe.forpleuvoir.compose_minecraft.platform.ui.popup.AnchorPosition
+import moe.forpleuvoir.compose_minecraft.platform.ui.popup.LocalPopupHost
+import moe.forpleuvoir.compose_minecraft.platform.ui.popup.register
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
+
+/** 测试专用 CompositionLocal:验证 [register] 自动捕获调用处的 locals 并注入弹层。 */
+val LocalTestAccentColor = staticCompositionLocalOf { Color(0xFF4FC3F7) }
 
 /**
  * Dialog / Popup 测试屏幕(window 包场景图层实现,Android 样式)。
@@ -332,6 +345,110 @@ fun DialogPopupDevScene() {
                     )
                 }
             }
+
+            // ========== 6. PopupHost:锚点挂业务组件,零布局污染 ==========
+            BasicText(
+                "6. PopupHost 模式:弹层注册进场景根 host,由根 PopupHostOverlay 渲染;\n" +
+                        "   锚点用 onGloballyPositioned 捕获(零新增布局节点),业务父布局完全无感",
+                modifier = Modifier.padding(top = 16.dp),
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
+            )
+            PopupHostTestSection()
         }
+    }
+}
+
+/**
+ * PopupHost 模式验证区:
+ * - 锚点组件用 `Modifier.onGloballyPositioned` 捕获 boundsInRoot,经 [register]
+ *   注册进 `LocalPopupHost`(场景根,MinecraftComposeScene.setContent 自动挂载);
+ * - 弹层内容由根 PopupHostOverlay 渲染为标准 Popup —— EmptyLayout 锚点节点
+ *   落在根场景而非本 Row 中,Row 的 SpaceBetween 分布不受影响;
+ * - 自动 CompositionLocal 注入:外层 CompositionLocalProvider 提供非默认值的
+ *   测试专用 [LocalTestAccentColor],弹层内容里读取到的应是被提供的值
+ *   (背景/色块呈注入色);若注入失效则呈默认色 (0xFF4FC3F7)。
+ */
+@Composable
+private fun PopupHostTestSection() {
+    val popupHost = LocalPopupHost.current
+    val popupKey = remember { Any() }
+
+    // 锚点:业务组件自身捕获(与 Tooltip 思路一致,零新增布局节点)
+    var anchorBounds by remember { mutableStateOf(Rect.Zero) }
+    var hostVisible by remember { mutableStateOf(false) }
+
+    // 提供非默认值,验证 register 自动捕获并注入弹层内容
+    CompositionLocalProvider(LocalTestAccentColor provides Color(0xFFFF7043)) {
+        if (hostVisible && popupHost != null) {
+            popupHost.register(
+                key = popupKey,
+                positionProvider = AnchorBoundsPositionProvider(
+                    anchorBounds = { anchorBounds },
+                    position = AnchorPosition.Below,
+                    spacing = 4,
+                ),
+                onDismissRequest = { hostVisible = false },
+                properties = PopupProperties(focusable = true, dismissOnBackPress = true),
+            ) {
+                val accent = LocalTestAccentColor.current
+                val injected = accent == Color(0xFFFF7043)
+                Column(Modifier.background(accent).padding(8.dp)) {
+                    BasicText(
+                        "PopupHost 弹层(锚点下方,注入色背景)",
+                        style = Style.EMPTY.withColor(Color.White).toTextStyle(),
+                    )
+                    BasicText(
+                        if (injected) {
+                            "LocalTestAccentColor = FF7043 ✓ 自动注入生效"
+                        } else {
+                            "LocalTestAccentColor = $accent ✗ 注入未生效(应 FF7043)"
+                        },
+                        style = Style.EMPTY.withColor(Color.White).withColor(Color(0xFFFFEBEE)).toTextStyle(),
+                    )
+                }
+            }
+        }
+
+        // 对照:Row SpaceBetween 分布 —— host 弹层弹出前后按钮位置应完全不变
+        // (直接 Popup 的 EmptyLayout 0 尺寸锚点会多占一个子项,SpaceBetween 分布被破坏)
+        Row(
+            Modifier
+                .padding(top = 4.dp)
+                .fillMaxWidth()
+                .background(Color(0xFF1A237E))
+                .padding(6.dp)
+        ) {
+            Box(
+                Modifier
+                    .weight(1f)
+                    .background(Color(0xFF3949AB))
+                    .onGloballyPositioned { anchorBounds = it.boundsInRoot() }
+                    .clickable { hostVisible = !hostVisible }
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+            ) {
+                BasicText(
+                    if (hostVisible) "点击关闭 host 弹层" else "点击弹出 host 弹层(锚点)",
+                    style = Style.EMPTY.withColor(Color.White).toTextStyle(),
+                )
+            }
+            Spacer(Modifier.width(6.dp))
+            Box(
+                Modifier
+                    .weight(1f)
+                    .background(Color(0xFF5C6BC0))
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+            ) {
+                BasicText(
+                    "右块(SpaceBetween 验证)",
+                    style = Style.EMPTY.withColor(Color.White).toTextStyle(),
+                )
+            }
+        }
+        BasicText(
+            "验证点:①弹层出现/消失时上方两色块间距不变;\n" +
+                "       ②弹层背景与色值应为 FF7043(Provider 注入值),而非默认 4FC3F7",
+            modifier = Modifier.padding(top = 4.dp),
+            style = Style.EMPTY.withColor(Color(0xFF90A4AE)).toTextStyle(),
+        )
     }
 }

@@ -1,6 +1,8 @@
 package moe.forpleuvoir.compose_minecraft.platform
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.geometry.Offset
@@ -30,6 +32,9 @@ import kotlinx.coroutines.awaitCancellation
 import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiRenderer
 import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderContext
 import moe.forpleuvoir.compose_minecraft.platform.textinput.MinecraftTextInputService
+import moe.forpleuvoir.compose_minecraft.platform.ui.popup.LocalPopupHost
+import moe.forpleuvoir.compose_minecraft.platform.ui.popup.PopupHostOverlay
+import moe.forpleuvoir.compose_minecraft.platform.ui.popup.PopupHostState
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalCharFilter
 import net.minecraft.client.Minecraft
 
@@ -145,10 +150,16 @@ class MinecraftComposeScene(
     /** 设置场景内容(同 [ComposeScene.setContent]) */
     fun setContent(content: @Composable () -> Unit) {
         scene.setContent {
-            // 读取 LocalCharFilter(业务方可经 CompositionLocalProvider 覆盖),
-            // 写入场景侧引用供输入分发使用
-            charFilter.set(LocalCharFilter.current)
-            content()
+            // 根级 PopupHost:场景根自动挂载主机与宿主(业务弹层经 LocalPopupHost
+            // 注册,由根 PopupHostOverlay 统一渲染,不污染业务父布局测量)。
+            val popupHostState = remember { PopupHostState() }
+            CompositionLocalProvider(LocalPopupHost provides popupHostState) {
+                // 读取 LocalCharFilter(业务方可经 CompositionLocalProvider 覆盖),
+                // 写入场景侧引用供输入分发使用
+                charFilter.set(LocalCharFilter.current)
+                content()
+                PopupHostOverlay()
+            }
         }
     }
 
