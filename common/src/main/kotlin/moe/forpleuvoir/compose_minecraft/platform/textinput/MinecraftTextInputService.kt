@@ -14,6 +14,7 @@ import androidx.compose.ui.text.input.SetSelectionCommand
 import androidx.compose.ui.text.input.TextFieldValue
 import net.minecraft.client.Minecraft
 import net.minecraft.client.input.PreeditEvent
+import kotlin.math.roundToInt
 
 /**
  * MC 平台文本输入服务(IME Service,实施计划 mc-ime-service-plan.md)。
@@ -23,8 +24,9 @@ import net.minecraft.client.input.PreeditEvent
  *   使 TextField 聚焦时弹出系统 IME;
  * - 把 MC 的 preedit 组合态回调([PreeditEvent])转换成 Compose 标准 [EditCommand]
  *   (SetComposingRegionCommand + SetComposingTextCommand),组合区在缓冲区中渲染为下划线;
- * - 候选窗跟随光标:组合更新时把光标矩形(根坐标 = GUI 单位,密度 1)交给
- *   [TextInputManager.setTextInputArea](其内部乘 guiScale)。
+ * - 候选窗跟随光标:组合更新时把光标矩形(根坐标 = 场景像素,T.24 1:1 渲染)交给
+ *   [TextInputManager.setTextInputArea](其内部乘 guiScale 转物理像素,
+ *   T.31:场景像素化后这里先除回 GUI 单位,净效果 = 像素直传)。
  *
  * 提交语义(与 charTyped 并存、无重复):
  * MC 的 GLFW 分支(TuxTheAstronaut/minecraft-glfw)在 IME 提交时,WM_IME_COMPOSITION 中
@@ -228,15 +230,23 @@ internal class MinecraftTextInputService : PlatformTextInputService {
         callback(commands)
     }
 
-    /** 候选窗跟随:组合更新时把光标矩形交给 MC TextInputManager(其内部乘 guiScale) */
+    /**
+     * 候选窗跟随:组合更新时把光标矩形交给 MC TextInputManager。
+     *
+     * T.24 后场景为 1:1 像素渲染(场景尺寸 = 窗口像素,根坐标即物理像素),而
+     * [TextInputManager.setTextInputArea] 内部把入参当 GUI 单位再乘 guiScale 转
+     * 物理像素 —— 直接传像素会被二次放大,候选窗位置随 guiScale 偏移。
+     * 这里先除回 GUI 单位,净效果 = 像素直传(T.31)。
+     */
     @OptIn(ExperimentalComposeUiApi::class)
     private fun updateTextInputArea() {
         val rect = request?.focusedRectInRoot?.invoke() ?: focusedRect ?: return
+        val scale = Minecraft.getInstance().window.guiScale.toFloat().coerceAtLeast(1f)
         textInputManager.setTextInputArea(
-            rect.left.toInt(),
-            rect.top.toInt(),
-            rect.right.toInt(),
-            rect.bottom.toInt(),
+            (rect.left / scale).roundToInt(),
+            (rect.top / scale).roundToInt(),
+            (rect.right / scale).roundToInt(),
+            (rect.bottom / scale).roundToInt(),
         )
     }
 }
