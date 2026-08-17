@@ -15,6 +15,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -26,6 +27,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFont
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.MinecraftFonts
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.ClickEvent
@@ -302,6 +306,23 @@ fun TextDevScene() {
                 },
                 style = TextStyle(fontSize = 36.sp),
             )
+
+            // ── ⑪ 默认字体/默认样式 CompositionLocal(T.30)──
+            SectionLabel("⑪ 默认字体/默认样式 CompositionLocal(T.30)")
+            CompositionLocalProvider(
+                LocalDefaultTextStyle provides TextStyle(fontSize = 36.sp, color = Color(0xFFFFD54F)),
+            ) {
+                BasicText("默认样式:未传 style(黄 36sp)")
+                BasicText("显式覆盖", style = TextStyle(color = Color(0xFF64B5F6), fontSize = 36.sp))
+            }
+            BasicText(
+                "默认样式:Provider 外(恢复白 18sp)",
+                style = TextStyle(color = Color(0xFF78909C)),
+            )
+            CompositionLocalProvider(LocalDefaultFont provides MinecraftFonts.Alt) {
+                BasicText("默认字体:alt(未指定字体)", style = TextStyle(fontSize = 36.sp))
+            }
+            BasicText("默认字体:default(恢复)", style = TextStyle(fontSize = 36.sp))
         }
     }
 }

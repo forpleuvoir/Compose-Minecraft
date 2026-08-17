@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.isUnspecified
+import net.minecraft.network.chat.FontDescription
 import net.minecraft.network.chat.Style
 import net.minecraft.network.chat.TextColor
 
@@ -251,4 +252,33 @@ fun AnnotatedString.toStyleSegments(baseStyle: Style): List<StyleSegment> {
         result.add(StyleSegment(segStyle, text.substring(start, end)))
     }
     return result
+}
+
+/**
+ * 默认字体填充(T.30):[TextStyle] 未显式指定字体(`spanStyle.platformStyle.font`
+ * 为 null)时补 [font];已指定则原样返回。保留其余字段与 platformStyle 的
+ * 其它 MC 特性(obfuscated/shadowColor 等)。供 BasicText 组合端读取
+ * [LocalDefaultFont] 后调用。
+ */
+fun TextStyle.withDefaultFont(font: FontDescription): TextStyle {
+    val pf = spanStyle.platformStyle
+    val merged =
+        if (pf?.font == null) {
+            PlatformSpanStyle(
+                obfuscated = pf?.obfuscated,
+                shadowColor = pf?.shadowColor,
+                clickEvent = pf?.clickEvent,
+                hoverEvent = pf?.hoverEvent,
+                insertion = pf?.insertion,
+                font = font,
+            )
+        } else {
+            pf
+        }
+    return if (merged === pf) {
+        this
+    } else {
+        // TextStyle.copy 展平了 spanStyle 字段(无 spanStyle 参数),直接构造保留其余字段
+        TextStyle(spanStyle = spanStyle.copy(platformStyle = merged), paragraphStyle = paragraphStyle)
+    }
 }

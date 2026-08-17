@@ -59,6 +59,9 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.sp
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFont
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.withDefaultFont
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.util.fastFilter
 import androidx.compose.ui.util.fastForEach
@@ -112,7 +115,7 @@ import net.minecraft.network.chat.Style
 fun BasicText(
     text: String,
     modifier: Modifier = Modifier,
-    style: TextStyle = TextStyle.Default,
+    style: TextStyle? = null,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -145,7 +148,15 @@ fun BasicText(
     // (letterSpacing/background/lineHeight/...) 收集进 PlatformTextData.ignored(文档化忽略)。
     // 已知边界(T.19):textModifier 分支(selection/onTextLayout/autoSize)暂不消费 scale/alpha。
     val density = LocalDensity.current
-    val platformData = remember(style, density) { style.toPlatformData(density) }
+    // 平台适配点(T.30):style 可空 —— 未显式传 style 用 LocalDefaultTextStyle 兜底;
+    // 未显式指定字体(platformStyle.font)补 LocalDefaultFont。
+    val defaultTextStyle = LocalDefaultTextStyle.current
+    val defaultFont = LocalDefaultFont.current
+    val effectiveStyle =
+        remember(style, defaultTextStyle, defaultFont) {
+            (style ?: defaultTextStyle).withDefaultFont(defaultFont)
+        }
+    val platformData = remember(effectiveStyle, density) { effectiveStyle.toPlatformData(density) }
     val mcStyle = platformData.mcStyle
     val scale = platformData.scale
     val textAlpha = platformData.alpha
@@ -231,22 +242,29 @@ fun BasicText(
     // 平台适配点(T.19/T.26):fontSize(sp) → 渲染缩放(18sp = 2x 基准);布局/绘制端消费 scale
     val scale = fontSize.toTextScale(LocalDensity.current)
 
+    // 平台适配点(T.30):默认字体 —— defaultStyle 未指定 font 时补 LocalDefaultFont
+    val defaultFont = LocalDefaultFont.current
+    val effectiveDefaultStyle =
+        remember(defaultStyle, defaultFont) {
+            if (defaultStyle.font == null) defaultStyle.withFont(defaultFont) else defaultStyle
+        }
+
     // 平台适配点(T.3):展平为带自身样式的段;每段缺失属性用 defaultStyle 补缺(applyTo 语义)
     val segments =
-        remember(component, defaultStyle) {
+        remember(component, effectiveDefaultStyle) {
             component.flatten().map { seg ->
-                StyleSegment(style = seg.style.applyTo(defaultStyle), text = seg.getString())
+                StyleSegment(style = seg.style.applyTo(effectiveDefaultStyle), text = seg.getString())
             }
         }
     val text = remember(segments) { segments.joinToString("") { it.text } }
 
-    BackgroundTextMeasurement(text = text, style = defaultStyle, fontFamilyResolver = fontFamilyResolver)
+    BackgroundTextMeasurement(text = text, style = effectiveDefaultStyle, fontFamilyResolver = fontFamilyResolver)
 
     val finalModifier =
         modifier then
             TextStringSimpleElement(
                 text = text,
-                style = defaultStyle,
+                style = effectiveDefaultStyle,
                 fontFamilyResolver = fontFamilyResolver,
                 overflow = overflow,
                 softWrap = softWrap,
@@ -298,7 +316,7 @@ fun BasicText(
 fun BasicText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
-    style: TextStyle = TextStyle.Default,
+    style: TextStyle? = null,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -330,7 +348,15 @@ fun BasicText(
 
     // 平台适配点(T.28):TextStyle → MC Style(见公开 String 版注释)
     val density = LocalDensity.current
-    val platformData = remember(style, density) { style.toPlatformData(density) }
+    // 平台适配点(T.30):style 可空 —— 未显式传 style 用 LocalDefaultTextStyle 兜底;
+    // 未显式指定字体(platformStyle.font)补 LocalDefaultFont。
+    val defaultTextStyle = LocalDefaultTextStyle.current
+    val defaultFont = LocalDefaultFont.current
+    val effectiveStyle =
+        remember(style, defaultTextStyle, defaultFont) {
+            (style ?: defaultTextStyle).withDefaultFont(defaultFont)
+        }
+    val platformData = remember(effectiveStyle, density) { effectiveStyle.toPlatformData(density) }
     val mcStyle = platformData.mcStyle
 
     // 平台适配点(T.29 富文本):spanStyles 段 → 全覆盖 StyleSegment(段样式叠加 mcStyle,
@@ -434,7 +460,7 @@ fun BasicText(
 internal fun BasicText(
     text: String,
     modifier: Modifier = Modifier,
-    style: TextStyle = TextStyle.Default,
+    style: TextStyle? = null,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -475,7 +501,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
-    style: TextStyle = TextStyle.Default,
+    style: TextStyle? = null,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -503,7 +529,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: String,
     modifier: Modifier = Modifier,
-    style: TextStyle = TextStyle.Default,
+    style: TextStyle? = null,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -526,7 +552,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
-    style: TextStyle = TextStyle.Default,
+    style: TextStyle? = null,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -551,7 +577,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: String,
     modifier: Modifier = Modifier,
-    style: TextStyle = TextStyle.Default,
+    style: TextStyle? = null,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
@@ -564,7 +590,7 @@ internal fun BasicText(
 internal fun BasicText(
     text: AnnotatedString,
     modifier: Modifier = Modifier,
-    style: TextStyle = TextStyle.Default,
+    style: TextStyle? = null,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
     softWrap: Boolean = true,
