@@ -12,6 +12,7 @@ import androidx.compose.ui.input.pointer.PointerType
 import moe.forpleuvoir.compose_minecraft.platform.ComposeInputBridge.scrollDelta
 import moe.forpleuvoir.compose_minecraft.platform.ComposeInputBridge.toCompose
 import moe.forpleuvoir.compose_minecraft.platform.ComposeInputBridge.toPointerKeyboardModifiers
+import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiRenderer
 import com.mojang.blaze3d.platform.InputConstants
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
@@ -30,26 +31,70 @@ import net.minecraft.network.chat.Component
  * - 渲染:[extractRenderState] 每帧被调用,把场景绘制命令提交进当前帧 GuiRenderState;
  * - 输入:鼠标(点击/释放/移动/拖拽/滚轮)、键盘(按下/释放)与字符(charTyped,含中文
  *   输入法上屏)从原版 Screen 转发到 Compose 场景(阶段 F + 文本输入 I.1);
- *   场景坐标 = GUI 单位(密度 1),无需换算;
+ *   场景坐标 = 像素(密度默认 1f,1dp == 1 像素;[density] 可配置放大,见构造);
  * - 生命周期:[removed] 时关闭场景(任何被替换/关闭路径都会触发)。
  *
  * IME 支持(实施计划 mc-ime-service-plan.md):[preeditUpdated] 把系统输入法组合态
  * (preedit)转发到 Compose 编辑缓冲(下划线组合文本);[charTyped] 保持提交文本上屏
  * 并通知 service 计数(组合结束时定位光标)。
  *
+ * 父屏幕能力(T.25):
+ * - [parent]:打开本屏之前的 Screen。关闭时([onClose],Esc 或业务调用)自动
+ *   `setScreen(parent)` 返回父屏 —— 与原版各 Screen 的 lastScreen 约定一致
+ *   (原版 [Screen.onClose] 默认 `setScreen(null)`,[Gui.setScreen] 无自动记忆,
+ *   lastScreen 是子类约定);
+ * - [renderParentScreen]:开关,控制本屏打开时是否把父屏内容渲染在 Compose 之下
+ *   (Compose 内容在最上层,半透明背景可透出父屏)。原版父屏走原版 GuiRenderState
+ *   (原版 guiRenderer 先画);Compose 父屏由其 [MinecraftComposeScene.renderFrame]
+ *   收集后经 [ComposeGuiRenderer.absorbAndClear] 并入本屏渲染器(顺序在前);
+ * - [reopenable]:父屏为 ComposeScreen 时由 [open] 自动标记 —— [removed] 保留场景
+ *   (不 close),返回时 [added] 复活(场景与组合状态保留,滚动位置等不丢失);
+ *   非可复活屏关闭即销毁场景。
+ *
  * 尚未支持:双击、Popup/Dialog 焦点层级、IME 候选窗(由系统输入法负责)。
  */
 class ComposeScreen(
-    content: @Composable () -> Unit,
+    val parent: Screen? = null,
+    var renderParentScreen: Boolean = false,
+    /**
+     * 场景密度(T.26):默认 1f(1dp == 1 像素,场景尺寸 = 窗口像素 T.24);
+     * 传 >1f 放大 UI(官方桌面 density 语义,文本字号同步放大)。
+     */
+    val density: Float = 1f,
+    private val content: @Composable () -> Unit,
 ) : Screen(Component.literal("Compose Screen")) {
 
-    /** 本屏幕持有的 Compose 场景 */
-    val composeScene: MinecraftComposeScene = MinecraftComposeScene(width = 1, height = 1)
+    /** 本屏持有的 Compose 场景(可复活:removed 保留场景时非空,否则重建) */
+    private var composeScene: MinecraftComposeScene? = null
 
-    private var closed = false
+    /**
+     * T.25:可复活标记 —— true 时 [removed] 不销毁场景(关闭返回父屏后状态保留),
+     * 由 [open] 在替换父屏前自动设置(父屏为 ComposeScreen 时)。
+     */
+    var reopenable: Boolean = false
 
     init {
-        composeScene.setContent(content)
+        ensureScene()
+    }
+
+    /**
+     * 确保场景存在并注册本屏渲染器。首次构造与 [added](关闭返回父屏后再次打开)
+     * 都会调用:场景已存在(可复活保留)则复用,否则重建。
+     */
+    private fun ensureScene() {
+        if (composeScene == null) {
+            val scene = MinecraftComposeScene(width = 1, height = 1, density = density)
+            scene.setContent(content)
+            composeScene = scene
+        }
+        // T.24:setScreen 先 removed 旧屏再 init 新屏,注册顺序保证 active 指向当前屏
+        ComposeGuiRenderer.register(composeScene!!.renderer)
+    }
+
+    /** T.25:关闭返回父屏后再次打开时复活场景(重新注册渲染器) */
+    override fun added() {
+        ensureScene()
+        super.added()
     }
 
     // ── 渲染 ──────────────────────────────────────────────────
@@ -61,61 +106,96 @@ class ComposeScreen(
         partialTick: Float,
     ) {
         // 不调用 super:不渲染原版 widget 列表与默认背景,画面完全由 Compose 场景提供
-        composeScene.renderFrame()
+        if (renderParentScreen && parent != null) {
+            // T.25:渲染父屏(Compose 之下)。原版父屏走原版 GuiRenderState(原版
+            // guiRenderer 先画,Compose 后画盖上面);Compose 父屏由其 renderFrame
+            // 收集到自身渲染器,再并入本屏渲染器(元素顺序在前 = 画在下面)。
+            parent.extractRenderStateWithTooltipAndSubtitles(graphics, mouseX, mouseY, partialTick)
+            if (parent is ComposeScreen) {
+                parent.composeScene?.renderer?.let { parentRenderer ->
+                    composeScene?.renderer?.absorbAndClear(parentRenderer)
+                }
+            }
+        }
+        composeScene?.renderFrame()
+    }
+
+    /**
+     * T.24:空实现 —— 不渲染原版 Screen 的菜单背景遮罩
+     * ([Screen.extractBackground] 默认走 extractBlurredBackground + extractMenuBackground,
+     * 即模糊 + 半透明黑色遮罩)。Compose 内容自绘背景(业务背景色/图片),不需要原版遮罩。
+     */
+    override fun extractBackground(
+        graphics: GuiGraphicsExtractor,
+        mouseX: Int,
+        mouseY: Int,
+        partialTick: Float,
+    ) {
+        // 空实现:跳过原版菜单背景遮罩
     }
 
     // ── 鼠标输入(阶段 F)──────────────────────────────────────
 
+    /**
+     * T.24:MC 输入坐标为 guiScale 缩放坐标(Scene 1:1 像素后需乘回 guiScale 转像素)。
+     * 注意 MC 的 scaled 坐标本身是「像素 / guiScale 取整」,乘回后与原始像素最多差
+     * guiScale-1 像素(MC 输入层固有限制,渲染裁剪已完全像素化)。
+     */
+    private fun guiScale(): Int =
+        Minecraft.getInstance().gameRenderer.gameRenderState().windowRenderState.guiScale
+
+    private fun toPixels(x: Double): Float = (x * guiScale()).toFloat()
+
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
-        val consumed = composeScene.sendPointerEvent(
+        val consumed = composeScene?.sendPointerEvent(
             eventType = PointerEventType.Press,
-            position = Offset(event.x.toFloat(), event.y.toFloat()),
+            position = Offset(toPixels(event.x), toPixels(event.y)),
             type = PointerType.Mouse,
             keyboardModifiers = event.buttonInfo.modifiers().toPointerKeyboardModifiers(),
             button = PointerButton(event.buttonInfo.button()),
         )
-        return consumed.anyMovementConsumed || super.mouseClicked(event, doubleClick)
+        return consumed?.anyMovementConsumed == true || super.mouseClicked(event, doubleClick)
     }
 
     override fun mouseReleased(event: MouseButtonEvent): Boolean {
-        val consumed = composeScene.sendPointerEvent(
+        val consumed = composeScene?.sendPointerEvent(
             eventType = PointerEventType.Release,
-            position = Offset(event.x.toFloat(), event.y.toFloat()),
+            position = Offset(toPixels(event.x), toPixels(event.y)),
             type = PointerType.Mouse,
             keyboardModifiers = event.buttonInfo.modifiers().toPointerKeyboardModifiers(),
             button = PointerButton(event.buttonInfo.button()),
         )
-        return consumed.anyMovementConsumed || super.mouseReleased(event)
+        return consumed?.anyMovementConsumed == true || super.mouseReleased(event)
     }
 
     override fun mouseMoved(x: Double, y: Double) {
-        composeScene.sendPointerEvent(
+        composeScene?.sendPointerEvent(
             eventType = PointerEventType.Move,
-            position = Offset(x.toFloat(), y.toFloat()),
+            position = Offset(toPixels(x), toPixels(y)),
             type = PointerType.Mouse,
         )
         super.mouseMoved(x, y)
     }
 
     override fun mouseDragged(event: MouseButtonEvent, dx: Double, dy: Double): Boolean {
-        val consumed = composeScene.sendPointerEvent(
+        val consumed = composeScene?.sendPointerEvent(
             eventType = PointerEventType.Move,
-            position = Offset(event.x.toFloat(), event.y.toFloat()),
+            position = Offset(toPixels(event.x), toPixels(event.y)),
             type = PointerType.Mouse,
             keyboardModifiers = event.buttonInfo.modifiers().toPointerKeyboardModifiers(),
         )
-        return consumed.anyMovementConsumed || super.mouseDragged(event, dx, dy)
+        return consumed?.anyMovementConsumed == true || super.mouseDragged(event, dx, dy)
     }
 
     override fun mouseScrolled(x: Double, y: Double, scrollX: Double, scrollY: Double): Boolean {
         val consumed =
-            composeScene.sendPointerEvent(
+            composeScene?.sendPointerEvent(
                 eventType = PointerEventType.Scroll,
-                position = Offset(x.toFloat(), y.toFloat()),
+                position = Offset(toPixels(x), toPixels(y)),
                 type = PointerType.Mouse,
                 scrollDelta = scrollDelta(scrollX, scrollY),
             )
-        return consumed.anyMovementConsumed || super.mouseScrolled(x, y, scrollX, scrollY)
+        return consumed?.anyMovementConsumed == true || super.mouseScrolled(x, y, scrollX, scrollY)
     }
 
     // ── 键盘输入(阶段 F)──────────────────────────────────────
@@ -129,18 +209,19 @@ class ComposeScreen(
      * 组合期间按键不达应用的行为一致)。
      */
     override fun keyPressed(event: MCKeyEvent): Boolean {
-        if (composeScene.textInputService.isComposing && event.key in IME_COMPOSITION_KEYS) {
+        if (composeScene?.textInputService?.isComposing == true && event.key in IME_COMPOSITION_KEYS) {
             return true
         }
-        return composeScene.sendKeyEvent(event.toCompose(KeyEventType.KeyDown)) ||
-            super.keyPressed(event)
+        return composeScene?.sendKeyEvent(event.toCompose(KeyEventType.KeyDown)) == true ||
+                super.keyPressed(event)
     }
 
     override fun keyReleased(event: MCKeyEvent): Boolean {
-        if (composeScene.textInputService.isComposing && event.key in IME_COMPOSITION_KEYS) {
+        if (composeScene?.textInputService?.isComposing == true && event.key in IME_COMPOSITION_KEYS) {
             return true
         }
-        return composeScene.sendKeyEvent(event.toCompose(KeyEventType.KeyUp)) || super.keyReleased(event)
+        return composeScene?.sendKeyEvent(event.toCompose(KeyEventType.KeyUp)) == true ||
+                super.keyReleased(event)
     }
 
     /**
@@ -156,16 +237,17 @@ class ComposeScreen(
      */
     @OptIn(InternalComposeUiApi::class)
     override fun charTyped(event: CharacterEvent): Boolean {
-        if (!composeScene.isCharAccepted(event.codepoint)) {
+        val scene = composeScene ?: return false
+        if (!scene.isCharAccepted(event.codepoint)) {
             return false
         }
-        composeScene.textInputService.onCharTyped(event.codepoint)
+        scene.textInputService.onCharTyped(event.codepoint)
         val typedEvent = ComposeKeyEvent(
             key = Key.Unknown,
             type = KeyEventType.KeyDown,
             codePoint = event.codepoint,
         )
-        return composeScene.sendKeyEvent(typedEvent)
+        return scene.sendKeyEvent(typedEvent)
     }
 
     /**
@@ -174,21 +256,31 @@ class ComposeScreen(
      * Compose EditCommand 写入编辑缓冲(下划线组合文本/组合区清理/光标定位)。
      */
     override fun preeditUpdated(event: PreeditEvent?): Boolean {
-        composeScene.textInputService.onPreeditChanged(event)
+        composeScene?.textInputService?.onPreeditChanged(event)
         return true
     }
 
     // ── 生命周期 ─────────────────────────────────────────────
 
+    /**
+     * T.25:关闭请求 —— 有父屏则自动打开父屏(与原版各 Screen 的 lastScreen 约定一致),
+     * 无父屏走原版默认(setScreen(null):回游戏 HUD / 主菜单)。
+     */
     override fun onClose() {
-        super.onClose()
-        // 关闭请求:原版会继续走 setScreen(null) → removed(),真正的清理在 removed 中
+        if (parent != null) {
+            Minecraft.getInstance().gui.setScreen(parent)
+        } else {
+            super.onClose()
+        }
     }
 
     override fun removed() {
-        if (!closed) {
-            closed = true
-            runCatching { composeScene.close() }
+        // T.24:注销本屏渲染器(避免 gui 阶段继续提交已关闭的场景)
+        composeScene?.let { ComposeGuiRenderer.unregister(it.renderer) }
+        // T.25:可复活屏保留场景(关闭返回父屏后状态不丢),否则销毁
+        if (!reopenable) {
+            composeScene?.let { runCatching { it.close() } }
+            composeScene = null
         }
         super.removed()
     }
@@ -204,9 +296,51 @@ class ComposeScreen(
             InputConstants.KEY_ESCAPE,
         )
 
-        /** 打开一个 Compose 屏幕(等价于原版 minecraft.gui.setScreen) */
-        fun open(content: @Composable () -> Unit) {
-            Minecraft.getInstance().gui.setScreen(ComposeScreen(content))
+        /**
+         * 关闭当前 Compose 屏幕(T.25 父屏幕语义):等价于对当前屏调用 [ComposeScreen.onClose]
+         * —— 有父屏则自动 `setScreen(parent)` 返回,无父屏回游戏/主菜单(原版默认行为)。
+         * 当前屏幕不是 [ComposeScreen](如原版屏幕)时返回 false,不做任何事。
+         *
+         * 用途:内容侧「返回」按钮 —— **关闭自己**而非重新 open 一个父屏实例
+         * (重新 open 会丢父屏组合状态,且叠加多层屏幕)。
+         */
+        fun closeCurrent(): Boolean {
+            val current = Minecraft.getInstance().gui.screen()
+            if (current is ComposeScreen) {
+                current.onClose()
+                return true
+            }
+            return false
+        }
+
+        /**
+         * 打开一个 Compose 屏幕(等价于原版 minecraft.gui.setScreen)。
+         *
+         * T.25:[parent] 默认取打开前的当前屏幕 —— 关闭时自动返回它(「父屏幕能力」);
+         * 显式传 null 关闭回主菜单/游戏内。[renderParentScreen] 控制打开期间是否把
+         * 父屏内容渲染在 Compose 之下。父屏为 [ComposeScreen] 时自动标记
+         * [ComposeScreen.reopenable],保证返回后场景/状态复活。
+         *
+         * T.26:[density] 场景密度,默认 1f(1dp == 1 像素);传 >1f 放大 UI。
+         *
+         * 注意 [content] 是最后一个参数 —— 保持 `ComposeScreen.open { ... }`
+         * trailing lambda 调用形式与早期版本兼容。
+         *
+         * @return 创建的 [ComposeScreen] 实例(可经 [ComposeScreen.renderParentScreen]
+         * 运行时切换渲染父屏开关)。
+         */
+        fun open(
+            parent: Screen? = null,
+            renderParentScreen: Boolean = false,
+            density: Float = 1f,
+            content: @Composable () -> Unit,
+        ): ComposeScreen {
+            val resolvedParent = parent ?: Minecraft.getInstance().gui.screen()
+            // 父屏是 ComposeScreen:替换前先标记可复活(removed 保留场景)
+            (resolvedParent as? ComposeScreen)?.reopenable = true
+            val screen = ComposeScreen(resolvedParent, renderParentScreen, density, content)
+            Minecraft.getInstance().gui.setScreen(screen)
+            return screen
         }
     }
 }

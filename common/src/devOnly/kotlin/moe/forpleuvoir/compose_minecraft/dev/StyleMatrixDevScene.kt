@@ -93,7 +93,7 @@ fun StyleMatrixDevScene() {
             DevMenuButton(
                 title = "← 返回主菜单",
                 subtitle = "Back to menu",
-                onClick = { ComposeScreen.open { MinecraftDevSceneContent() } },
+                onClick = { if (!ComposeScreen.closeCurrent()) ComposeScreen.open { MinecraftDevSceneContent() } },
             )
 
             // ── BasicText 样式矩阵 ──

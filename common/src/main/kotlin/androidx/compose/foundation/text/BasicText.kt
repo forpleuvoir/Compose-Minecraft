@@ -94,9 +94,10 @@ import net.minecraft.network.chat.Style
  *   fits in the available space and lays the text out with this size. This performs multiple layout
  *   passes and can be slower than using a fixed font size. This takes precedence over sizes defined
  *   through [style]. See [TextAutoSize] and the sample code.
- * @param fontSize 平台适配点(T.19):字体大小,**16sp = 原样 1 倍**(MC 无原生字号
- *   系统,经渲染矩阵缩放实现:布局尺寸与字形矩阵同步缩放)。仅支持 sp 单位;
- *   默认 16sp 与旧 scale = 1f 渲染一致。
+ * @param fontSize 平台适配点(T.19):字体大小,经渲染矩阵缩放实现(布局尺寸与字形
+ *   矩阵同步缩放);仅支持 sp 单位。基准行高 [MC_TEXT_SCALE_BASE_PX] = 9px(T.26),
+ *   **18sp = 2x 平台基准字号**(整数放大),9sp = 1x 原生像素;
+ *   默认 18sp 与 [androidx.compose.foundation.text.input.BasicTextField] 默认一致。
  * @sample androidx.compose.foundation.samples.TextAutoSizeBasicTextSample
  */
 @Composable
@@ -111,7 +112,7 @@ fun BasicText(
     minLines: Int = 1,
     color: ColorProducer? = null,
     autoSize: TextAutoSize? = null,
-    fontSize: TextUnit = 16.sp,
+    fontSize: TextUnit = 18.sp,
 ) {
     validateMinMaxLines(minLines = minLines, maxLines = maxLines)
     val selectionRegistrar = LocalSelectionRegistrar.current
@@ -131,7 +132,7 @@ fun BasicText(
 
     val fontFamilyResolver = LocalFontFamilyResolver.current
 
-    // 平台适配点(T.19):fontSize(sp) → 渲染缩放(16sp = 1f);布局/绘制端消费 scale
+    // 平台适配点(T.19/T.26):fontSize(sp) → 渲染缩放(18sp = 2x 基准);布局/绘制端消费 scale
     val scale = fontSize.toTextScale(LocalDensity.current)
 
     BackgroundTextMeasurement(text = text, style = style, fontFamilyResolver = fontFamilyResolver)
@@ -188,9 +189,10 @@ fun BasicText(
  * @param maxLines 最大可见行数。
  * @param minLines 最小可见行数。
  * @param color 覆盖文本颜色的颜色生产者(覆盖所有段)。
- * @param fontSize 平台适配点(T.19):字体大小,**16sp = 原样 1 倍**(MC 无原生字号
- *   系统,经渲染矩阵缩放实现:布局尺寸与字形矩阵同步缩放)。仅支持 sp 单位;
- *   默认 16sp 与旧 scale = 1f 渲染一致。
+ * @param fontSize 平台适配点(T.19):字体大小,经渲染矩阵缩放实现(布局尺寸与字形
+ *   矩阵同步缩放);仅支持 sp 单位。基准行高 [MC_TEXT_SCALE_BASE_PX] = 9px(T.26),
+ *   **18sp = 2x 平台基准字号**(整数放大),9sp = 1x 原生像素;
+ *   默认 18sp 与 [androidx.compose.foundation.text.input.BasicTextField] 默认一致。
  */
 @Composable
 fun BasicText(
@@ -203,13 +205,13 @@ fun BasicText(
     maxLines: Int = Int.MAX_VALUE,
     minLines: Int = 1,
     color: ColorProducer? = null,
-    fontSize: TextUnit = 16.sp,
+    fontSize: TextUnit = 18.sp,
 ) {
     validateMinMaxLines(minLines = minLines, maxLines = maxLines)
 
     val fontFamilyResolver = LocalFontFamilyResolver.current
 
-    // 平台适配点(T.19):fontSize(sp) → 渲染缩放(16sp = 1f);布局/绘制端消费 scale
+    // 平台适配点(T.19/T.26):fontSize(sp) → 渲染缩放(18sp = 2x 基准);布局/绘制端消费 scale
     val scale = fontSize.toTextScale(LocalDensity.current)
 
     // 平台适配点(T.3):展平为带自身样式的段;每段缺失属性用 defaultStyle 补缺(applyTo 语义)
@@ -837,16 +839,29 @@ internal fun BackgroundTextMeasurement(
 }
 
 /**
+ * 平台适配点(T.19/T.25):MC 字形 1x 行高(px)。
+ *
+ * MC 无原生字号系统,文字大小经渲染矩阵缩放实现(T.10 的 scale 链路)。
+ * MC 字形为 8x8 位图,1x 行高固定 9px —— 位图非整数缩放会糊,常用字号应落在
+ * 整数缩放上。**MC 平台的基准字号 = 18sp(2x,行高 18px)**:18sp 是 MC 界面
+ * 自然的放大观感字号(16sp 是强行对齐 Compose 惯例,非本平台自然字号):
+ * 9sp → 1x(行高 9px 原生)、18sp → 2x(行高 18px)、36sp → 4x(行高 36px)。
+ */
+internal const val MC_TEXT_SCALE_BASE_PX = 9f
+
+/**
  * 平台适配点(T.19):TextUnit(sp) → 文本渲染缩放。
  *
  * MC 无原生字号系统,文字大小经渲染矩阵缩放实现(T.10 的 scale 链路)。
- * 约定 **16sp = 1f**(16sp 时字形原样,布局尺寸与字形矩阵同步缩放);
+ * 基准行高 [MC_TEXT_SCALE_BASE_PX] = MC 1x 行高 9px:**18sp = 2x = 18px 行高**
+ * (MC 平台基准字号;16sp ≈ 1.78x 非整数缩放、非自然字号,尽量避免);
  * 仅支持 sp 单位 —— em 需要基准字号链(TextStyle 已随平台移除),无法解析。
  */
-private fun TextUnit.toTextScale(density: Density): Float {
+// 平台适配点(T.26):internal —— BasicTextField 同包复用(fontSize → 渲染缩放)
+internal fun TextUnit.toTextScale(density: Density): Float {
     require(type == TextUnitType.Sp) {
         "平台适配点(T.19):fontSize 仅支持 sp 单位(MC 无原生字号系统,em 无法解析)"
     }
-    // sp → px(密度 1 下 16sp = 16px)→ 缩放 = px / 16
-    return value * density.density * density.fontScale / 16f
+    // sp → px(密度 1 下 18sp = 18px)→ 缩放 = px / MC 1x 行高(9px),18sp → 2x
+    return value * density.density * density.fontScale / MC_TEXT_SCALE_BASE_PX
 }

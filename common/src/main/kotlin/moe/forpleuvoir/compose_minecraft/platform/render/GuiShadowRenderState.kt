@@ -21,8 +21,9 @@ import org.joml.Matrix3x2fc
  *   ([MinecraftShadowRenderer]),形状不变时每帧零 CPU;
  * - bounds:本体(外扩模糊带)经 pose 变换后与 scissor 求交 —— 供
  *   GuiRenderer 层级归并使用,非 null 是元素被接受的前提;
- * - 渲染顺序:GuiRenderStateMixin 把本类型元素排序到列表最前(最先绘制 =
- *   最底层),内容后画盖住阴影重叠部分 —— 等价于官方"先画阴影、后画内容"。
+ * - 渲染顺序:T.24 起由 [ComposeGuiRenderer] 把本类型元素排到列表最前(最先绘制 =
+ *   最底层),内容后画盖住阴影重叠部分 —— 等价于官方"先画阴影、后画内容"
+ *   (原 GuiRenderStateMixin 排序 hack 已随独立渲染工作流删除)。
  */
 internal class GuiShadowRenderState(
     val pose: Matrix3x2fc,

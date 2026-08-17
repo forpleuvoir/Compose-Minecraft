@@ -101,6 +101,8 @@ internal class TextLayoutState {
         singleLine: Boolean,
         softWrap: Boolean,
         keyboardOptions: KeyboardOptions,
+        // 平台适配点(T.26):输入框文本渲染缩放(1f = 原样;BasicTextField(fontSize) 派生)
+        scale: Float = 1f,
     ) {
         layoutCache.updateNonMeasureInputs(
             textFieldState = textFieldState,
@@ -108,6 +110,7 @@ internal class TextLayoutState {
             singleLine = singleLine,
             softWrap = softWrap,
             keyboardOptions = keyboardOptions,
+            scale = scale,
         )
     }
 

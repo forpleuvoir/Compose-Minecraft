@@ -29,7 +29,6 @@ import net.minecraft.client.gui.render.TextureSetup
 import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.client.renderer.state.gui.BlitRenderState
 import net.minecraft.client.renderer.state.gui.ColoredRectangleRenderState
-import net.minecraft.client.renderer.state.gui.GuiRenderState
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState
 import net.minecraft.locale.Language
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toComponent
@@ -68,18 +67,18 @@ internal class MinecraftRenderContext {
      */
     private val triangleCache = HashMap<Long, FloatArray>()
 
-    /** 把 [canvas] 中的命令逐条提交到 [renderState](GUI 坐标 = 场景 px,密度 1) */
-    fun render(canvas: MinecraftCanvas, renderState: GuiRenderState) {
+    /** 把 [canvas] 中的命令逐条提交到 [sink](T.24:像素坐标,场景 1:1 窗口像素) */
+    fun render(canvas: MinecraftCanvas, sink: GuiCommandSink) {
         val windowState = Minecraft.getInstance().gameRenderer.gameRenderState().windowRenderState
-        val windowWidth = windowState.width / windowState.guiScale
-        val windowHeight = windowState.height / windowState.guiScale
-        val guiScale = windowState.guiScale
+        // T.24:场景尺寸 = 窗口像素(1:1),不再除 guiScale
+        val windowWidth = windowState.width.toFloat()
+        val windowHeight = windowState.height.toFloat()
 
         for (command in canvas.commands()) {
             // T.15:3D 命令(图层 rotationX/rotationY,携带行主序含透视的 layer3D)
             // 走 CPU 顶点透视变换路径(纯色几何 → 屏幕三角形,实心无 AA)。
             if (command.layer3D != null) {
-                render3D(renderState, command, guiScale)
+                render3D(sink, command)
                 continue
             }
             // 平台适配点(T.9 兜底):MC 的 enableScissor 对 "宽高 <= 0" 直接抛
@@ -100,7 +99,7 @@ internal class MinecraftRenderContext {
             if (command.clip != null && scissor == null) continue
 
             when (command) {
-                is DrawRectCommand -> renderState.addBlitToCurrentLayer(
+                is DrawRectCommand -> sink.addElement(
                     blit(
                         command.matrix, scissor,
                         command.left, command.top, command.right, command.bottom,
@@ -110,7 +109,7 @@ internal class MinecraftRenderContext {
                 is DrawRoundRectCommand -> {
                     // 圆角为 0(或小于 1px)时退化为矩形;带圆角走三角化
                     if (command.radiusX <= 1f && command.radiusY <= 1f) {
-                        renderState.addBlitToCurrentLayer(
+                        sink.addElement(
                             blit(
                                 command.matrix, scissor,
                                 command.left, command.top, command.right, command.bottom,
@@ -118,7 +117,7 @@ internal class MinecraftRenderContext {
                             )
                         )
                     } else {
-                        addTriangles(renderState, command, scissor, guiScale) { sink ->
+                        addTriangles(sink, command, scissor) { sink ->
                             GeometryTessellator.roundRect(
                                 command.left, command.top, command.right, command.bottom,
                                 command.radiusX, command.radiusY,
@@ -129,7 +128,7 @@ internal class MinecraftRenderContext {
                         }
                     }
                 }
-                is DrawOvalCommand -> addTriangles(renderState, command, scissor, guiScale) { sink ->
+                is DrawOvalCommand -> addTriangles(sink, command, scissor) { sink ->
                     GeometryTessellator.oval(
                         command.left, command.top, command.right, command.bottom,
                         fill = command.paint.style == PaintingStyle.Fill,
@@ -137,7 +136,7 @@ internal class MinecraftRenderContext {
                         sink = sink,
                     )
                 }
-                is DrawCircleCommand -> addTriangles(renderState, command, scissor, guiScale) { sink ->
+                is DrawCircleCommand -> addTriangles(sink, command, scissor) { sink ->
                     GeometryTessellator.circle(
                         command.centerX, command.centerY, command.radius,
                         fill = command.paint.style == PaintingStyle.Fill,
@@ -145,7 +144,7 @@ internal class MinecraftRenderContext {
                         sink = sink,
                     )
                 }
-                is DrawArcCommand -> addTriangles(renderState, command, scissor, guiScale) { sink ->
+                is DrawArcCommand -> addTriangles(sink, command, scissor) { sink ->
                     GeometryTessellator.arc(
                         command.left, command.top, command.right, command.bottom,
                         command.startAngle, command.sweepAngle, command.useCenter,
@@ -154,7 +153,7 @@ internal class MinecraftRenderContext {
                         sink = sink,
                     )
                 }
-                is DrawLineCommand -> addTriangles(renderState, command, scissor, guiScale) { sink ->
+                is DrawLineCommand -> addTriangles(sink, command, scissor) { sink ->
                     GeometryTessellator.line(
                         command.p1x, command.p1y, command.p2x, command.p2y,
                         command.paint.strokeWidth,
@@ -162,7 +161,7 @@ internal class MinecraftRenderContext {
                         sink = sink,
                     )
                 }
-                is DrawPathCommand -> addTriangles(renderState, command, scissor, guiScale) { sink ->
+                is DrawPathCommand -> addTriangles(sink, command, scissor) { sink ->
                     GeometryTessellator.path(
                         command.segments,
                         fill = command.paint.style == PaintingStyle.Fill,
@@ -171,7 +170,7 @@ internal class MinecraftRenderContext {
                         sink = sink,
                     )
                 }
-                is DrawPointsCommand -> addTriangles(renderState, command, scissor, guiScale) { sink ->
+                is DrawPointsCommand -> addTriangles(sink, command, scissor) { sink ->
                     GeometryTessellator.points(
                         command.pointMode, command.points,
                         command.paint.strokeWidth,
@@ -179,8 +178,8 @@ internal class MinecraftRenderContext {
                         sink = sink,
                     )
                 }
-                is DrawTextCommand -> renderState.addText(text(command, scissor))
-                is MinecraftCanvas.DrawGradientRectCommand -> renderState.addGuiElement(
+                is DrawTextCommand -> sink.addText(text(command, scissor))
+                is MinecraftCanvas.DrawGradientRectCommand -> sink.addElement(
                     // T.14 阴影(渐变保底):MC 原生双色垂直渐变矩形(GUI pipeline,与 blit 同排序组,
                     // 阴影命令先记录先绘制,层级正确)
                     ColoredRectangleRenderState(
@@ -196,11 +195,11 @@ internal class MinecraftRenderContext {
                         scissor?.toScreenRectangle(),
                     )
                 )
-                is MinecraftCanvas.DrawShadowCommand -> {
-                    // T.14 阴影(CPU 离屏真模糊):alpha 场 + 高斯卷积 + 纹理 blit,
-                    // 双后端兼容,无自定义 shader/render pass
+                is MinecraftCanvas.DrawShadowCommand ->
+                    // T.14 阴影(GPU 距离场):CPU 三角化 + 每顶点距离场,
+                    // gui_shadow shader 高斯模糊解析解生成软阴影(参照 Skia SkShadowUtils)
                     MinecraftShadowRenderer.renderShadow(
-                        renderState = renderState,
+                        sink = sink,
                         matrix = command.matrix,
                         left = command.left,
                         top = command.top,
@@ -215,11 +214,10 @@ internal class MinecraftRenderContext {
                         spotColorArgb = command.spotColorArgb,
                         scissor = scissor?.toScreenRectangle(),
                     )
-                }
-                is DrawImageRectCommand -> renderState.addBlitToCurrentLayer(
+                is DrawImageRectCommand -> sink.addElement(
                     blitImage(command, scissor)
                 )
-                is MinecraftCanvas.DrawVerticesCommand -> addVertices(renderState, command, scissor, guiScale)
+                is MinecraftCanvas.DrawVerticesCommand -> addVertices(sink, command, scissor)
             }
         }
     }
@@ -239,7 +237,7 @@ internal class MinecraftRenderContext {
      *
      * 防御:w <= 0(图元在相机后方)的顶点丢弃,对应三角形跳过。
      */
-    private fun render3D(renderState: GuiRenderState, command: DrawCommand, guiScale: Int) {
+    private fun render3D(sink: GuiCommandSink, command: DrawCommand) {
         val layer3D = command.layer3D ?: return
         val m2 = command.matrix
         val paint = command.paint ?: return
@@ -269,7 +267,8 @@ internal class MinecraftRenderContext {
         }
 
         fun tessellated(tessellate: (GeometryTessellator.Sink) -> Unit) {
-            triangleSink.aaScale = matrixScale(m2) * guiScale
+            // T.24:像素场景(1:1),AA 距离不再乘 guiScale
+            triangleSink.aaScale = matrixScale(m2)
             triangleSink.clear()
             tessellate(triangleSink)
             if (triangleSink.vertexCount < 3) return
@@ -419,7 +418,7 @@ internal class MinecraftRenderContext {
         if (count >= 9) {
             MinecraftGuiTriangles.ensureCompiled()
             BlendPipelines.ensureCompiled()
-            renderState.addGuiElement(
+            sink.addElement(
                 GuiTriangleRenderState(
                     pose = IDENTITY_MATRIX,
                     colorArgb = colorArgb,
@@ -462,14 +461,14 @@ internal class MinecraftRenderContext {
      * coverage 的屏幕像素距离按「矩阵最大轴缩放 × guiScale」换算。
      */
     private fun addTriangles(
-        renderState: GuiRenderState,
+        sink: GuiCommandSink,
         command: DrawCommand,
         scissor: Rect?,
-        guiScale: Int,
         tessellate: (GeometryTessellator.Sink) -> Unit,
     ) {
         val paint = command.paint ?: return
-        val aaScale = matrixScale(command.matrix) * guiScale
+        // T.24:像素场景(1:1),AA 距离不再乘 guiScale
+        val aaScale = matrixScale(command.matrix)
         val key = geometryFingerprint(command, paint, aaScale)
         var vertices = triangleCache[key]
         if (vertices == null) {
@@ -483,7 +482,7 @@ internal class MinecraftRenderContext {
         }
         MinecraftGuiTriangles.ensureCompiled()
         BlendPipelines.ensureCompiled()
-        renderState.addGuiElement(
+        sink.addElement(
             GuiTriangleRenderState(
                 pose = command.matrix.toMatrix3x2f(),
                 colorArgb = paint.toArgb(),
@@ -505,10 +504,9 @@ internal class MinecraftRenderContext {
      * - 3D 图层下走 [render3D] 的 CPU 透视路径(见 render3D 内分支)。
      */
     private fun addVertices(
-        renderState: GuiRenderState,
+        sink: GuiCommandSink,
         command: MinecraftCanvas.DrawVerticesCommand,
         scissor: Rect?,
-        guiScale: Int,
     ) {
         val paint = command.paint
         val vc = command.positions.size / 2
@@ -576,7 +574,7 @@ internal class MinecraftRenderContext {
         if (count < 9) return
         MinecraftGuiTriangles.ensureCompiled()
         BlendPipelines.ensureCompiled()
-        renderState.addGuiElement(
+        sink.addElement(
             GuiTriangleRenderState(
                 pose = command.matrix.toMatrix3x2f(),
                 colorArgb = -1, // 0xFFFFFFFF;vertexColors 优先,此值仅占位

@@ -28,15 +28,27 @@ Agent 的 IDE 工具集中以 `mcp__idea__*` 前缀暴露。**所有代码阅读
 
 在 Minecraft(Fabric + NeoForge 双 Loader)中运行 Compose Multiplatform UI 的基座 Mod。
 
-- **无 Skia / Skiko / Desktop / Material**:所有绘制进入 Minecraft 当前帧的
-  `GuiRenderState`(与 Vulkan/OpenGL 渲染后端无关);
-- **原版 `Screen` 桥接**:Compose 场景通过 `net.minecraft.client.gui.screens.Screen`
-  挂入 Minecraft(无帧钩子 mixin、无渲染注入 mixin、无 loader 事件;
-  仅 StyleAccessor 只读字段 mixin,见 `common/src/main/.../mixin/StyleAccessor.java`);
-- **场景密度固定 1**:1dp == 1 GUI 单位,坐标无需换算;
+- **无 Skia / Skiko / Desktop / Material**:所有绘制经 `ComposeGuiRenderer`
+  提交到主帧缓冲(独立渲染工作流,不依赖原版 `GuiRenderState` 节点树,
+  与 Vulkan/OpenGL 渲染后端无关);
+- **原版 `Screen` 桥接 + 独立渲染工作流(T.24)**:Compose 场景通过
+  `net.minecraft.client.gui.screens.Screen` 挂入 Minecraft;渲染不依赖原版
+  `GuiRenderState` 节点树 —— `ComposeGuiRenderer`(仿 `GuiRenderer` 结构,
+  像素 1:1 投影、像素级裁剪)经 `GuiRendererMixin` 帧钩子
+  (`@Inject` 在 `GuiRenderer.render()` 的 draw() 调用之后)绘制,
+  原版 GUI 画完后 Compose 画在最上层(ComposeScreen 空实现 `extractBackground`
+  不渲染原版菜单遮罩);原版 guiRenderer 继续提交 HUD/toasts(共存不替换,
+  用户拍板解除早期「无帧钩子/无渲染注入 mixin」约定)。Mixin 清单:
+  `GuiRendererMixin`(帧钩子)+ `StyleAccessor`(只读字段),见
+  `common/src/main/.../mixin/`;
+- **场景密度可配置(T.26)**:默认 1f(1dp == 1 像素,场景尺寸 = 窗口像素,T.24
+  1:1 渲染),经 `ComposeScreen.open(density = …)` / 构造传入,>1f 放大 UI
+  (官方桌面 density 语义,文本字号同步放大);
 - **文字**:MC Font 度量统一,行高 9px 固定;`BasicText(fontSize)` 以 sp 驱动字号
-  (T.19,**16sp = 原样 1 倍**,经渲染矩阵缩放,仅支持 sp);`BasicText(autoSize=…)`
-  自动缩放(T.20,二分搜索最大适配字号,默认 12–112sp);
+  (T.19,**16sp = 原样 1 倍**,经渲染矩阵缩放,仅支持 sp;18sp = 2x 为平台基准字号,
+  9sp = 1x 原生像素);`BasicText(autoSize=…)` 自动缩放(T.20,二分搜索最大适配字号,
+  默认 12–112sp);`BasicTextField(fontSize)` 输入框字号(T.26,默认 18sp = 2x,
+  光标/选区/命中坐标随 scale 换算);
 - **发布 JAR 内嵌完整 Compose 运行时**(约 4000+ 个 `androidx.compose.*` 类),
   消费者无需引入任何 Compose/Skiko 依赖。
 
@@ -89,7 +101,10 @@ build_project(rebuild=true)
    Basic 层级,类似 Compose Material 的主题系统/默认组件外观不考虑;
    文本组件的 `McTextStyle` 是 MC `Style` 的基础封装,`McText`/`McTextField`
    无默认外观,UI 长什么样由业务方决定;
-4. 渲染只消费 MC 的 `GuiRenderState`(`extractRenderState` 每帧驱动),不做离屏渲染;
+4. 渲染走 `ComposeGuiRenderer` 独立工作流(T.24,`GuiRendererMixin` 帧钩子
+   注入 `GuiRenderer.render()` 的 draw() 调用之后,像素 1:1 投影 + 像素级裁剪,
+   原版 guiRenderer 仍提交 HUD/toasts);
+   **不做离屏渲染**;
 5. 输入键码映射使用 MC 的 `InputConstants` 抽象(不直接绑定 GLFW/LWJGL);
 6. Compose 的 `Key` 编码即 AWT VK 值(库源码契约),桥接层不要引用 AWT 类型;
 7. 修改 `androidx/compose/**` 移植源码时保持与官方语义一致,标注平台适配点;
@@ -100,7 +115,8 @@ build_project(rebuild=true)
    注入点、公开 API 等非反射方式。
 10. **Mixin 可注入 lambda 合成方法**:`@Redirect(method = "lambda$sortElements$0", ...)`
     可定向到 JDK 编译器生成的 lambda 合成方法(命名规则 `lambda$<方法名>$<序号>`,
-    稳定)。lambda 体内的调用无法用普通方法名命中。
+    稳定)。lambda 体内的调用无法用普通方法名命中。(历史案例:已删除的
+    `GuiRenderStateMixin` 曾用此注入阴影置底排序,T.24 独立渲染工作流取代之。)
 
 ## 移植源码维护经验(与调试)
 
@@ -156,7 +172,8 @@ build_project(rebuild=true)
   阴影全部丢失(矩形/圆角矩形正常,容易误判为"只有 Path 阴影没实现")。
 - **Mixin 置底排序风险**(`GuiRenderStateMixin`):置底只在节点内生效(阴影被
   `findAppropriateNode` up 到上层节点时不跨节点)、`@Redirect` lambda 结构脆弱、
-  不保证全场景最底 —— 已记录在类注释,待渲染链路拆分后处理。
+  不保证全场景最底 —— [T.24 已解决:该 mixin 删除,独立渲染工作流
+  `ComposeGuiRenderer` 自行排序,阴影排最前]。
 
 ### 矩阵/旋转调试踩坑记录(T.13 旋转中心"公转"案)
 

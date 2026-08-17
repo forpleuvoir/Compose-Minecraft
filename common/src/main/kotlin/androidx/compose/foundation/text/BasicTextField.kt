@@ -88,8 +88,10 @@ import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.constrain
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.channels.BufferOverflow
@@ -198,6 +200,9 @@ fun BasicTextField(
     outputTransformation: OutputTransformation? = null,
     decorator: TextFieldDecorator? = null,
     scrollState: ScrollState = rememberScrollState(),
+    // 平台适配点(T.26):输入框文本字号(sp 驱动渲染缩放;默认 18sp = 2x,MC 平台
+    // 基准字号 —— 9sp=1x 原生行高过小,16sp≈1.78x 非整数缩放糊,见 BasicText.toTextScale)
+    fontSize: TextUnit = 18.sp,
     // Last parameter must not be a function unless it's intended to be commonly used as a trailing
     // lambda.
 ) {
@@ -218,6 +223,7 @@ fun BasicTextField(
         outputTransformation = outputTransformation,
         decorator = decorator,
         scrollState = scrollState,
+        fontSize = fontSize,
     )
 }
 
@@ -248,10 +254,14 @@ internal fun BasicTextField(
     decorator: TextFieldDecorator? = null,
     scrollState: ScrollState = rememberScrollState(),
     isPassword: Boolean = false,
+    // 平台适配点(T.26):输入框文本字号(sp 驱动渲染缩放;默认 18sp = 2x 平台基准字号)
+    fontSize: TextUnit = 18.sp,
     // Last parameter must not be a function unless it's intended to be commonly used as a trailing
     // lambda.
 ) {
     val density = LocalDensity.current
+    // 平台适配点(T.26):fontSize(sp) → 渲染缩放(18sp = 2x 平台基准字号;9sp = 1x)
+    val textScale = fontSize.toTextScale(density)
     val layoutDirection = LocalLayoutDirection.current
     val singleLine = lineLimits == SingleLine
     // We're using this to communicate focus state to cursor for now.
@@ -513,6 +523,7 @@ internal fun BasicTextField(
                                 singleLine = singleLine,
                                 onTextLayout = onTextLayout,
                                 keyboardOptions = resolvedKeyboardOptions,
+                                scale = textScale,
                             )
                     )
 

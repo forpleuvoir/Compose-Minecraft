@@ -346,7 +346,9 @@ internal class MinecraftParagraph(
             val right = layout.prefixWidth(line.start, lineEnd)
             val top = lineIndex * layout.lineHeight
             val bottom = (lineIndex + 1) * layout.lineHeight
-            path.addRect(Rect(left, top, right, bottom))
+            // 平台适配点(T.26):坐标 API 统一 ×scale —— 布局在 1x 空间度量,绘制经矩阵
+            // 放大;选区/光标/命中测试在放大空间工作,坐标必须与视觉一致
+            path.addRect(Rect(left * scale, top * scale, right * scale, bottom * scale))
         }
         return path
     }
@@ -358,24 +360,25 @@ internal class MinecraftParagraph(
         // T.5:前缀精确宽度(EditBox.getScreenX 同源)
         val x = layout.prefixWidth(start, offset.coerceIn(start, line.end))
         val top = lineIndex * layout.lineHeight
-        return Rect(x, top, x, top + layout.lineHeight)
+        // 平台适配点(T.26):坐标 ×scale(布局 1x 空间,视觉放大空间)
+        return Rect(x * scale, top * scale, x * scale, (top + layout.lineHeight) * scale)
     }
 
     override fun getLineLeft(lineIndex: Int): Float = 0f
 
-    override fun getLineRight(lineIndex: Int): Float = lineAt(lineIndex).width
+    override fun getLineRight(lineIndex: Int): Float = lineAt(lineIndex).width * scale
 
-    override fun getLineTop(lineIndex: Int): Float = lineIndex * layout.lineHeight
+    override fun getLineTop(lineIndex: Int): Float = lineIndex * layout.lineHeight * scale
 
     override fun getLineBaseline(lineIndex: Int): Float =
-        lineIndex * layout.lineHeight + layout.lineHeight * 0.8f
+        (lineIndex * layout.lineHeight + layout.lineHeight * 0.8f) * scale
 
     override fun getLineBottom(lineIndex: Int): Float =
-        (lineIndex + 1) * layout.lineHeight
+        (lineIndex + 1) * layout.lineHeight * scale
 
-    override fun getLineHeight(lineIndex: Int): Float = layout.lineHeight
+    override fun getLineHeight(lineIndex: Int): Float = layout.lineHeight * scale
 
-    override fun getLineWidth(lineIndex: Int): Float = lineAt(lineIndex).width
+    override fun getLineWidth(lineIndex: Int): Float = lineAt(lineIndex).width * scale
 
     override fun getLineStart(lineIndex: Int): Int = lineAt(lineIndex).start
 
@@ -396,7 +399,7 @@ internal class MinecraftParagraph(
         val lineIndex = lineForOffset(offset)
         val line = lineAt(lineIndex)
         val start = lineDrawStart(lineIndex, line)
-        return layout.prefixWidth(start, offset.coerceIn(start, line.end))
+        return layout.prefixWidth(start, offset.coerceIn(start, line.end)) * scale
     }
 
     override fun getParagraphDirection(offset: Int): ResolvedTextDirection = intrinsics.textDirection
@@ -404,9 +407,13 @@ internal class MinecraftParagraph(
     override fun getBidiRunDirection(offset: Int): ResolvedTextDirection = intrinsics.textDirection
 
     override fun getLineForVerticalPosition(vertical: Float): Int =
-        (vertical / layout.lineHeight).toInt().coerceIn(0, maxOf(0, layout.lines.size - 1))
+        // 平台适配点(T.26):输入 vertical 为放大空间坐标,除以 scale 后按 1x 布局行高换算
+        ((vertical / scale) / layout.lineHeight)
+            .toInt()
+            .coerceIn(0, maxOf(0, layout.lines.size - 1))
 
     override fun getOffsetForPosition(position: Offset): Int {
+        // 平台适配点(T.26):position 为放大空间坐标(点击/光标),换算回 1x 布局空间定位
         val lineIndex = getLineForVerticalPosition(position.y)
         val line = lineAt(lineIndex)
         val start = lineDrawStart(lineIndex, line)
@@ -420,7 +427,7 @@ internal class MinecraftParagraph(
         val rel = font
             .plainSubstrByWidth(
                 intrinsics.text.substring(start, lineEndExclusive),
-                position.x.roundToInt().coerceAtLeast(0),
+                (position.x / scale).roundToInt().coerceAtLeast(0),
             ).length
         return (start + rel).coerceIn(line.start, lineEndExclusive)
     }

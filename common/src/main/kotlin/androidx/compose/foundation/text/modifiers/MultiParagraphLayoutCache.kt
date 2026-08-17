@@ -18,6 +18,7 @@ package androidx.compose.foundation.text.modifiers
 
 import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.text.DefaultMinLines
+import androidx.compose.foundation.text.MC_TEXT_SCALE_BASE_PX
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.text.ceilToIntPx
 import androidx.compose.ui.text.AnnotatedString
@@ -207,13 +208,13 @@ internal class MultiParagraphLayoutCache(
             return true
         }
         if (autoSize != null) {
-            // 平台适配点(T.20):TextAutoSize 二分搜索最大适配字号(sp → 渲染 scale,16sp = 1f),
-            // 用搜索得到的字号重新布局
+            // 平台适配点(T.20/T.25):TextAutoSize 二分搜索最大适配字号(sp → 渲染 scale,
+            // 基准 = MC 1x 行高 9px,18sp → 2x = 18px 行高),用搜索得到的字号重新布局
             val localAutoSize = autoSize!!
             val scale =
                 with(localAutoSize) {
                     with(fontSizeSearchScope) {
-                        getFontSize(finalConstraints, text).toPx() / 16f
+                        getFontSize(finalConstraints, text).toPx() / MC_TEXT_SCALE_BASE_PX
                     }
                 }
             val multiParagraph = layoutText(finalConstraints, layoutDirection, scale)
@@ -261,6 +262,7 @@ internal class MultiParagraphLayoutCache(
                 layoutDirection,
                 fontFamilyResolver,
                 finalConstraints,
+                intrinsicsScale,
             ),
             multiParagraph,
             finalConstraints.constrain(
@@ -454,7 +456,7 @@ internal class MultiParagraphLayoutCache(
             private set
 
         // 平台适配点(T.20):sp → px,与 T.19 的 TextUnit.toTextScale 同公式
-        // (16sp = 16px = 渲染 scale 1f,含 fontScale)
+        // (18sp = 18px = 渲染 scale 2x,含 fontScale)
         override fun TextUnit.toPx(): Float =
             when (type) {
                 TextUnitType.Sp -> value * density * fontScale
@@ -470,9 +472,10 @@ internal class MultiParagraphLayoutCache(
             text: AnnotatedString,
             fontSize: TextUnit,
         ): TextLayoutResult {
-            // 平台适配点(T.20):MC 无原生字号系统,字号经渲染 scale 驱动(16sp = 1f);
-            // 用局部 intrinsics 布局(不污染主布局缓存)
-            val scale = fontSize.toPx() / 16f
+            // 平台适配点(T.20/T.25):MC 无原生字号系统,字号经渲染 scale 驱动
+            // (基准 = MC 1x 行高 9px,18sp → 2x = 18px 行高);用局部 intrinsics
+            // 布局(不污染主布局缓存)
+            val scale = fontSize.toPx() / MC_TEXT_SCALE_BASE_PX
             val localIntrinsics =
                 MultiParagraphIntrinsics(
                     annotatedString = text,
@@ -508,6 +511,7 @@ internal class MultiParagraphLayoutCache(
                         lastLayoutDirection,
                         fontFamilyResolver,
                         constraints,
+                        scale,
                     ),
                     multiParagraph,
                     constraints.constrain(

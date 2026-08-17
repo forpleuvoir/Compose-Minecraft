@@ -102,6 +102,8 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
         singleLine: Boolean,
         softWrap: Boolean,
         keyboardOptions: KeyboardOptions,
+        // 平台适配点(T.26):输入框文本渲染缩放(1f = 原样;BasicTextField(fontSize) 组合期算好传入)
+        scale: Float = 1f,
     ) {
         nonMeasureInputs =
             NonMeasureInputs(
@@ -111,6 +113,7 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
                 softWrap = softWrap,
                 // 平台适配点:isKeyboardTypePhone(键盘类型)不再参与布局方向计算,MC 第一版固定 LTR
                 isKeyboardTypePhone = false,
+                scale = scale,
             )
     }
 
@@ -275,6 +278,8 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
             layoutDirection = measureInputs.layoutDirection,
             density = measureInputs.density,
             fontFamilyResolver = measureInputs.fontFamilyResolver,
+            // 平台适配点(T.26):输入框字号缩放(经 TextMeasurer → MultiParagraphIntrinsics 注入)
+            scale = nonMeasureInputs.scale,
         )
     }
 
@@ -378,6 +383,8 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
         val singleLine: Boolean,
         val softWrap: Boolean,
         val isKeyboardTypePhone: Boolean,
+        // 平台适配点(T.26):文本渲染缩放(缓存键,变化时重排)
+        val scale: Float,
     ) {
 
         override fun toString(): String =
@@ -386,7 +393,8 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
                 "textStyle=$textStyle, " +
                 "singleLine=$singleLine, " +
                 "softWrap=$softWrap, " +
-                "isKeyboardTypePhone=$isKeyboardTypePhone" +
+                "isKeyboardTypePhone=$isKeyboardTypePhone, " +
+                "scale=$scale" +
                 ")"
 
         companion object {
@@ -413,7 +421,8 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
                                 a.textStyle == b.textStyle &&
                                 a.singleLine == b.singleLine &&
                                 a.softWrap == b.softWrap &&
-                                a.isKeyboardTypePhone == b.isKeyboardTypePhone
+                                a.isKeyboardTypePhone == b.isKeyboardTypePhone &&
+                                a.scale == b.scale
                         } else {
                             !((a == null) xor (b == null))
                         }

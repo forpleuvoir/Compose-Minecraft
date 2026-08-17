@@ -61,7 +61,7 @@ internal fun VerticesDevScene() {
             DevMenuButton(
                 title = "← 返回主菜单",
                 subtitle = "",
-                onClick = { ComposeScreen.open { MinecraftDevSceneContent() } },
+                onClick = { if (!ComposeScreen.closeCurrent()) ComposeScreen.open { MinecraftDevSceneContent() } },
             )
 
             SectionLabel("① 四边形渐变 (Triangles + 索引)")

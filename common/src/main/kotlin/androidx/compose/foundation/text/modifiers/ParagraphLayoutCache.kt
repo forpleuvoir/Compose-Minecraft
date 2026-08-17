@@ -401,6 +401,7 @@ internal class ParagraphLayoutCache(
                 localLayoutDirection,
                 fontFamilyResolver,
                 finalConstraints,
+                scale,
             ),
             MultiParagraph(
                 MultiParagraphIntrinsics(
@@ -409,6 +410,7 @@ internal class ParagraphLayoutCache(
                     placeholders = emptyList(),
                     density = localDensity,
                     fontFamilyResolver = fontFamilyResolver,
+                    scale = scale,
                 ),
                 finalConstraints,
                 maxLines,

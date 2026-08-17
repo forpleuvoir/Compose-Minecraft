@@ -368,6 +368,7 @@ internal class TextAnnotatedStringNode(
                                     layoutDirection = inputLayout.layoutInput.layoutDirection,
                                     fontFamilyResolver = inputLayout.layoutInput.fontFamilyResolver,
                                     constraints = inputLayout.layoutInput.constraints,
+                                    scale = inputLayout.layoutInput.scale,
                                 )
                         )
                         ?.also { textLayoutResult.add(it) }

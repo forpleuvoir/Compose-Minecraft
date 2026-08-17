@@ -16,6 +16,7 @@ import moe.forpleuvoir.compose_minecraft.platform.ComposeScreen
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
+import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Style
 
 /**
@@ -111,6 +112,39 @@ fun MinecraftDevSceneContent() {
                 title = "顶点渐变测试 (drawVertices)",
                 subtitle = "每顶点色 GPU 插值:四边形/圆形渐变、strip/fan、Plus 叠合、乱序索引",
                 onClick = { ComposeScreen.open { VerticesDevScene() } },
+            )
+
+            DevMenuButton(
+                title = "父屏幕能力测试 (ParentScreen)",
+                subtitle = "关闭时返回父屏(dev 菜单);渲染父屏开关(半透明背景透出 dev 菜单)",
+                onClick = {
+                    val holder = arrayOfNulls<ComposeScreen>(1)
+                    holder[0] = ComposeScreen.open(
+                        content = {
+                            ParentDevSceneContent(
+                                renderParent = holder[0]?.renderParentScreen == true,
+                                onToggleRenderParent = {
+                                    val s = holder[0]
+                                    if (s != null) s.renderParentScreen = !s.renderParentScreen
+                                },
+                                onClose = { holder[0]?.onClose() },
+                            )
+                        },
+                        parent = Minecraft.getInstance().gui.screen(),
+                    )
+                },
+            )
+
+            DevMenuButton(
+                title = "原版父屏测试 (Vanilla Parent)",
+                subtitle = "原版 Screen(一个按钮)→ 打开 Compose 屏并渲染原版父屏(按钮+遮罩透出)",
+                onClick = { openVanillaParentTest() },
+            )
+
+            DevMenuButton(
+                title = "密度参数测试 (Density)",
+                subtitle = "ComposeScreen.open(density=2f) 打开 —— dp 尺寸/sp 字号放大 2 倍,100dp 应显示为 200px",
+                onClick = { ComposeScreen.open(density = 2f) { DensityDevScene() } },
             )
         }
     }

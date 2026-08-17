@@ -84,6 +84,9 @@ private constructor(
 
     /** The minimum width provided while calculating this text layout. */
     val constraints: Constraints,
+
+    /** 平台适配点(T.26):文本渲染缩放(1f = 原样,经 MultiParagraphIntrinsics.scale 注入布局)。 */
+    val scale: Float = 1f,
 ) {
 
     private var _developerSuppliedResourceLoader = resourceLoader
@@ -104,7 +107,7 @@ private constructor(
             ReplaceWith(
                 "TextLayoutInput(text, style, placeholders, " +
                     "maxLines, softWrap, overflow, density, layoutDirection, fontFamilyResolver, " +
-                    "constraints"
+                    "constraints)"
             ),
     )
     @Suppress("DEPRECATION")
@@ -131,6 +134,7 @@ private constructor(
         resourceLoader,
         createFontFamilyResolver(resourceLoader),
         constraints,
+        1f,
     )
 
     constructor(
@@ -144,6 +148,8 @@ private constructor(
         layoutDirection: LayoutDirection,
         fontFamilyResolver: FontFamily.Resolver,
         constraints: Constraints,
+        // 平台适配点(T.26):文本渲染缩放(1f = 原样)
+        scale: Float = 1f,
     ) : this(
         text,
         style,
@@ -156,6 +162,7 @@ private constructor(
         @Suppress("DEPRECATION") null,
         fontFamilyResolver,
         constraints,
+        scale,
     )
 
     @Deprecated(
@@ -183,6 +190,7 @@ private constructor(
         layoutDirection: LayoutDirection = this.layoutDirection,
         @Suppress("DEPRECATION") resourceLoader: Font.ResourceLoader = this.resourceLoader,
         constraints: Constraints = this.constraints,
+        scale: Float = this.scale,
     ): TextLayoutInput {
         return TextLayoutInput(
             text = text,
@@ -196,6 +204,7 @@ private constructor(
             resourceLoader = resourceLoader,
             fontFamilyResolver = fontFamilyResolver,
             constraints = constraints,
+            scale = scale,
         )
     }
 
@@ -213,6 +222,7 @@ private constructor(
         if (layoutDirection != other.layoutDirection) return false
         if (fontFamilyResolver != other.fontFamilyResolver) return false
         if (constraints != other.constraints) return false
+        if (scale != other.scale) return false
 
         return true
     }
@@ -228,6 +238,7 @@ private constructor(
         result = 31 * result + layoutDirection.hashCode()
         result = 31 * result + fontFamilyResolver.hashCode()
         result = 31 * result + constraints.hashCode()
+        result = 31 * result + scale.hashCode()
         return result
     }
 
@@ -256,7 +267,7 @@ private class DeprecatedBridgeFontResourceLoader
 private constructor(private val fontFamilyResolver: FontFamily.Resolver) : Font.ResourceLoader {
     @Deprecated(
         "Replaced by FontFamily.Resolver, this method should not be called",
-        ReplaceWith("FontFamily.Resolver.resolve(font, )"),
+        ReplaceWith("FontFamily.Resolver.resolve(font )"),
     )
     override fun load(font: Font): Any {
         return fontFamilyResolver.resolve(font.toFontFamily(), font.weight, font.style).value

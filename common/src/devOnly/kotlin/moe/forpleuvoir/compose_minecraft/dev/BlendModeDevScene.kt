@@ -84,7 +84,7 @@ internal fun BlendModeDevScene() {
             DevMenuButton(
                 title = "← 返回主菜单",
                 subtitle = "",
-                onClick = { ComposeScreen.open { MinecraftDevSceneContent() } },
+                onClick = { if (!ComposeScreen.closeCurrent()) ComposeScreen.open { MinecraftDevSceneContent() } },
             )
             modes.chunked(3).forEachIndexed { rowIndex, row ->
                 Row(

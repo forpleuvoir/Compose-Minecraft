@@ -68,7 +68,7 @@ fun RotationTestDevScene() {
         DevMenuButton(
             title = "← 返回主菜单",
             subtitle = "Back to menu",
-            onClick = { ComposeScreen.open { MinecraftDevSceneContent() } },
+            onClick = { if (!ComposeScreen.closeCurrent()) ComposeScreen.open { MinecraftDevSceneContent() } },
         )
 
         Column(
@@ -162,10 +162,10 @@ fun RotationTestDevScene() {
                 ) {
                     Box(
                         Modifier
-                            .size(96.dp, 36.dp)
+                            .size(320.dp, 160.dp)
                             // 阴影必须在内容(background)之前:shadow(graphicsLayer)包裹内容,
                             // 阴影命令先记录、内容后回放 → 内容盖住阴影重叠部分
-                            .shadow(1.dp, RoundedCornerShape(4.dp))
+                            .shadow(16.dp, RoundedCornerShape(4.dp))
                             .background(Color(0xFF42A5F5), RoundedCornerShape(4.dp))
                     )
                 }
@@ -179,9 +179,9 @@ fun RotationTestDevScene() {
                 Box(
                     Modifier
                         .padding(top = 16.dp)
-                        .size(96.dp, 36.dp)
+                        .size(320.dp, 160.dp)
                         .shadow(
-                            1.dp,
+                            16.dp,
                             RoundedCornerShape(4.dp),
                             ambientColor = Color(0xFF1976D2),
                             spotColor = Color(0xFFE64A19),

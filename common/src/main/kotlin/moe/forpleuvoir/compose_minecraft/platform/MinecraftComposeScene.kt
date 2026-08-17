@@ -21,20 +21,21 @@ import androidx.compose.ui.unit.IntSize
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
+import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiRenderer
 import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderContext
 import moe.forpleuvoir.compose_minecraft.platform.textinput.MinecraftTextInputService
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalCharFilter
 import net.minecraft.client.Minecraft
-import net.minecraft.client.renderer.state.gui.GuiRenderState
 
 /**
  * Minecraft 平台的 Compose Scene 宿主(阶段 D)。
  *
  * 包装 CMP 移植的 [CanvasLayersComposeScene]:
- * - 密度固定 1f,场景尺寸 = Minecraft GUI 单位(窗口 px / guiScale),与 GuiRenderer
- *   的 GUI 正交投影一致,1dp == 1 GUI 单位;
+ * - 密度默认 1f,场景尺寸 = Minecraft 窗口像素(T.24:1:1,不再除 guiScale),
+ *   1dp == 1 像素;可传 [density] 放大(2f 时 1dp == 2 像素,UI 元素视觉放大,
+ *   与官方桌面 density 语义一致,文本字号同步放大);
  * - 由 [ComposeScreen](原版 Screen 桥接)每帧调用 [renderFrame],把绘制命令记录进
- *   [MinecraftCanvas] 并提交到当前帧的 [GuiRenderState](直接进入当前 RenderTarget,
+ *   [MinecraftCanvas] 并提交到当前帧的 [ComposeGuiRenderer](直接进入当前 RenderTarget,
  *   无离屏纹理);
  * - 输入(pointer/key)、文字渲染、弹出层等为后续阶段。
  */
@@ -42,11 +43,20 @@ import net.minecraft.client.renderer.state.gui.GuiRenderState
 class MinecraftComposeScene(
     width: Int,
     height: Int,
+    /** 平台适配点(T.26):场景密度,默认 1f(1dp == 1 像素);业务方可传 >1f 放大 UI */
+    density: Float = 1f,
 ) {
     /** 每帧命令记录的画布(不分配 CPU/GPU 位图,纯命令列表) */
     private val canvas = MinecraftCanvas()
 
     private val renderContext = MinecraftRenderContext()
+
+    /**
+     * 本屏的独立 GUI 渲染器(T.24):extract 阶段经 [renderFrame] 收集 Compose 命令,
+     * gui 阶段由 GuiRendererMixin 在 GuiRenderer.draw 的 after-blur(HUD)段之前提交。
+     * [ComposeScreen] init/removed 负责注册/注销 [ComposeGuiRenderer.active]。
+     */
+    val renderer = ComposeGuiRenderer()
 
     /**
      * 当前组合提供的字符过滤器(默认全放行)。由 [setContent] 的组合在每次重组时写入,
@@ -58,7 +68,7 @@ class MinecraftComposeScene(
     internal val textInputService = MinecraftTextInputService()
 
     private val scene: ComposeScene = CanvasLayersComposeScene(
-        density = Density(1f),
+        density = Density(density),
         size = IntSize(width.coerceAtLeast(1), height.coerceAtLeast(1)),
         // 主线程驱动:MC 的 extract/render 都在主线程,recompose 同步刷新
         coroutineContext = Dispatchers.Unconfined,
@@ -99,8 +109,9 @@ class MinecraftComposeScene(
     fun isCharAccepted(codePoint: Int): Boolean = charFilter.get().invoke(codePoint)
 
     /**
-     * 转发指针事件到场景(阶段 F)。坐标 = GUI 单位(密度 1,与场景尺寸一致),
-     * 不需要任何换算。见 [ComposeScene.sendPointerEvent]。
+     * 转发指针事件到场景(阶段 F)。坐标 = 像素(密度 1 时 1px == 1 GUI 单位,与场景
+     * 尺寸一致);密度 >1f 时事件坐标仍为像素,由场景内部按 density 换算 dp。
+     * 见 [ComposeScene.sendPointerEvent]。
      */
     fun sendPointerEvent(
         eventType: PointerEventType,
@@ -130,24 +141,20 @@ class MinecraftComposeScene(
         }
     }
 
-    /** 渲染一帧:重组/布局/绘制到 [canvas],再提交到 [renderState] */
-    fun render(renderState: GuiRenderState) {
-        canvas.clearCommands()
-        scene.render(canvas, System.nanoTime())
-        renderContext.render(canvas, renderState)
-    }
-
     /**
-     * 同步 Minecraft 窗口尺寸(GUI 单位 = 窗口 px / guiScale)并渲染当前帧。
-     * 由 [ComposeScreen.extractRenderState] 每帧调用;仅尺寸变化时才触发重排。
+     * 同步 Minecraft 窗口尺寸(像素,T.24:1:1,不再除 guiScale)并渲染当前帧:
+     * 重组/布局/绘制到 [canvas],再提交到 [renderer] 收集器(gui 阶段由
+     * GuiRendererMixin 提交)。由 [ComposeScreen.extractRenderState] 每帧调用。
      */
     fun renderFrame() {
         val windowState = Minecraft.getInstance().gameRenderer.gameRenderState().windowRenderState
         resize(
-            width = windowState.width / windowState.guiScale,
-            height = windowState.height / windowState.guiScale,
+            width = windowState.width,
+            height = windowState.height,
         )
-        render(Minecraft.getInstance().gameRenderer.gameRenderState().guiRenderState)
+        canvas.clearCommands()
+        scene.render(canvas, System.nanoTime())
+        renderContext.render(canvas, renderer)
     }
 
     /** 释放场景(组合、Recomposer 等) */

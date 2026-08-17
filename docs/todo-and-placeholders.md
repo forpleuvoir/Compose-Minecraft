@@ -151,10 +151,20 @@
 
 ---
 
-## 6. `MinecraftRenderContext`(`moe/forpleuvoir/compose_minecraft/platform/render/`)
+## 6. `MinecraftRenderContext`(`moe/forpleuvoir/compose_minecraft/platform/render/`)与独立渲染工作流(T.24)
 
-回放画布命令到 `GuiRenderState`:
-- ✅ `DrawRectCommand` / `DrawRoundRectCommand` / `DrawTextCommand` / `DrawOvalCommand` / `DrawCircleCommand` / `DrawArcCommand` / `DrawLineCommand` / `DrawPathCommand` / `DrawPointsCommand`(几何三角化)/ `DrawGradientRectCommand` / `DrawShadowCommand`(T.14)/ `DrawImageRectCommand`(T.16,纹理 blit)。
+**渲染架构(T.24,用户拍板)**:Compose 内容不再进原版 `GuiRenderState` 节点树,而是走**完全独立的渲染工作流**:
+
+- `MinecraftRenderContext.render(canvas, sink: GuiCommandSink)` 回放画布命令到 `GuiCommandSink`(`interface { addElement(GuiElementRenderState); addText(GuiTextRenderState) }`),由 `ComposeGuiRenderer`(`platform/render/ComposeGuiRenderer.kt`,public class,仿 `GuiRenderer` 结构:prepare → `StagedVertexBuffer.upload()` → draw → endDraw/endFrame)实现:
+  - **投影 = 像素 1:1**:`setupOrtho(1000, 11000, window.width, window.height, true)`,丢弃原版 `guiScale`(场景尺寸 `resize(windowState.width, windowState.height)`,`ComposeScreen` 输入经 `toPixels(x) = x * guiScale()` 乘回像素);
+  - **裁剪精度**:`enableScissor` 像素直传(`renderPass.enableScissor(left, window.height - bottom, w, h)`,四边对窗口钳制、退化矩形 disableScissor)—— 消除原版 `×guiScale 后 (int) 截断` 的精度丢失;
+  - **排序**:阴影(`GuiShadowRenderState`)排最前,其余保持记录顺序 —— 取代原 `GuiRenderStateMixin` @Redirect 置底 hack(**该 mixin 已删除**,`compose_minecraft.mixins.json` 现为 `["GameRendererMixin", "StyleAccessor"]`);
+  - **挂载**:`GuiRendererMixin`(`common/src/main/java/.../mixin/GuiRendererMixin.java`)`@Inject(method="render", at=@At(value="INVOKE", target="...GuiRenderer;draw()V", shift=At.Shift.AFTER))` 帧钩子 —— 原版 GUI(遮罩/HUD/toasts)画完后提交 `ComposeGuiRenderer.active` 内容,Compose 画在最上层(ComposeScreen 空实现 `extractBackground`,原版 HUD 实测不产生元素,故「最上层」即「唯一 GUI 层」);原版 `guiRenderer` 继续提交 HUD/toasts,**共存不替换**(T.24 用户拍板,解除 AGENTS.md「无帧钩子 mixin」约定)。**注入点演进(每轮用户实测驱动)**:① guiRenderer.render()V 之前 → Compose 被原版 GUI 盖住;② draw() 第二个 executeDrawRange(after-blur 段)之前(层级 = before-blur < Compose < HUD)→ 依赖原版 draws 非空,遮罩移除后 draws 全空、注入不触发、Compose 不渲染;③ 现版 render() 的 draw() 调用点 AFTER —— 不依赖原版 draws 状态,必触发;
+  - 文本复用原版 `GlyphRenderState`(`text.ensurePrepared().visit(GlyphVisitor)`),提交时 merge 同 pipeline/scissor/textureSetup 的 draw(`StagedVertexBuffer.appendDraw` + `getVertexBuilder`),索引自动(`RenderSystem.getSequentialBuffer`);
+  - render pass:绑定 `mainRenderTarget.getColorTextureView()` / `getDepthTextureView()`,`RenderSystem.bindDefaultUniforms` + `DynamicTransforms`(0,0,-11000),与主帧缓冲同目标。
+
+回放命令清单:
+- ✅ `DrawRectCommand` / `DrawRoundRectCommand` / `DrawTextCommand` / `DrawOvalCommand` / `DrawCircleCommand` / `DrawArcCommand` / `DrawLineCommand` / `DrawPathCommand` / `DrawPointsCommand`(几何三角化)/ `DrawGradientRectCommand` / `DrawShadowCommand`(T.14)/ `DrawImageRectCommand`(T.16,纹理 blit)/ `DrawVerticesCommand`(T.23,每顶点色)。
 - 3D 命令(`layer3D` 非 null)走 CPU 顶点透视变换路径(T.15);文本/阴影/渐变/图片降级 2D 仿射近似。
 - ⚠️ IME preedit 组合态(候选框)未做,由系统输入法负责。
 
@@ -239,8 +249,11 @@
 
 1. ~~**图片**:`createImageBitmap` 解码 → `MinecraftImageBitmap` → GpuTexture 上传 → 回放 `drawImageRect`~~ —— ✅ 已完成(T.16,`MinecraftImageTextureCache` + NativeImage 解码)。
 2. ~~**CPU 光栅化器**:`GraphicsLayer.toImageBitmap()` 依赖(图层内容 → 位图快照);无离屏渲染下的替代方案~~ —— ✅ 已完成(T.17,`GraphicsLayerRasterizer`;文本/阴影命令不支持)。
-3. **Dialog + Popup 焦点层级**:移植 `Dialog`,打通多图层焦点/键盘分发。
-4. **富文本**:按 SpanStyle 分条 `DrawTextCommand`,走多 MC `Style`;再考虑 InlineContent 占位矩形。
-5. **输入补全**:双击、拖放(接 MC 或系统)、软键盘事件、可选的指针图标/系统光标。
-6. ~~**TextAutoSize**:二分搜索最大适配字号(默认 12–112sp)~~ —— ✅ 已完成(T.20,`MultiParagraphLayoutCache` 搜索 + 渲染 scale 驱动)。
-7. **无障碍**:screenReader 接入 MC 的 Toast/讲稿或跳过。
+3. ~~**颜色滤镜 / 混合模式**(draw 级近似,不依赖离屏)~~ —— ✅ 已完成(T.21 `colorFilter` ColorMatrix/tint/lighting;T.22 `blendMode` 17 种可表达模式经 `BlendPipelines` 自建 blend pipeline,12 种高级模式回退 SrcOver,详见 §1.6)。
+4. ~~**顶点渐变 `drawVertices`**~~ —— ✅ 已完成(T.23,每顶点色 GPU 插值,Triangles/Strip/Fan + 索引展开)。
+5. ~~**独立渲染工作流**(像素 1:1 投影、像素级裁剪精度、与 HUD 共存)~~ —— ✅ 已完成(T.24,`ComposeGuiRenderer` + `GameRendererMixin`,取代 `GuiRenderStateMixin`,详见 §6)。
+6. **Dialog + Popup 焦点层级**:移植 `Dialog`,打通多图层焦点/键盘分发。
+7. **富文本**:按 SpanStyle 分条 `DrawTextCommand`,走多 MC `Style`;再考虑 InlineContent 占位矩形。
+8. **输入补全**:双击、拖放(接 MC 或系统)、软键盘事件、可选的指针图标/系统光标。
+9. ~~**TextAutoSize**:二分搜索最大适配字号(默认 12–112sp)~~ —— ✅ 已完成(T.20,`MultiParagraphLayoutCache` 搜索 + 渲染 scale 驱动)。
+10. **无障碍**:screenReader 接入 MC 的 Toast/讲稿或跳过。

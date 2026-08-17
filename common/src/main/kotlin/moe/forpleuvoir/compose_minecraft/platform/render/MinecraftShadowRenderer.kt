@@ -2,7 +2,6 @@ package moe.forpleuvoir.compose_minecraft.platform.render
 
 import androidx.compose.ui.graphics.MinecraftPath
 import net.minecraft.client.gui.navigation.ScreenRectangle
-import net.minecraft.client.renderer.state.gui.GuiRenderState
 import org.joml.Matrix3x2f
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -24,7 +23,7 @@ import kotlin.math.sin
  *   CPU 只做形状三角化 + 每顶点距离场([GeometryTessellator.shadowFill]),
  *   无离屏渲染、无纹理上传、无 CPU 卷积;
  * - **网格 LRU 缓存**:形状(轮廓 + σ + 偏移)不变时每帧零 CPU;
- * - 渲染顺序:GuiRenderStateMixin 把阴影元素排到列表最前(最底层),
+ * - 渲染顺序:T.24 起由 [ComposeGuiRenderer] 把阴影元素排到列表最前(最底层),
  *   内容后画盖住重叠 —— 等价于官方"先画阴影、后画内容"。
  *
  * 平台适配点:
@@ -94,7 +93,7 @@ internal object MinecraftShadowRenderer {
      * alpha = 颜色 alpha × 各自阴影强度;默认全黑 = 官方默认行为)。
      */
     fun renderShadow(
-        renderState: GuiRenderState,
+        sink: GuiCommandSink,
         matrix: FloatArray,
         left: Float, top: Float, right: Float, bottom: Float,
         elevation: Float,
@@ -129,11 +128,11 @@ internal object MinecraftShadowRenderer {
         val kind = if (pathSegments != null) 2 else if (cornerRadius > 0f) 1 else 0
 
         // ambient:无偏移(环境光,均匀包围)
-        emit(renderState, matrix, pts, minX, minY, maxX, maxY,
+        emit(sink, matrix, pts, minX, minY, maxX, maxY,
             0f, 0f, blurPx, norm, AMBIENT_ALPHA * fade, ambientColorArgb,
             kind, segHash, scissor)
         // spot:投影偏移(点光方向)
-        emit(renderState, matrix, pts, minX, minY, maxX, maxY,
+        emit(sink, matrix, pts, minX, minY, maxX, maxY,
             offsetX, offsetY, blurPx, norm, SPOT_ALPHA * fade, spotColorArgb,
             kind, segHash, scissor)
     }
@@ -141,7 +140,7 @@ internal object MinecraftShadowRenderer {
     // ── 单阴影元素 ───────────────────────────────────────────────────────
 
     private fun emit(
-        renderState: GuiRenderState,
+        sink: GuiCommandSink,
         matrix: FloatArray,
         pts: FloatArray,
         minX: Float, minY: Float, maxX: Float, maxY: Float,
@@ -180,7 +179,7 @@ internal object MinecraftShadowRenderer {
         val colorAlpha = ((colorArgb ushr 24) and 0xFF) / 255f
         val finalAlpha = (colorAlpha * alpha * 255f).toInt().coerceIn(0, 255)
 
-        renderState.addGuiElement(
+        sink.addElement(
             GuiShadowRenderState(
                 pose = Matrix3x2f(matrix[0], matrix[1], matrix[4], matrix[5], matrix[12], matrix[13]),
                 shadowColorArgb = (colorArgb and 0xFFFFFF) or (finalAlpha shl 24),

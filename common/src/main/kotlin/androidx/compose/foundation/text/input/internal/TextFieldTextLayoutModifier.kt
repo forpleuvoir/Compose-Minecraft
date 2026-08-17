@@ -55,6 +55,8 @@ internal class TextFieldTextLayoutModifier(
     private val singleLine: Boolean,
     private val onTextLayout: (Density.(getResult: () -> TextLayoutResult?) -> Unit)?,
     private val keyboardOptions: KeyboardOptions,
+    // 平台适配点(T.26):输入框文本渲染缩放(1f = 原样;BasicTextField(fontSize) 派生)
+    private val scale: Float = 1f,
 ) : ModifierNodeElement<TextFieldTextLayoutModifierNode>() {
     override fun create(): TextFieldTextLayoutModifierNode =
         TextFieldTextLayoutModifierNode(
@@ -64,6 +66,7 @@ internal class TextFieldTextLayoutModifier(
             singleLine = singleLine,
             onTextLayout = onTextLayout,
             keyboardOptions = keyboardOptions,
+            scale = scale,
         )
 
     override fun update(node: TextFieldTextLayoutModifierNode) {
@@ -74,6 +77,7 @@ internal class TextFieldTextLayoutModifier(
             singleLine = singleLine,
             onTextLayout = onTextLayout,
             keyboardOptions = keyboardOptions,
+            scale = scale,
         )
     }
 
@@ -91,6 +95,7 @@ internal class TextFieldTextLayoutModifier(
         if (textStyle != other.textStyle) return false
         if (onTextLayout !== other.onTextLayout) return false
         if (keyboardOptions != other.keyboardOptions) return false
+        if (scale != other.scale) return false
 
         return true
     }
@@ -102,6 +107,7 @@ internal class TextFieldTextLayoutModifier(
         result = 31 * result + textStyle.hashCode()
         result = 31 * result + (onTextLayout?.hashCode() ?: 0)
         result = 31 * result + keyboardOptions.hashCode()
+        result = 31 * result + scale.hashCode()
         return result
     }
 }
@@ -113,6 +119,8 @@ internal class TextFieldTextLayoutModifierNode(
     private var singleLine: Boolean,
     onTextLayout: (Density.(getResult: () -> TextLayoutResult?) -> Unit)?,
     keyboardOptions: KeyboardOptions,
+    // 平台适配点(T.26):输入框文本渲染缩放(1f = 原样;BasicTextField(fontSize) 派生)
+    private var scale: Float = 1f,
 ) :
     DelegatingNode(),
     LayoutModifierNode,
@@ -130,6 +138,7 @@ internal class TextFieldTextLayoutModifierNode(
             singleLine = singleLine,
             softWrap = !singleLine,
             keyboardOptions = keyboardOptions,
+            scale = scale,
         )
     }
 
@@ -144,18 +153,21 @@ internal class TextFieldTextLayoutModifierNode(
         singleLine: Boolean,
         onTextLayout: (Density.(getResult: () -> TextLayoutResult?) -> Unit)?,
         keyboardOptions: KeyboardOptions,
+        scale: Float = 1f,
     ) {
         val previousTextLayoutState = this.textLayoutState
 
         this.textLayoutState = textLayoutState
         this.textLayoutState.onTextLayout = onTextLayout
         this.singleLine = singleLine
+        this.scale = scale
         this.textLayoutState.updateNonMeasureInputs(
             textFieldState = textFieldState,
             textStyle = textStyle,
             singleLine = singleLine,
             softWrap = !singleLine,
             keyboardOptions = keyboardOptions,
+            scale = scale,
         )
 
         if (previousTextLayoutState != textLayoutState) {
