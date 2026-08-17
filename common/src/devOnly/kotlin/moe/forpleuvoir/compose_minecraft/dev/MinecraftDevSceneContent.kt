@@ -94,6 +94,12 @@ fun MinecraftDevSceneContent() {
                 subtitle = "record 录制 → CPU 光栅化快照,与 GPU 回放对照",
                 onClick = { ComposeScreen.open { BitmapDevScene() } },
             )
+
+            DevMenuButton(
+                title = "颜色滤镜测试 (ColorFilter)",
+                subtitle = "ColorMatrix 反相/灰度、tint、lighting、图层级滤镜",
+                onClick = { ComposeScreen.open { ColorFilterDevScene() } },
+            )
         }
     }
 }

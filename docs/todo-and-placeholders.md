@@ -62,7 +62,9 @@
 - ✅ translate/scale/rotationZ/rotationX/rotationY(3D 透视,T.15)/pivot/alpha/clip(矩形 scissor)/shadowElevation(T.14 GPU 距离场软阴影)均已实现。
 - ✅ `setRectOutline` / `setRoundRectOutline` / `setPathOutline` 已实现(T.14 阴影轮廓)。
 - ✅ `toImageBitmap()`(T.17):CPU 光栅化器(`GraphicsLayerRasterizer`,与 GPU 回放同一套三角化)把录制命令光栅化到像素缓冲,任意线程可调用;**文本与阴影命令不支持,快照中缺失**。
-- 离屏合成家族(`compositingStrategy` / `blendMode`≠SrcOver / `colorFilter` / `renderEffect`)未实现(属性链路完整但渲染端不消费),依赖离屏渲染,见 §11.3。
+- ✅ `colorFilter`(T.21,draw 级近似):`ColorFilter.colorMatrix`(4x5 颜色矩阵)与 `BlendModeColorFilter`(tint,按 blendMode 与自身底色 SrcIn/SrcOver/Modulate 合成)/ `LightingColorFilter`(multiply+add)经 `NativeColorFilter` 透传到每个绘制命令,渲染端 `applyColorFilter` 对最终色应用;图片(drawImageRect 恒白调制)与文本(style 色)不经滤镜。
+- ⚠️ `blendMode`(T.21):字段已透传快照与回放链路,但渲染端固定 GUI 管线 TRANSLUCENT alpha 合成 —— MC 26.2 blend 函数在 pipeline 编译期固定,draw 级无法逐命令切换,**仅 SrcOver(默认)生效**;其余模式需自建 blend pipeline / 离屏合成(待架构决策,见 §11.3)。
+- 未实现:`compositingStrategy` / `renderEffect`(离屏合成家族,属性链路完整但渲染端不消费),依赖离屏渲染,见 §11.3。
 
 ### 1.7 `GraphicsLayerOwnerLayer.kt`(`ui/platform/`)
 - `setLightingInfo`(3D 光照)为空实现;阴影本身已由 `GraphicsLayer.drawShadow` + `MinecraftShadowRenderer` 实现(T.14),不依赖该接口。
@@ -211,7 +213,7 @@
 ### 11.3 离屏合成 / 3D 光照 —— 已实现或按架构约束不实现
 - ✅ 阴影(T.14 GPU 距离场软阴影,`Modifier.shadow` / `shadowElevation`)与 3D 透视(T.15 rotationX/rotationY)已实现。
 - ⚠️ `GraphicsLayerOwnerLayer.setLightingInfo`(3D 光照)仍为空实现(无实际光照语义需求)。
-- ⚠️ 离屏合成家族(`saveLayer`、`compositingStrategy`、`blendMode`≠SrcOver、`colorFilter`、`renderEffect`)按 AGENTS.md 约束 #4「不做离屏渲染」**不实现**;`GraphicsLayerScope` 对应 setter 为占位。
+- ⚠️ 离屏合成家族(`saveLayer`、`compositingStrategy`、`blendMode`≠SrcOver、`renderEffect`)按 AGENTS.md 约束 #4「不做离屏渲染」**不实现**;`GraphicsLayerScope` 对应 setter 为占位。T.21 已把 `colorFilter` 与 `blendMode` 折进每个绘制命令(draw 级近似):colorFilter 生效,blendMode 仅 SrcOver。
 
 ### 11.4 系统级桌面 API —— 视宿主而定
 - `DEFAULT_DENSITY`/`DrawContext` 密度占位、`DefaultHapticFeedback`(触感反馈,平台无振动)、`EmptyPlatformWindowInsets`(窗口 inset,MC 全屏接管)、`uriHandler`(打开外链,可接 MC/系统或留空)。

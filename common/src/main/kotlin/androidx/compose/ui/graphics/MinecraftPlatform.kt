@@ -55,6 +55,12 @@ class MinecraftPaint(
     // 平台适配点(T.16):官方默认 Low(线性)。本平台默认 None(最近邻,MC 像素风);configurePaint 总会按调用参数覆盖
     override var filterQuality: FilterQuality = FilterQuality.None,
 ) : Paint {
+    // T.21:内部通道 —— 图层级/命令级 NativeColorFilter 注入(compose colorFilter 是
+    // public ColorFilter?,而渲染端需要 NativeColorFilter?;回放时经此字段透传,
+    // snapshot() 优先取它,见 Paint.snapshot())。不能放构造参数(public 构造
+    // 暴露 internal 类型)。
+    internal var nativeColorFilter: NativeColorFilter? = null
+
     @Deprecated("Use platform-specific extension to get platform reference")
     override fun asFrameworkPaint(): NativePaint {
         throw UnsupportedOperationException("asFrameworkPaint 第一版不支持")
@@ -572,16 +578,19 @@ internal class MinecraftImageBitmap(
     override fun prepareToDraw() = Unit
 }
 
-/** Minecraft 平台 NativeColorFilter(记录色值/矩阵,绘制阶段应用) */
+/** Minecraft 平台 NativeColorFilter(记录色值/矩阵/相加色,绘制阶段应用) */
 internal class NativeColorFilter internal constructor(
+    /** 调制色(BlendModeColorFilter 的 tint / LightingColorFilter 的 multiply) */
     val color: Color? = null,
     val colorMatrix: ColorMatrix? = null,
     val blendMode: BlendMode = BlendMode.SrcIn,
+    /** LightingColorFilter 的 add 分量(T.21):输出 = src × multiply + add */
+    val add: Color? = null,
 ) {
     override fun equals(other: Any?): Boolean =
-        other is NativeColorFilter && color == other.color && colorMatrix == other.colorMatrix
+        other is NativeColorFilter && color == other.color && colorMatrix == other.colorMatrix && add == other.add
 
-    override fun hashCode(): Int = color.hashCode() * 31 + colorMatrix.hashCode()
+    override fun hashCode(): Int = (color.hashCode() * 31 + colorMatrix.hashCode()) * 31 + add.hashCode()
 }
 
 /** Minecraft 平台 Canvas:命令记录式,后续阶段由 MinecraftRenderContext 回放 */
@@ -605,6 +614,15 @@ internal class MinecraftCanvas internal constructor(
         val strokeCap: StrokeCap,
         /** 图片采样质量(T.16):[FilterQuality.None] → 最近邻(平台默认),[FilterQuality.Low] → 双线性 */
         val filterQuality: FilterQuality = FilterQuality.None,
+        /**
+         * 颜色滤镜(T.21):渲染端对最终色应用。
+         * [NativeColorFilter.colorMatrix] → 颜色矩阵;[color] 为调制色
+         * (BlendModeColorFilter 的 tint / LightingColorFilter 的 multiply),
+         * [add] 为 LightingColorFilter 的 add 分量。
+         */
+        val colorFilter: NativeColorFilter? = null,
+        /** 混合模式(T.21,draw 级):渲染端按 BlendMode 选择 blend;SrcOver = 默认 alpha 合成 */
+        val blendMode: BlendMode = BlendMode.SrcOver,
     )
 
     /** 绘制命令基类 */
@@ -894,7 +912,16 @@ internal class MinecraftCanvas internal constructor(
      * 再重放裁剪与原始绘制参数,最后 restore。
      * [alphaMultiplier] 用于叠加图层级透明度(GraphicsLayer.alpha)。
      */
-    internal fun replayFrom(source: MinecraftCanvas, alphaMultiplier: Float = 1f) {
+    internal fun replayFrom(
+        source: MinecraftCanvas,
+        alphaMultiplier: Float = 1f,
+        // T.21:图层级颜色滤镜/混合(官方 GraphicsLayer.colorFilter/blendMode)。
+        // draw 级近似:命令自身带 colorFilter/blendMode 时优先用命令的;
+        // 命令未带时回退到图层级(官方语义是"图层内容整体后处理",
+        // 本平台无离屏,逐命令应用,组合情况以命令为准,见 AGENTS.md)。
+        layerColorFilter: NativeColorFilter? = null,
+        layerBlendMode: BlendMode = BlendMode.SrcOver,
+    ) {
         for (command in source.commands()) {
             save()
             // 平台适配点(T.9 修复):命令 clip 处于**录制画布的根空间**(录制画布
@@ -914,7 +941,13 @@ internal class MinecraftCanvas internal constructor(
                     style = snapshot.style,
                     strokeWidth = snapshot.strokeWidth,
                     strokeCap = snapshot.strokeCap,
-                )
+                    filterQuality = snapshot.filterQuality,
+                    // T.21:图层级/命令级混合透传(命令优先,图层回退)
+                    blendMode = if (snapshot.blendMode == BlendMode.SrcOver) layerBlendMode else snapshot.blendMode,
+                ).apply {
+                    // T.21:图层级/命令级滤镜透传(命令优先,图层回退)经内部通道注入
+                    nativeColorFilter = snapshot.colorFilter ?: layerColorFilter
+                }
                 if (command.layer3D != null) {
                     // T.15 修复:3D 命令(带 layer3D)必须**透传** layer3D。
                     // 嵌套图层时,子图层 3D 命令先进入父图层录制画布,父图层
@@ -1110,9 +1143,12 @@ internal class MinecraftCanvas internal constructor(
         layer3D: FloatArray,
         text2D: FloatArray = floatArrayOf(1f, 0f, 0f, 1f),
         alphaMultiplier: Float = 1f,
+        // T.21:图层级颜色滤镜/混合,规则同 replayFrom(命令优先,图层回退)
+        layerColorFilter: NativeColorFilter? = null,
+        layerBlendMode: BlendMode = BlendMode.SrcOver,
     ) {
         for (command in source.commands()) {
-            val converted = command.with3D(layer3D, text2D, alphaMultiplier)
+            val converted = command.with3D(layer3D, text2D, alphaMultiplier, layerColorFilter, layerBlendMode)
             if (converted != null) {
                 record(converted)
             }
@@ -1132,6 +1168,8 @@ internal class MinecraftCanvas internal constructor(
         layer3D: FloatArray,
         text2D: FloatArray,
         alphaMultiplier: Float,
+        layerColorFilter: NativeColorFilter? = null,
+        layerBlendMode: BlendMode = BlendMode.SrcOver,
     ): DrawCommand? {
         // approx2D 的 2x2 = 图层旋转缩放组合的干净线性部分,由 GraphicsLayer
         // 按 S·Rx·Ry·Rz(内旋,点先 X 再 Y 再 Z)计算并以 **row-major 展平**
@@ -1182,14 +1220,28 @@ internal class MinecraftCanvas internal constructor(
         // 纯色几何命令的 paint 恒非空(接口约定);文本/阴影/渐变不走此分支。
         fun paint3D(): PaintSnapshot {
             val p = paint ?: return PaintSnapshot(Color.Black, 1f, PaintingStyle.Fill, 0f, StrokeCap.Butt)
-            return if (alphaMultiplier == 1f) p else PaintSnapshot(
-                color = p.color,
-                alpha = p.alpha * alphaMultiplier,
-                style = p.style,
-                strokeWidth = p.strokeWidth,
-                strokeCap = p.strokeCap,
-                filterQuality = p.filterQuality,
-            )
+            // T.21:图层级滤镜/混合回退(命令优先,图层回退,与 replayFrom 2D 分支一致)
+            val effFilter = p.colorFilter ?: layerColorFilter
+            val effBlend = if (p.blendMode == BlendMode.SrcOver) layerBlendMode else p.blendMode
+            return if (alphaMultiplier == 1f && p.colorFilter === effFilter && p.blendMode == effBlend) {
+                PaintSnapshot(
+                    color = p.color, alpha = p.alpha, style = p.style,
+                    strokeWidth = p.strokeWidth, strokeCap = p.strokeCap,
+                    filterQuality = p.filterQuality,
+                    colorFilter = effFilter, blendMode = effBlend,
+                )
+            } else {
+                PaintSnapshot(
+                    color = p.color,
+                    alpha = p.alpha * alphaMultiplier,
+                    style = p.style,
+                    strokeWidth = p.strokeWidth,
+                    strokeCap = p.strokeCap,
+                    filterQuality = p.filterQuality,
+                    colorFilter = effFilter,
+                    blendMode = effBlend,
+                )
+            }
         }
         return when (this) {
             is DrawRectCommand -> DrawRectCommand(
@@ -1252,6 +1304,11 @@ internal class MinecraftCanvas internal constructor(
             strokeWidth = strokeWidth,
             strokeCap = strokeCap,
             filterQuality = filterQuality,
+            // T.21:colorFilter 透传(compose ColorFilter 内部即 NativeColorFilter,
+            // 渲染端对最终色应用颜色矩阵/调制色);回放注入的 nativeColorFilter 优先。
+            // (receiver 是 Paint 接口,须 cast 到 MinecraftPaint 才能读内部通道)
+            colorFilter = (this as? MinecraftPaint)?.nativeColorFilter ?: colorFilter?.nativeColorFilter,
+            blendMode = blendMode,
         )
 
     private fun record(command: DrawCommand) {

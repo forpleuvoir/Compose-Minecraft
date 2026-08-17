@@ -561,7 +561,12 @@ class GraphicsLayer internal constructor() {
                 clean2D[0, 0], clean2D[0, 1],
                 clean2D[1, 0], clean2D[1, 1],
             )
-            canvas.replayFrom3D(recording, layer3D.values, text2D, alphaMultiplier = alpha)
+            canvas.replayFrom3D(
+                recording, layer3D.values, text2D, alphaMultiplier = alpha,
+                // T.21:图层级颜色滤镜/混合(命令优先,图层回退)
+                layerColorFilter = colorFilter?.nativeColorFilter,
+                layerBlendMode = blendMode,
+            )
         } else {
             canvas.translate(topLeft.x.toFloat() + translationX, topLeft.y.toFloat() + translationY)
             canvas.translate(pivotX, pivotY)
@@ -583,7 +588,12 @@ class GraphicsLayer internal constructor() {
             // 在内容之前绘制,随图层变换;偏移向下,内层深外层浅。
             // Path outline(Outline.Generic)阴影后续阶段补齐。
             drawShadow(canvas)
-            canvas.replayFrom(recording, alphaMultiplier = alpha)
+            canvas.replayFrom(
+                recording, alphaMultiplier = alpha,
+                // T.21:图层级颜色滤镜/混合(命令优先,图层回退)
+                layerColorFilter = colorFilter?.nativeColorFilter,
+                layerBlendMode = blendMode,
+            )
         }
         canvas.restore()
     }

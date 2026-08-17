@@ -1,6 +1,7 @@
 package moe.forpleuvoir.compose_minecraft.platform.render
 
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.MinecraftCanvas
@@ -17,6 +18,7 @@ import androidx.compose.ui.graphics.MinecraftCanvas.DrawRoundRectCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.PaintSnapshot
 import androidx.compose.ui.graphics.MinecraftImageBitmap
+import androidx.compose.ui.graphics.NativeColorFilter
 import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
@@ -101,7 +103,7 @@ internal class MinecraftRenderContext {
                     blit(
                         command.matrix, scissor,
                         command.left, command.top, command.right, command.bottom,
-                        command.paint.color, command.paint.alpha,
+                        command.paint,
                     )
                 )
                 is DrawRoundRectCommand -> {
@@ -111,7 +113,7 @@ internal class MinecraftRenderContext {
                             blit(
                                 command.matrix, scissor,
                                 command.left, command.top, command.right, command.bottom,
-                                command.paint.color, command.paint.alpha,
+                                command.paint,
                             )
                         )
                     } else {
@@ -239,7 +241,8 @@ internal class MinecraftRenderContext {
         val layer3D = command.layer3D ?: return
         val m2 = command.matrix
         val paint = command.paint ?: return
-        val colorArgb = paint.color.toArgb(paint.alpha)
+        // T.21:颜色滤镜经 PaintSnapshot.toArgb() 应用(alpha + colorFilter)
+        val colorArgb = paint.toArgb()
         var output = FloatArray(384)
         var count = 0
 
@@ -418,7 +421,7 @@ internal class MinecraftRenderContext {
         renderState.addGuiElement(
             GuiTriangleRenderState(
                 pose = command.matrix.toMatrix3x2f(),
-                colorArgb = paint.color.toArgb(paint.alpha),
+                colorArgb = paint.toArgb(),
                 scissor = scissor?.toScreenRectangle(),
                 vertices = vertices,
                 stroke = paint.style == PaintingStyle.Stroke,
@@ -553,8 +556,7 @@ internal class MinecraftRenderContext {
         top: Float,
         right: Float,
         bottom: Float,
-        color: Color,
-        alpha: Float,
+        paint: PaintSnapshot,
     ): BlitRenderState {
         // Java record 构造器无参数名,必须使用位置参数
         return BlitRenderState(
@@ -569,7 +571,8 @@ internal class MinecraftRenderContext {
             1f,
             0f,
             1f,
-            color.toArgb(alpha),
+            // T.21:颜色滤镜经 PaintSnapshot.toArgb() 应用(alpha + colorFilter)
+            paint.toArgb(),
             clip?.toScreenRectangle(),
         )
     }
@@ -644,5 +647,99 @@ internal class MinecraftRenderContext {
             ((red * 255f).roundToInt() shl 16) or
             ((green * 255f).roundToInt() shl 8) or
             (blue * 255f).roundToInt()
+    }
+
+    /**
+     * Paint 快照 → 最终 0xAARRGGBB(alpha 叠加 + T.21 颜色滤镜)。
+     *
+     * T.21 限制:[blendMode] 已透传到快照与回放链路,但渲染端固定使用
+     * GUI 管线的 TRANSLUCENT alpha 合成 —— MC 26.2 的 blend 函数在
+     * pipeline 编译期固定,draw 级无法逐命令切换,仅 SrcOver(默认)生效;
+     * 其余模式需自建 blend pipeline / 离屏合成(待架构决策,见 AGENTS.md)。
+     */
+    private fun PaintSnapshot.toArgb(): Int = applyColorFilter(color.toArgb(alpha), colorFilter)
+
+    /**
+     * 应用颜色滤镜(T.21,draw 级):
+     * - [NativeColorFilter.colorMatrix]:4x5 颜色矩阵(直通 RGBA,0..255);
+     * - [NativeColorFilter.color](调制色,BlendModeColorFilter 的 tint /
+     *   LightingColorFilter 的 multiply):out = src × color + add × 255
+     *   (tint 按 [NativeColorFilter.blendMode] 与底色混合,SrcIn 非恒色时
+     *   退化为 lerp(src, color, color.a);官方离屏语义见 AGENTS.md);
+     * - 其余:原样返回。
+     */
+    private fun applyColorFilter(argb: Int, filter: NativeColorFilter?): Int {
+        if (filter == null) return argb
+        val c = filter.color
+        if (c != null) {
+            // tint(SrcIn 通用):结果 = color 调制,alpha 保留源
+            if (filter.colorMatrix == null && filter.add == null) {
+                // BlendModeColorFilter:color 与底色按 blendMode 合成(draw 级近似)
+                val sa = (c.alpha * 255f).roundToInt()
+                if (sa >= 255 && filter.blendMode == BlendMode.SrcIn) {
+                    // SrcIn + 不透明 tint → 直接替换为 tint 色
+                    return ((argb ushr 24) shl 24) or (c.toArgb(1f) and 0x00FFFFFF)
+                }
+                val sr = (c.red * 255f).roundToInt()
+                val sg = (c.green * 255f).roundToInt()
+                val sb = (c.blue * 255f).roundToInt()
+                val dr = (argb shr 16) and 0xFF
+                val dg = (argb shr 8) and 0xFF
+                val db = argb and 0xFF
+                val da = (argb ushr 24) and 0xFF
+                return when (filter.blendMode) {
+                    // SrcOver:出 = src×sa + dst×(1-sa)(draw 级近似,无背景知识)
+                    BlendMode.SrcOver -> {
+                        val ia = 255 - sa
+                        val r = (sr * sa + dr * ia) / 255
+                        val g = (sg * sa + dg * ia) / 255
+                        val b = (sb * sa + db * ia) / 255
+                        (da shl 24) or (r shl 16) or (g shl 8) or b
+                    }
+                    // Modulate:出 = src × dst / 255
+                    BlendMode.Modulate -> {
+                        val r = (sr * dr) / 255
+                        val g = (sg * dg) / 255
+                        val b = (sb * db) / 255
+                        (da shl 24) or (r shl 16) or (g shl 8) or b
+                    }
+                    // 其他 blendMode 的 draw 级近似:SrcIn 之外回退到 tint 色 + 源 alpha
+                    else -> (da shl 24) or (sr shl 16) or (sg shl 8) or sb
+                }
+            }
+            // LightingColorFilter:out = src × multiply + add × 255
+            val add = filter.add
+            val a = ((argb ushr 24) and 0xFF)
+            val r = ((argb shr 16) and 0xFF)
+            val g = ((argb shr 8) and 0xFF)
+            val b = (argb and 0xFF)
+            fun mix(v: Int, mul: Float, aoff: Float): Int =
+                (v * mul + aoff * 255f).roundToInt().coerceIn(0, 255)
+            return (mix(a, c.alpha, add?.alpha ?: 0f) shl 24) or
+                (mix(r, c.red, add?.red ?: 0f) shl 16) or
+                (mix(g, c.green, add?.green ?: 0f) shl 8) or
+                mix(b, c.blue, add?.blue ?: 0f)
+        }
+        val m = filter.colorMatrix
+        if (m != null) {
+            val a = (argb ushr 24) and 0xFF
+            val r = (argb shr 16) and 0xFF
+            val g = (argb shr 8) and 0xFF
+            val b = argb and 0xFF
+            val v = floatArrayOf(r.toFloat(), g.toFloat(), b.toFloat(), a.toFloat())
+            val out = IntArray(4)
+            for (row in 0 until 4) {
+                // 偏移列(m[row,4])本身已是 0..255 刻度(如反相矩阵的 255),不再乘 255
+                var acc = m[row, 4]
+                var col = 0
+                while (col < 4) {
+                    acc += m[row, col] * v[col]
+                    col++
+                }
+                out[row] = acc.roundToInt().coerceIn(0, 255)
+            }
+            return (out[3] shl 24) or (out[0] shl 16) or (out[1] shl 8) or out[2]
+        }
+        return argb
     }
 }

@@ -207,7 +207,7 @@ internal fun actualColorMatrixColorFilter(colorMatrix: ColorMatrix): NativeColor
     NativeColorFilter(colorMatrix = colorMatrix)
 
 internal fun actualLightingColorFilter(multiply: Color, add: Color): NativeColorFilter =
-    NativeColorFilter(color = multiply)
+    NativeColorFilter(color = multiply, add = add)
 
 internal fun actualColorMatrixFromFilter(filter: NativeColorFilter): ColorMatrix =
     filter.colorMatrix ?: ColorMatrix()
