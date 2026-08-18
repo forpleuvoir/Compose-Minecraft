@@ -612,7 +612,7 @@ class GraphicsLayer internal constructor() {
      * 绘制软阴影(T.14,CPU 离屏真模糊 + 方向性投影)。
      * 记录一条 [DrawShadowCommand]:内容矩形 + 扩散距离 + 投影偏移 + 圆角半径。
      * 投影偏移 = 光源反方向 × elevation × 0.5(光源方向默认右上角,
-     * 经 [moe.forpleuvoir.compose_minecraft.platform.render.LocalShadowLight]
+     * 经 [moe.forpleuvoir.compose_minecraft.platform.ui.LocalShadowLight]
      * CompositionLocal 可配置,由业务方在 graphicsLayer block 赋值)。
      * Path outline 阴影后续阶段补齐。
      */

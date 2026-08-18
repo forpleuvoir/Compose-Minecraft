@@ -134,7 +134,7 @@ internal fun ContextMenuColumnBuilder(
 }
 
 // 平台适配点(2025-08):官方 Modifier.shadow(androidx.compose.ui.draw)已弃用并重定向到
-// 平台扩展 moe.forpleuvoir.compose_minecraft.platform.render.shadow(见 Shadow.kt 弃用说明)。
+// 平台扩展 moe.forpleuvoir.compose_minecraft.platform.ui.shadow(见 Shadow.kt 弃用说明)。
 // ContextMenu 移植组件保留官方实现(渲染结果与平台版一致 —— 同一 GraphicsLayer 属性 +
 // 同一 GPU 距离场管线,默认光源同为右上),此处压制弃用警告,避免移植树依赖平台包。
 @Suppress("DEPRECATION")

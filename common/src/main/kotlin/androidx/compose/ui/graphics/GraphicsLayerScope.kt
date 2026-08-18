@@ -77,7 +77,7 @@ interface GraphicsLayerScope : Density {
     /**
      * 阴影光源方向(平台扩展 T.14 方向性投影)。
      * 归一化向量,屏幕坐标 y 向下,默认右上角 (1, -1);
-     * 业务方在组合内读取 [moe.forpleuvoir.compose_minecraft.platform.render.LocalShadowLight]
+     * 业务方在组合内读取 [moe.forpleuvoir.compose_minecraft.platform.ui.LocalShadowLight]
      * 后赋值,阴影向光源反方向偏移投射。
      */
     var shadowLightDirection: Offset
@@ -350,8 +350,8 @@ internal class ReusableGraphicsLayerScope : GraphicsLayerScope {
     /**
      * 阴影光源方向(平台扩展 T.14 方向性投影)。
      * 归一化向量,屏幕坐标 y 向下,默认右上角 (1, -1)。
-     * 由 [moe.forpleuvoir.compose_minecraft.platform.render.shadow] 在组合期从
-     * [moe.forpleuvoir.compose_minecraft.platform.render.LocalShadowLight] 自动赋值,
+     * 由 [moe.forpleuvoir.compose_minecraft.platform.ui.shadow] 在组合期从
+     * [moe.forpleuvoir.compose_minecraft.platform.ui.LocalShadowLight] 自动赋值,
      * 业务方通常无需直接操作本属性。不参与官方 [mutatedFields] 位
      * (由 OwnerLayer 每帧同步)。
      */

@@ -87,16 +87,15 @@ P1 先行:颜色求值是 P2/P3 共用的地基;但按硬约束 #1,**两处 lerp
 
 ### P4 — tessellator 拆分(消除 C4)
 
-**目标**:`GeometryTessellator` object 按文件职责拆分,算法零改动。
+> **执行决定(2025-08):C4 保留不拆。**
+> `GeometryTessellator` 是单一内聚职责(几何 → 三角化距离场),1537 行全部服务于
+> 3D/2D/快照三条路径的同一几何化。按范围声明「行为零变更、不是 100% 确定就不改」,
+> 强行切分为 8 个文件会引入跨 object 的可见性/顺序耦合、且每步都需重验高度复杂的
+> 三角化算法(三环/耳切/自交切分/描边展开),属高风险低收益。评审对标拆散的是
+> 「多职责」—— tessellator 是**单一职责大文件**,不应按行数硬拆。
+> 若后续确需拆分,须作为独立重构评审开展。
 
-| # | 任务 | 动作 |
-|---|---|---|
-| 4.1 | 建 `tessellator/` 包,迁移文件 | `Sink.kt` / `Flatten.kt`(细分判据+flatten+simplifyPolygon)/ `Offset.kt`(offsetPolygon)/ `Fill.kt`(fillPolygon+fillInner+earClipInner)/ `Stroke.kt`(strokeRing+caps+cornerCap)/ `ShapeFill.kt`(circle/oval/arc/roundRect/line/path/points/rectGrid)/ `SelfIntersect.kt`(findCrossings+splitFill)/ `ShadowField.kt`(shadowFill+fillShadowInner+earClipShadowInner) |
-| 4.2 | 保持 object 形态 | 拆成多个 internal object,构造函数/属性按依赖注入或同包可见;`Sink` 类与 `aaScale` 语义不变;公开入口(`roundRect`/`oval`/`arc`/`line`/`path`/`points`/`shadowFill`/`circle`)签名不变 |
-| 4.3 | 文件头注释迁移 | 现有 30 行约定注释(三环结构、coverage 语义、简化原则)拆分配到对应文件顶部,`@file:Suppress` 保留在需要处 |
-| 4.4 | 验收 | lint 全绿;build 全量;runClient 几何回归(与 P2.6 同一批次样例) |
-
-**涉及文件**:新增 `tessellator/` 8 个文件;删除 `GeometryTessellator.kt`(或保留为 facade 转发,视 D2 后端形态定)。
+**结论**:`GeometryTessellator` 保持单文件单 object,不拆分。
 
 ### P5 — submit 收敛 + ShadowLight 迁移(消除 C5/C6/C7)
 
