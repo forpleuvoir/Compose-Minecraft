@@ -134,8 +134,8 @@ fun MinecraftDevSceneContent() {
             )
 
             DevMenuButton(
-                title = "原版绘制修饰符测试 (vanillaDraw)",
-                subtitle = "DrawScope 内直调原版 GuiGraphicsExtractor:fill/text/scissor,坐标换算与层级",
+                title = "原版绘制修饰符测试 (vanillaDraw / postVanillaDraw)",
+                subtitle = "前/后渲染双通道:guiScale 开关切换 1:1 像素桥与原版通道,坐标换算与层级",
                 onClick = { ComposeScreen.open { VanillaDrawDevScene() } },
             )
 

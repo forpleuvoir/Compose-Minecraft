@@ -22,6 +22,7 @@ import com.mojang.blaze3d.platform.cursor.CursorType
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
 import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiRenderer
+import moe.forpleuvoir.compose_minecraft.platform.render.GuiCommandSink
 import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderContext
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.LocalVanillaDrawState
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.VanillaDrawState
@@ -77,18 +78,23 @@ class MinecraftComposeScene(
     val renderer = ComposeGuiRenderer()
 
     /**
-     * vanillaDraw 帧级状态(T.38):持有已挂载的 vanillaDraw 节点回调,由
-     * [renderFrame] 把当前帧收集器([ComposeGuiRenderer])传入
-     * [VanillaDrawState.runFrameCallbacks] —— 1:1 绘制桥
+     * vanillaDraw 帧级状态(T.38):持有已挂载的 vanillaDraw/postVanillaDraw
+     * 节点回调,由 [renderFrame] 把当前帧收集器([ComposeGuiRenderer])与当前帧
+     * 原版 [net.minecraft.client.gui.GuiGraphicsExtractor]
+     * ([VanillaDrawState.graphics],由 ComposeScreen.extractRenderState 写入)
+     * 传入 [VanillaDrawState.runFrameCallbacks] /
+     * [VanillaDrawState.runPostFrameCallbacks]:1:1 绘制桥
      * ([moe.forpleuvoir.compose_minecraft.platform.ui.draw.VanillaGuiGraphics])
-     * 经 [GuiCommandSink] 注入本收集器,与 Compose 内容同一次 1:1 像素提交。
-     * 组合根部经 [LocalVanillaDrawState] 提供给业务(`Modifier.vanillaDraw`)。
+     * 经 [GuiCommandSink] 注入本收集器(前渲染元素在头、后渲染元素在尾);
+     * guiScale 通道经当前帧原版 extractor 走原版 GuiRenderState。
+     * 组合根部经 [LocalVanillaDrawState] 提供给业务
+     * (`Modifier.vanillaDraw` / `Modifier.postVanillaDraw`)。
      *
      * 平台开放点:public —— 自定义宿主可直接读写帧态。
      *
-     * @see moe.forpleuvoir.compose_minecraft.platform.ui.draw.Modifier.vanillaDraw(已弃用)
+     * @see moe.forpleuvoir.compose_minecraft.platform.ui.draw.vanillaDraw
+     * @see moe.forpleuvoir.compose_minecraft.platform.ui.draw.postVanillaDraw
      */
-    @Suppress("DEPRECATION") // T.38 兼容保留:vanillaDraw 已弃用,接线暂存
     val vanillaDrawState = VanillaDrawState()
 
     /**
@@ -168,7 +174,6 @@ class MinecraftComposeScene(
             // 根级 PopupHost:场景根自动挂载主机与宿主(业务弹层经 LocalPopupHost
             // 注册,由根 PopupHostOverlay 统一渲染,不污染业务父布局测量)。
             val popupHostState = remember { PopupHostState() }
-            @Suppress("DEPRECATION") // T.38 兼容保留:vanillaDraw 已弃用
             CompositionLocalProvider(
                 LocalPopupHost provides popupHostState,
                 // T.38:vanillaDraw 帧态(LocalVanillaDrawState),实例稳定不触发重组
@@ -222,9 +227,18 @@ class MinecraftComposeScene(
     /**
      * 同步 Minecraft 窗口尺寸(像素,T.24:1:1,不再除 guiScale)并渲染当前帧:
      * 重组/布局/绘制到 [canvas],再提交到 [renderer] 收集器(gui 阶段由
-     * GuiRendererMixin 提交)。由 [ComposeScreen.extractRenderState] 每帧调用。
+     * GuiRendererMixin 提交)。由 [ComposeScreen.extractRenderState] 每帧调用
+     * (调用前已写入 [VanillaDrawState.graphics] 当前帧原版 extractor)。
+     *
+     * 帧内 vanilla 回调时序:
+     * 1. [VanillaDrawState.runFrameCallbacks]——前渲染(vanillaDraw):1:1 桥
+     *    元素注入收集器列表头部 → 画在 Compose 内容之下;guiScale 通道走原版
+     *    extractor(受原版 guiScale,时序由原版 GUI 阶段决定);
+     * 2. `renderContext.render(...)`——Compose 内容收集与提交;
+     * 3. [VanillaDrawState.runPostFrameCallbacks]——后渲染(postVanillaDraw):
+     *    1:1 桥元素注入列表尾部 → 画在全部 Compose 内容之上;guiScale 通道仍
+     *    走原版 extractor(画在 Compose 之下,见 KDoc 限制)。
      */
-    @Suppress("DEPRECATION") // T.38 兼容保留:vanillaDraw 已弃用
     fun renderFrame() {
         val windowState = Minecraft.getInstance().gameRenderer.gameRenderState().windowRenderState
         sceneContainerSize = IntSize(windowState.width, windowState.height)
@@ -234,12 +248,18 @@ class MinecraftComposeScene(
         )
         canvas.clearCommands()
         scene.render(canvas, System.nanoTime())
-        // T.38:每帧重放 vanillaDraw 回调(vanilla 元素经 1:1 绘制桥每帧注入
-        // 当前帧收集器;绕开 Compose 图层"命令烘焙"脏标记缓存 ——
+        // 当前帧原版 extractor(ComposeScreen 已写入)与 GUI 缩放系数(guiScale 通道换算用;
+        // 1:1 通道不参与绘制,仅原版通道以 GUI 单位绘制时使用)
+        val graphics = vanillaDrawState.graphics
+        val guiScale = windowState.guiScale.toFloat().coerceAtLeast(1f)
+        // T.38:每帧重放前渲染回调(绕开 Compose 图层"命令烘焙"脏标记缓存 ——
         // GraphicsLayer.record 静态帧不重跑 draw 块)。桥元素注入在
         // renderContext.render 之前 → 元素位于列表头部,画在 Compose 内容之下。
-        vanillaDrawState.runFrameCallbacks(renderer)
+        vanillaDrawState.runFrameCallbacks(renderer, graphics, guiScale)
         renderContext.render(canvas, renderer)
+        // T.38:每帧重放后渲染回调(在 renderContext.render 之后 → 元素位于列表
+        // 尾部,画在全部 Compose 内容之上;guiScale 通道例外,见 KDoc)。
+        vanillaDrawState.runPostFrameCallbacks(renderer, graphics, guiScale)
     }
 
     /** 释放场景(组合、Recomposer 等) */

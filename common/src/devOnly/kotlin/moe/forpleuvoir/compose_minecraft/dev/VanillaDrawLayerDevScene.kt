@@ -1,5 +1,3 @@
-@file:Suppress("DEPRECATION") // T.38 已弃用:本场景为弃用功能的留存测试,有意使用
-
 package moe.forpleuvoir.compose_minecraft.dev
 
 import androidx.compose.foundation.background
@@ -39,20 +37,26 @@ import kotlin.math.roundToInt
  *
  * 本场景验证「vanillaDraw 内容(1:1 像素桥)与 Compose 元素互相遮盖」的层级关系:
  *
- * ## 预期层级(自底向上)
+ * ## 预期层级(自底向上,1:1 通道默认)
  * ```text
  * ┌ 顶层 ┐
+ * │ postVanillaDraw 元素(后渲染,注入列表尾部,盖全部 Compose)  │
  * │ Dialog / Popup 的 Compose 内容(scrim 在其上层的栈顶)  │
  * │ 主场景 Compose 内容(不透明盖住其下,半透明透出)          │
- * │ 全部 vanillaDraw 元素(注册序;垫全局最底)               │
+ * │ 全部 vanillaDraw 元素(前渲染,注入列表头部;注册序垫全局最底)┤
  * └ 底层 ┘
  * ```
- * 所有 vanillaDraw 回调都注入 ComposeGuiRenderer.items 列表**头部**,因此:
+ * 所有 vanillaDraw(前渲染)回调都注入 ComposeGuiRenderer.items 列表**头部**,因此:
  * - 任何不透明 Compose 元素都会盖住它;半透明则透出;
  * - **弹层(Popup/Dialog)内的 vanillaDraw 同样垫全局最底** —— 若主场景有不透明
  *   内容,弹层的 vanilla 会被主场景内容盖住(全局底,非"弹层底"),这是当前
  *   单收集器架构的固有语义;弹层内 vanilla 坐标以弹层原点为基准(未叠加弹层
  *   窗口位移)。
+ *
+ * 本场景固定使用 **1:1 通道**(`guiScaleEnabled = false`,不受原版 guiScale)。
+ * `guiScaleEnabled = true` 的原版通道走当前帧真
+ * [net.minecraft.client.gui.GuiGraphicsExtractor] / 原版 GuiRenderState ——
+ * 原版 GUI 画在 Compose 之下,不受本矩阵约束(相关演示见 VanillaDrawDevScene)。
  *
  * 验证区:
  * - A1 半透明 Compose 盖 vanilla(应透出) / A2 不透明 Compose 盖 vanilla(应盖死);
@@ -83,7 +87,7 @@ fun VanillaDrawLayerDevScene() {
             )
             BasicText(
                 "当前窗口 guiScale=${Minecraft.getInstance().window.guiScale}(vanilla 1:1 桥不受其影响)。\n" +
-                    "层级预期:底层=[全部 vanilla(注册序)] → [主场景 Compose] → [Popup/Dialog 内容]。",
+                    "层级预期(1:1 通道):[vanillaDraw 垫底] → [主场景 Compose] → [Popup/Dialog] → [postVanillaDraw 置顶]。",
                 style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
             )
 
@@ -100,8 +104,8 @@ fun VanillaDrawLayerDevScene() {
                     .background(Color(0x8055AADD))
                     .vanillaDraw {
                         val r = guiRect(0f, 0f, size.width, size.height)
-                        graphics.fill(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt(), 0xFFFF3300.toInt())
-                        graphics.text(
+                        fill(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt(), 0xFFFF3300.toInt())
+                        text(
                             Minecraft.getInstance().font,
                             "vanilla RED under semi-transparent compose",
                             (r.left + 6).roundToInt(),
@@ -124,8 +128,8 @@ fun VanillaDrawLayerDevScene() {
                     .background(Color(0xFF263238))
                     .vanillaDraw {
                         val r = guiRect(0f, 0f, size.width, size.height)
-                        graphics.fill(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt(), 0xFF00FF66.toInt())
-                        graphics.text(
+                        fill(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt(), 0xFF00FF66.toInt())
+                        text(
                             Minecraft.getInstance().font,
                             "vanilla GREEN hidden by opaque compose",
                             (r.left + 6).roundToInt(),
@@ -147,8 +151,8 @@ fun VanillaDrawLayerDevScene() {
                     .height(56.dp)
                     .vanillaDraw {
                         val r = guiRect(0f, 0f, size.width, size.height)
-                        graphics.fill(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt(), 0xFF3399FF.toInt())
-                        graphics.text(
+                        fill(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt(), 0xFF3399FF.toInt())
+                        text(
                             Minecraft.getInstance().font,
                             "vanilla BLUE fully visible (no compose bg)",
                             (r.left + 6).roundToInt(),
@@ -170,8 +174,8 @@ fun VanillaDrawLayerDevScene() {
                     .height(70.dp)
                     .vanillaDraw {
                         val r = guiRect(0f, 0f, size.width, size.height)
-                        graphics.fill(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt(), 0x80FF3300.toInt())
-                        graphics.text(Minecraft.getInstance().font, "red first", (r.left + 4).roundToInt(), (r.top + 4).roundToInt(), 0xFFFFFFFF.toInt())
+                        fill(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt(), 0x80FF3300.toInt())
+                        text(Minecraft.getInstance().font, "red first", (r.left + 4).roundToInt(), (r.top + 4).roundToInt(), 0xFFFFFFFF.toInt())
                     }
             ) {
                 Box(
@@ -180,8 +184,8 @@ fun VanillaDrawLayerDevScene() {
                         .padding(start = 40.dp, end = 0.dp)
                         .vanillaDraw {
                             val r = guiRect(0f, 0f, size.width, size.height)
-                            graphics.fill(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt(), 0x8000FF66.toInt())
-                            graphics.text(Minecraft.getInstance().font, "green later", (r.left + 4).roundToInt(), (r.top + 30).roundToInt(), 0xFFFFFFFF.toInt())
+                            fill(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt(), 0x8000FF66.toInt())
+                            text(Minecraft.getInstance().font, "green later", (r.left + 4).roundToInt(), (r.top + 30).roundToInt(), 0xFFFFFFFF.toInt())
                         }
                 ) {}
             }
@@ -198,7 +202,7 @@ fun VanillaDrawLayerDevScene() {
                     .height(40.dp)
                     .vanillaDraw {
                         val r = guiRect(0f, 0f, size.width, size.height)
-                        graphics.text(Minecraft.getInstance().font, "VANILLA TEXT (bottom)", (r.left + 4).roundToInt(), (r.top + 10).roundToInt(), 0xFFFFFFFF.toInt())
+                        text(Minecraft.getInstance().font, "VANILLA TEXT (bottom)", (r.left + 4).roundToInt(), (r.top + 10).roundToInt(), 0xFFFFFFFF.toInt())
                     }
             ) {
                 BasicText(
@@ -239,8 +243,8 @@ fun VanillaDrawLayerDevScene() {
                                 .height(52.dp)
                                 .vanillaDraw {
                                     val r = guiRect(0f, 0f, size.width, size.height)
-                                    graphics.fill(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt(), 0xFFAA00FF.toInt())
-                                    graphics.text(Minecraft.getInstance().font, "popup vanilla purple", (r.left + 4).roundToInt(), (r.top + 20).roundToInt(), 0xFFFFFFFF.toInt())
+                                    fill(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt(), 0xFFAA00FF.toInt())
+                                    text(Minecraft.getInstance().font, "popup vanilla purple", (r.left + 4).roundToInt(), (r.top + 20).roundToInt(), 0xFFFFFFFF.toInt())
                                 }
                         ) {}
                         Box(
@@ -250,7 +254,7 @@ fun VanillaDrawLayerDevScene() {
                                 .background(Color(0xFFFFFFFF))
                                 .vanillaDraw {
                                     val r = guiRect(0f, 0f, size.width, size.height)
-                                    graphics.fill(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt(), 0xFF00AAFF.toInt())
+                                    fill(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt(), 0xFF00AAFF.toInt())
                                 }
                         ) {}
                         BasicText(
@@ -293,8 +297,8 @@ fun VanillaDrawLayerDevScene() {
                                 .height(48.dp)
                                 .vanillaDraw {
                                     val r = guiRect(0f, 0f, size.width, size.height)
-                                    graphics.fill(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt(), 0x80FFFF00.toInt())
-                                    graphics.text(Minecraft.getInstance().font, "dialog vanilla yellow", (r.left + 4).roundToInt(), (r.top + 16).roundToInt(), 0xFF000000.toInt())
+                                    fill(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt(), 0x80FFFF00.toInt())
+                                    text(Minecraft.getInstance().font, "dialog vanilla yellow", (r.left + 4).roundToInt(), (r.top + 16).roundToInt(), 0xFF000000.toInt())
                                 }
                         ) {}
                         BasicText(
@@ -324,8 +328,8 @@ fun VanillaDrawLayerDevScene() {
                         .height(30.dp)
                         .vanillaDraw {
                             val r = guiRect(0f, 0f, size.width, size.height)
-                            graphics.fill(r.left.roundToInt(), r.top.roundToInt(), (r.left + 60).roundToInt(), r.bottom.roundToInt(), if (i % 2 == 0) 0x8033E0FF.toInt() else 0x80FF9933.toInt())
-                            graphics.text(
+                            fill(r.left.roundToInt(), r.top.roundToInt(), (r.left + 60).roundToInt(), r.bottom.roundToInt(), if (i % 2 == 0) 0x8033E0FF.toInt() else 0x80FF9933.toInt())
+                            text(
                                 Minecraft.getInstance().font,
                                 "row $i origin=(${guiOrigin.x},${guiOrigin.y})",
                                 (r.left + 68).roundToInt(),

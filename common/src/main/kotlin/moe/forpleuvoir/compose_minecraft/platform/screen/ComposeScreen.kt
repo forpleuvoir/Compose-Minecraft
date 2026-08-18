@@ -144,10 +144,19 @@ class ComposeScreen(
                 }
             }
         }
-        // T.38:vanillaDraw 帧态由 renderFrame 内部驱动(1:1 绘制桥经
-        // GuiCommandSink 注入本屏收集器,不依赖本参数 —— 本参数仍供 requestCursor
-        // 等原版通道使用,见下方 I9 光标块)。
-        composeScene?.renderFrame()
+        // T.38:vanillaDraw 帧态 —— 先注入当前帧原版 GuiGraphicsExtractor
+        // (guiScale 通道用),再驱动 renderFrame(前/后渲染回调在 renderFrame 内经
+        // 1:1 桥或原版通道执行),完成后清除 —— guiScale 通道回调只在 extract
+        // 阶段栈内可见 graphics。1:1 通道不依赖本参数(桥经 GuiCommandSink 注入
+        // 本屏收集器);本参数仍供 requestCursor 等原版通道使用,见下方 I9 光标块。
+        composeScene?.let { scene ->
+            scene.vanillaDrawState.graphics = graphics
+            try {
+                scene.renderFrame()
+            } finally {
+                scene.vanillaDrawState.graphics = null
+            }
+        }
         // 复述系统:语义变化(Compose 内部焦点迁移)补触发原版朗读。extractRenderState
         // 帧内调用是安全的(不在语义快照提交期,不会递归);triggerImmediateNarration
         // 内部只在 Narrator.isActive() 或 DEBUG 时执行,静默无副作用。
