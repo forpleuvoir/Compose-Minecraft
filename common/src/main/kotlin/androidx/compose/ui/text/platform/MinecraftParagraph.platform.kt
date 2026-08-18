@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.MinecraftCanvas
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawStyle
 import androidx.compose.ui.text.AnnotatedString
@@ -542,9 +543,46 @@ internal class MinecraftParagraph(
         drawStyle: DrawStyle?,
         blendMode: BlendMode,
     ) {
-        // 平台适配点:Brush 只支持纯色(SolidColor),渐变第一版不支持
-        val color = (brush as? SolidColor)?.value ?: Color.White
-        paint(canvas, color, alpha)
+        if (brush is ShaderBrush) {
+            val size = androidx.compose.ui.geometry.Size(width, height)
+            val shader = brush.createShader(size)
+            val mc = canvas as? MinecraftCanvas
+                ?: throw UnsupportedOperationException(
+                    "MinecraftParagraph.paint only supports MinecraftCanvas, actual: ${canvas::class.simpleName}"
+                )
+            val effectiveAlpha = alpha
+            val scaled = scale != 1f
+            if (scaled) {
+                mc.save()
+                mc.scale(scale, scale)
+            }
+            val lineCount = visibleLineCount
+            try {
+                for (i in 0 until lineCount) {
+                    val line = layout.lines[i]
+                    val start = lineDrawStart(i, line)
+                    if (line.end > start) {
+                        var drawText = intrinsics.text.substring(start, line.end)
+                        if (drawText.endsWith('\n')) drawText = drawText.dropLast(1)
+                        if (drawText.isNotEmpty()) {
+                            mc.recordTextDraw(
+                                text = drawText,
+                                x = 0f,
+                                y = i * layout.lineHeight,
+                                style = intrinsics.style,
+                                alpha = effectiveAlpha,
+                                shader = shader,
+                            )
+                        }
+                    }
+                }
+            } finally {
+                if (scaled) mc.restore()
+            }
+        } else {
+            val color = (brush as? SolidColor)?.value ?: Color.White
+            paint(canvas, color, alpha)
+        }
     }
 
     private fun paint(canvas: Canvas, color: Color, alpha: Float) {

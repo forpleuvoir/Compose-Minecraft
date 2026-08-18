@@ -618,6 +618,8 @@ internal class MinecraftCanvas internal constructor(
         val colorFilter: NativeColorFilter? = null,
         /** 混合模式(T.21,draw 级):渲染端按 BlendMode 选择 blend;SrcOver = 默认 alpha 合成 */
         val blendMode: BlendMode = BlendMode.SrcOver,
+        /** 渐变着色器(平台适配点):LinearGradient/RadialGradient/SweepGradient,非 null 时覆盖 color */
+        val shader: Shader? = null,
     )
 
     /** 绘制命令基类 */
@@ -781,6 +783,8 @@ internal class MinecraftCanvas internal constructor(
         val style: Style,
         /** 文本整体透明度 0..1(图层级 alpha 叠加,阶段 C 经颜色 alpha 通道应用) */
         val alpha: Float = 1f,
+        /** 渐变着色器(平台适配点):非 null 时文本颜色由渐变采样决定,覆盖 style 色 */
+        val shader: Shader? = null,
     ) : DrawCommand {
         override val paint: PaintSnapshot? = null
     }
@@ -853,6 +857,7 @@ internal class MinecraftCanvas internal constructor(
         y: Float,
         style: Style,
         alpha: Float = 1f,
+        shader: Shader? = null,
     ) {
         drawCommands.add(
             DrawTextCommand(
@@ -863,6 +868,7 @@ internal class MinecraftCanvas internal constructor(
                 y = y,
                 style = style,
                 alpha = alpha,
+                shader = shader,
             )
         )
     }
@@ -968,6 +974,7 @@ internal class MinecraftCanvas internal constructor(
                     filterQuality = snapshot.filterQuality,
                     // T.21:图层级/命令级混合透传(命令优先,图层回退)
                     blendMode = if (snapshot.blendMode == BlendMode.SrcOver) layerBlendMode else snapshot.blendMode,
+                    shader = snapshot.shader,
                 ).apply {
                     // T.21:图层级/命令级滤镜透传(命令优先,图层回退)经内部通道注入
                     nativeColorFilter = snapshot.colorFilter ?: layerColorFilter
@@ -1345,6 +1352,7 @@ internal class MinecraftCanvas internal constructor(
             is DrawTextCommand -> DrawTextCommand(
                 combine(matrix), clip, text, x, y, style,
                 alpha = alpha * alphaMultiplier,
+                shader = shader,
             )
             is DrawGradientRectCommand -> DrawGradientRectCommand(
                 combine(matrix), clip, left, top, right, bottom,
@@ -1374,6 +1382,7 @@ internal class MinecraftCanvas internal constructor(
             // (receiver 是 Paint 接口,须 cast 到 MinecraftPaint 才能读内部通道)
             colorFilter = (this as? MinecraftPaint)?.nativeColorFilter ?: colorFilter?.nativeColorFilter,
             blendMode = blendMode,
+            shader = shader,
         )
 
     private fun record(command: DrawCommand) {
@@ -1655,9 +1664,6 @@ internal class MinecraftCanvas internal constructor(
     override fun disableZ() = Unit
 
     private fun validatePaint(paint: Paint) {
-        if (paint.shader != null) {
-            throw UnsupportedOperationException("Paint.shader is not supported in v1")
-        }
         // T.22:blendMode 支持 17 种可表达模式(渲染端经 BlendPipelines 切换 pipeline),
         // 其余 12 种高级模式(Overlay/Difference/...)渲染端回退 SrcOver —— 记录端不拦截。
     }

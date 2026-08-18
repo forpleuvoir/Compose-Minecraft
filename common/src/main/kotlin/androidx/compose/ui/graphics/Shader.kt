@@ -18,11 +18,41 @@ package androidx.compose.ui.graphics
 
 import androidx.compose.ui.geometry.Offset
 
-/**
- * Class that represents the corresponding Shader implementation on a platform. This maps to
- * Gradients or ImageShaders
- */
-class Shader
+sealed class Shader
+
+class LinearGradientShaderData(
+    val from: Offset,
+    val to: Offset,
+    val colors: List<Color>,
+    val colorStops: List<Float>?,
+    val tileMode: TileMode,
+) : Shader()
+
+class RadialGradientShaderData(
+    val center: Offset,
+    val radius: Float,
+    val colors: List<Color>,
+    val colorStops: List<Float>?,
+    val tileMode: TileMode,
+) : Shader()
+
+class SweepGradientShaderData(
+    val center: Offset,
+    val colors: List<Color>,
+    val colorStops: List<Float>?,
+) : Shader()
+
+internal class ImageShaderData(
+    val image: ImageBitmap,
+    val tileModeX: TileMode,
+    val tileModeY: TileMode,
+) : Shader()
+
+internal class CompositeShaderData(
+    val dst: Shader,
+    val src: Shader,
+    val blendMode: BlendMode,
+) : Shader()
 
 /**
  * Class that applies the transform matrix to the corresponding [Shader]. This is useful for
@@ -61,7 +91,7 @@ internal fun ActualLinearGradientShader(
     colors: List<Color>,
     colorStops: List<Float>?,
     tileMode: TileMode,
-): Shader = throw UnsupportedOperationException("Shader(LinearGradient) is not supported in v1")
+): Shader = LinearGradientShaderData(from, to, colors, colorStops, tileMode)
 
 /**
  * Creates a radial gradient centered at `center` that ends at `radius` distance from the center.
@@ -91,7 +121,7 @@ internal fun ActualRadialGradientShader(
     colors: List<Color>,
     colorStops: List<Float>?,
     tileMode: TileMode,
-): Shader = throw UnsupportedOperationException("Shader(RadialGradient) is not supported in v1")
+): Shader = RadialGradientShaderData(center, radius, colors, colorStops, tileMode)
 
 /**
  * Creates a circular gradient that sweeps around a provided center point. The sweep begins relative
@@ -115,7 +145,7 @@ internal fun ActualSweepGradientShader(
     center: Offset,
     colors: List<Color>,
     colorStops: List<Float>?,
-): Shader = throw UnsupportedOperationException("Shader(SweepGradient) is not supported in v1")
+): Shader = SweepGradientShaderData(center, colors, colorStops)
 
 /**
  * Creates a Shader using the given [ImageBitmap] as an input texture. If the shader is to be drawn
@@ -132,7 +162,7 @@ internal fun ActualImageShader(
     image: ImageBitmap,
     tileModeX: TileMode,
     tileModeY: TileMode,
-): Shader = throw UnsupportedOperationException("Shader(Image) is not supported in v1")
+): Shader = ImageShaderData(image, tileModeX, tileModeY)
 
 /**
  * Creates a composited result between 2 shaders and the specified BlendMode. The specified
@@ -148,4 +178,4 @@ fun CompositeShader(dst: Shader, src: Shader, blendMode: BlendMode): Shader =
     ActualCompositeShader(dst, src, blendMode)
 
 internal fun ActualCompositeShader(dst: Shader, src: Shader, blendMode: BlendMode): Shader =
-    throw UnsupportedOperationException("Shader(Composite) is not supported in v1")
+    CompositeShaderData(dst, src, blendMode)

@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PointMode
@@ -39,7 +40,7 @@ fun GeometryDevScene() {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xFF121212))
+            .background(Color(0xFFFFFFFF))
     ) {
         Column(
             Modifier
@@ -372,6 +373,254 @@ fun GeometryDevScene() {
                 drawLine(
                     color = Color(0xFFA5D6A7), start = Offset(370f, 40f), end = Offset(380f, 40f),
                     strokeWidth = 1f,
+                )
+            }
+
+            // ── 渐变:垂直渐变矩形 ──
+            BasicText(
+                "渐变填充:垂直/水平/对角/径向/扫描/色相",
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
+            )
+            Canvas(
+                Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth()
+                    .height(120.dp)
+            ) {
+                drawRect(
+                    brush = Brush.verticalGradient(listOf(Color.Red, Color.Blue)),
+                    topLeft = Offset(10f, 10f), size = Size(80f, 80f),
+                )
+                drawRect(
+                    brush = Brush.horizontalGradient(listOf(Color(0xFFFFEB3B), Color(0xFFE91E63), Color(0xFF9C27B0))),
+                    topLeft = Offset(110f, 10f), size = Size(80f, 80f),
+                )
+                drawRect(
+                    brush = Brush.linearGradient(
+                        listOf(Color(0xFF66BB6A), Color.White, Color(0xFF42A5F5)),
+                        start = Offset(210f, 10f), end = Offset(290f, 90f),
+                    ),
+                    topLeft = Offset(210f, 10f), size = Size(80f, 80f),
+                )
+                drawRect(
+                    brush = Brush.radialGradient(
+                        listOf(Color(0xFFFF5722), Color(0xFFFFEB3B), Color(0xFF4CAF50)),
+                        center = Offset(330f, 50f), radius = 50f,
+                    ),
+                    topLeft = Offset(300f, 10f), size = Size(80f, 80f),
+                )
+                drawRect(
+                    brush = Brush.sweepGradient(
+                        listOf(Color.Red, Color(0xFFFFEB3B), Color(0xFF4CAF50), Color(0xFF2196F3), Color.Red),
+                        center = Offset(420f, 50f),
+                    ),
+                    topLeft = Offset(390f, 10f), size = Size(80f, 80f),
+                )
+                }
+            // ── 色相渐变:单独一行测试 ──
+            BasicText(
+                "色相渐变: HSV 0°→300° 水平,6色",
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
+            )
+            Canvas(
+                Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth()
+                    .height(60.dp)
+            ) {
+                drawRect(
+                    brush = Brush.linearGradient(
+                        (0 until 7).map { i -> Color.hsv(i * 60f, 1f, 1f) },
+                        start = Offset(10f, 10f), end = Offset(310f, 10f),
+                    ),
+                    topLeft = Offset(10f, 10f), size = Size(300f, 40f),
+                )
+            }
+
+            // ── 渐变:圆/椭圆/圆角矩形 ──
+            BasicText(
+                "渐变几何:圆/椭圆/圆角矩形/弧",
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
+            )
+            Canvas(
+                Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth()
+                    .height(150.dp)
+            ) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(Color(0xFFFFC107), Color(0xFFE91E63)),
+                        center = Offset(50f, 55f), radius = 40f,
+                    ),
+                    radius = 40f, center = Offset(50f, 55f),
+                )
+                drawOval(
+                    brush = Brush.verticalGradient(listOf(Color(0xFF00BCD4), Color(0xFF3F51B5))),
+                    topLeft = Offset(110f, 10f), size = Size(100f, 80f),
+                )
+                drawRoundRect(
+                    brush = Brush.horizontalGradient(
+                        listOf(Color(0xFFFF9800), Color(0xFF7C4DFF), Color(0xFF448AFF)),
+                    ),
+                    topLeft = Offset(230f, 15f), size = Size(100f, 70f),
+                    cornerRadius = CornerRadius(20f, 20f),
+                )
+                drawArc(
+                    brush = Brush.sweepGradient(
+                        listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red),
+                        center = Offset(400f, 55f),
+                    ),
+                    startAngle = 0f, sweepAngle = 300f, useCenter = true,
+                    topLeft = Offset(360f, 15f), size = Size(80f, 80f),
+                )
+            }
+
+            // ── 渐变:Path ──
+            BasicText(
+                "渐变 Path:星形/圆角/自交",
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
+            )
+            Canvas(
+                Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth()
+                    .height(140.dp)
+            ) {
+                val star = Path().apply {
+                    moveTo(60f, 10f)
+                    lineTo(75f, 45f); lineTo(112f, 45f); lineTo(82f, 68f)
+                    lineTo(92f, 105f); lineTo(60f, 84f); lineTo(28f, 105f)
+                    lineTo(38f, 68f); lineTo(8f, 45f); lineTo(45f, 45f)
+                    close()
+                }
+                drawPath(
+                    star,
+                    brush = Brush.verticalGradient(listOf(Color(0xFFFFF176), Color(0xFFFF7043))),
+                )
+                val blob = Path().apply {
+                    moveTo(170f, 110f)
+                    quadraticTo(140f, 30f, 200f, 20f)
+                    cubicTo(260f, 10f, 250f, 80f, 300f, 60f)
+                    quadraticTo(330f, 110f, 260f, 120f)
+                    close()
+                }
+                drawPath(
+                    blob,
+                    brush = Brush.horizontalGradient(
+                        listOf(Color(0xFF26A69A), Color(0xFF80DEEA), Color(0xFF1E88E5)),
+                    ),
+                )
+                val bowtie = Path().apply {
+                    moveTo(350f, 40f); lineTo(430f, 110f)
+                    lineTo(430f, 40f); lineTo(350f, 110f)
+                    close()
+                }
+                drawPath(
+                    bowtie,
+                    brush = Brush.radialGradient(
+                        listOf(Color(0xFFFFF176), Color(0xFFAB47BC)),
+                        center = Offset(390f, 75f), radius = 50f,
+                    ),
+                )
+            }
+
+            // ── 渐变:描边 ──
+            BasicText(
+                "渐变描边:圆/椭圆/圆角矩形/线",
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
+            )
+            Canvas(
+                Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth()
+                    .height(120.dp)
+            ) {
+                drawCircle(
+                    brush = Brush.verticalGradient(listOf(Color(0xFFFF7043), Color(0xFFFFF176))),
+                    radius = 35f, center = Offset(45f, 45f),
+                    style = Stroke(width = 6f),
+                )
+                drawOval(
+                    brush = Brush.horizontalGradient(listOf(Color(0xFF42A5F5), Color(0xFF7E57C2))),
+                    topLeft = Offset(100f, 10f), size = Size(90f, 70f),
+                    style = Stroke(width = 5f),
+                )
+                drawRoundRect(
+                    brush = Brush.radialGradient(
+                        listOf(Color(0xFF66BB6A), Color(0xFFFFEB3B)),
+                        center = Offset(265f, 45f), radius = 50f,
+                    ),
+                    topLeft = Offset(220f, 10f), size = Size(90f, 70f),
+                    cornerRadius = CornerRadius(16f, 16f),
+                    style = Stroke(width = 4f),
+                )
+                drawLine(
+                    brush = Brush.linearGradient(
+                        listOf(Color(0xFFE91E63), Color(0xFFFF9800), Color(0xFF4CAF50)),
+                        start = Offset(340f, 20f), end = Offset(480f, 80f),
+                    ),
+                    start = Offset(340f, 20f), end = Offset(480f, 80f),
+                    strokeWidth = 8f,
+                )
+            }
+
+            // ── 渐变:Modifier 背景渐变 ──
+            BasicText(
+                "渐变背景(Modifier.background + Brush):",
+                style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
+            )
+            Box(
+                Modifier
+                    .padding(top = 4.dp)
+                    .fillMaxWidth()
+                    .height(40.dp)
+                    .background(Brush.verticalGradient(listOf(Color(0xFFFFF176), Color(0xFFE91E63))))
+            ) {
+                BasicText(
+                    "  垂直渐变背景",
+                    style = Style.EMPTY.withColor(Color.White).toTextStyle(),
+                )
+            }
+            Box(
+                Modifier
+                    .padding(top = 4.dp)
+                    .fillMaxWidth()
+                    .height(40.dp)
+                    .background(Brush.horizontalGradient(listOf(Color(0xFF66BB6A), Color(0xFF42A5F5), Color(0xFF7E57C2))))
+            ) {
+                BasicText(
+                    "  水平渐变背景",
+                    style = Style.EMPTY.withColor(Color.White).toTextStyle(),
+                )
+            }
+            Box(
+                Modifier
+                    .padding(top = 4.dp)
+                    .fillMaxWidth()
+                    .height(40.dp)
+                    .background(Brush.radialGradient(
+                        listOf(Color(0xFFFF5722), Color(0xFFFFEB3B), Color(0xFF4CAF50)),
+                        radius = 400f,
+                    ))
+            ) {
+                BasicText(
+                    "  径向渐变背景",
+                    style = Style.EMPTY.withColor(Color.White).toTextStyle(),
+                )
+            }
+            Box(
+                Modifier
+                    .padding(top = 4.dp)
+                    .fillMaxWidth()
+                    .height(40.dp)
+                    .background(Brush.sweepGradient(
+                        listOf(Color.Red, Color(0xFFFFEB3B), Color(0xFF4CAF50), Color(0xFF2196F3), Color.Red),
+                    ))
+            ) {
+                BasicText(
+                    "  扫描渐变背景",
+                    style = Style.EMPTY.withColor(Color.White).toTextStyle(),
                 )
             }
         }

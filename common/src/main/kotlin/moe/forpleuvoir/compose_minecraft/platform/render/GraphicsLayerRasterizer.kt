@@ -3,6 +3,7 @@ package moe.forpleuvoir.compose_minecraft.platform.render
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.LinearGradientShaderData
 import androidx.compose.ui.graphics.MinecraftCanvas
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawArcCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawCircleCommand
@@ -19,10 +20,16 @@ import androidx.compose.ui.graphics.MinecraftCanvas.DrawShadowCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawVerticesCommand
 import androidx.compose.ui.graphics.PaintingStyle
+import androidx.compose.ui.graphics.RadialGradientShaderData
+import androidx.compose.ui.graphics.Shader
+import androidx.compose.ui.graphics.SweepGradientShaderData
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.VertexMode
 import moe.forpleuvoir.compose_minecraft.platform.render.GeometryTessellator.Sink
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sqrt
 
 /**
  * CPU 光栅化器(T.17):把 [MinecraftCanvas] 录制的绘制命令直接光栅化到 CPU
@@ -54,14 +61,30 @@ internal object GraphicsLayerRasterizer {
         for (cmd in canvas.commands()) {
             when (cmd) {
                 is DrawRectCommand -> {
-                    sink.clear()
-                    sink.quad(
-                        cmd.left, cmd.top,
-                        cmd.right, cmd.top,
-                        cmd.right, cmd.bottom,
-                        cmd.left, cmd.bottom,
-                    )
-                    fillShape(out, width, height, cmd.matrix, cmd.clip, sink, cmd.paint.color, cmd.paint.alpha)
+                    val paint = cmd.paint
+                    if (paint.shader != null) {
+                        // 渐变矩形必须走着色器顶点色三角化(与 GPU 回放一致);
+                        // 退化为矩形的 roundRect 内部会用 rectGrid 细分,
+                        // 避免径向渐变因只有 4 个角点而退化为纯色。
+                        tessellate(out, width, height, cmd) { s ->
+                            GeometryTessellator.roundRect(
+                                cmd.left, cmd.top, cmd.right, cmd.bottom,
+                                0f, 0f,
+                                fill = paint.style == PaintingStyle.Fill,
+                                strokeWidth = paint.strokeWidth,
+                                sink = s,
+                            )
+                        }
+                    } else {
+                        sink.clear()
+                        sink.quad(
+                            cmd.left, cmd.top,
+                            cmd.right, cmd.top,
+                            cmd.right, cmd.bottom,
+                            cmd.left, cmd.bottom,
+                        )
+                        fillShape(out, width, height, cmd.matrix, cmd.clip, sink, cmd.paint.color, cmd.paint.alpha)
+                    }
                 }
 
                 is DrawRoundRectCommand -> tessellate(out, width, height, cmd) { s ->
@@ -152,11 +175,22 @@ internal object GraphicsLayerRasterizer {
         val sink = Sink()
         tessellate(sink)
         val data = sink.toArray()
-        fillShapeTriangles(
-            out, width, height,
-            cmd.matrix, cmd.clip, data, sink.vertexCount,
-            cmd.paint!!.color.toArgbInt(), cmd.paint!!.alpha,
-        )
+        val paint = cmd.paint ?: return
+        val shader = paint.shader
+        if (shader != null) {
+            val vertexColors = gradientVertexColors(shader, data, sink.vertexCount, paint.alpha)
+            fillShapeTrianglesWithColors(
+                out, width, height,
+                cmd.matrix, cmd.clip, data, sink.vertexCount,
+                vertexColors,
+            )
+        } else {
+            fillShapeTriangles(
+                out, width, height,
+                cmd.matrix, cmd.clip, data, sink.vertexCount,
+                paint.color.toArgbInt(), paint.alpha,
+            )
+        }
     }
 
     private fun fillShape(
@@ -247,6 +281,253 @@ internal object GraphicsLayerRasterizer {
                 }
             }
         }
+    }
+
+    // ── 渐变着色器顶点色填充 ───────────────────────────────────────────────
+
+    private fun fillShapeTrianglesWithColors(
+        out: IntArray, width: Int, height: Int,
+        matrix: FloatArray, clip: Rect?,
+        data: FloatArray, vertexCount: Int,
+        vertexColors: IntArray,
+    ) {
+        if (vertexCount < 3) return
+        val m00 = matrix[0]
+        val m10 = matrix[1]
+        val m01 = matrix[4]
+        val m11 = matrix[5]
+        val m20 = matrix[12]
+        val m21 = matrix[13]
+
+        var i = 0
+        var vi = 0
+        val n = vertexCount / 3
+        repeat(n) {
+            val ax = data[i] * m00 + data[i + 1] * m01 + m20
+            val ay = data[i] * m10 + data[i + 1] * m11 + m21
+            val ac = data[i + 2]
+            val acol = vertexColors[vi]
+            val bx = data[i + 3] * m00 + data[i + 4] * m01 + m20
+            val by = data[i + 3] * m10 + data[i + 4] * m11 + m21
+            val bc = data[i + 5]
+            val bcol = vertexColors[vi + 1]
+            val cx = data[i + 6] * m00 + data[i + 7] * m01 + m20
+            val cy = data[i + 6] * m10 + data[i + 7] * m11 + m21
+            val cc = data[i + 8]
+            val ccol = vertexColors[vi + 2]
+            i += 9
+            vi += 3
+
+            val minX = max(0, min(ax, min(bx, cx)).toInt())
+            val maxX = min(width - 1, max(ax, max(bx, cx)).toInt())
+            val minY = max(0, min(ay, min(by, cy)).toInt())
+            val maxY = min(height - 1, max(ay, max(by, cy)).toInt())
+            if (minX > maxX || minY > maxY) return@repeat
+
+            val v0x = cx - ax
+            val v0y = cy - ay
+            val v1x = bx - ax
+            val v1y = by - ay
+            val dot00 = v0x * v0x + v0y * v0y
+            val dot01 = v0x * v1x + v0y * v1y
+            val dot11 = v1x * v1x + v1y * v1y
+            val denom = dot00 * dot11 - dot01 * dot01
+            if (denom == 0f) return@repeat
+            val invDenom = 1f / denom
+
+            val ar = acol shr 16 and 0xFF
+            val ag = acol shr 8 and 0xFF
+            val ab = acol and 0xFF
+            val aa = acol ushr 24 and 0xFF
+            val br = bcol shr 16 and 0xFF
+            val bg = bcol shr 8 and 0xFF
+            val bb = bcol and 0xFF
+            val ba = bcol ushr 24 and 0xFF
+            val cr = ccol shr 16 and 0xFF
+            val cg = ccol shr 8 and 0xFF
+            val cb = ccol and 0xFF
+            val ca = ccol ushr 24 and 0xFF
+
+            for (py in minY..maxY) {
+                val y = py + 0.5f
+                var idx = py * width + minX
+                for (px in minX..maxX) {
+                    val x = px + 0.5f
+                    val v2x = x - ax
+                    val v2y = y - ay
+                    val dot02 = v0x * v2x + v0y * v2y
+                    val dot12 = v1x * v2x + v1y * v2y
+                    val u = (dot11 * dot02 - dot01 * dot12) * invDenom
+                    val v = (dot00 * dot12 - dot01 * dot02) * invDenom
+                    if (u < 0f || v < 0f || u + v > 1f) {
+                        idx++
+                        continue
+                    }
+                    val w = 1f - u - v
+                    if (clip != null && (x < clip.left || x > clip.right || y < clip.top || y > clip.bottom)) {
+                        idx++
+                        continue
+                    }
+                    val cov = ac * w + bc * v + cc * u
+                    val a = (cov.coerceIn(0f, 1f) * 255f + 0.5f).toInt().coerceIn(0, 255)
+                    if (a == 0) {
+                        idx++
+                        continue
+                    }
+                    val r = (ar * w + br * v + cr * u).toInt().coerceIn(0, 255)
+                    val g = (ag * w + bg * v + cg * u).toInt().coerceIn(0, 255)
+                    val bl = (ab * w + bb * v + cb * u).toInt().coerceIn(0, 255)
+                    out[idx] = blend(out[idx], (a shl 24) or (r shl 16) or (g shl 8) or bl)
+                    idx++
+                }
+            }
+        }
+    }
+
+    private fun gradientVertexColors(
+        shader: Shader,
+        vertices: FloatArray,
+        vertexCount: Int,
+        alphaMul: Float,
+    ): IntArray {
+        val vc = vertices.size / 3
+        val colors = IntArray(vc)
+        when (shader) {
+            is LinearGradientShaderData -> {
+                var dx = shader.to.x - shader.from.x
+                var dy = shader.to.y - shader.from.y
+                var fromX = shader.from.x
+                var fromY = shader.from.y
+                var minX = Float.MAX_VALUE; var maxX = -Float.MAX_VALUE
+                var minY = Float.MAX_VALUE; var maxY = -Float.MAX_VALUE
+                var i = 0; while (i + 2 < vertices.size) {
+                    val vx = vertices[i]; val vy = vertices[i + 1]
+                    if (vx < minX) minX = vx; if (vx > maxX) maxX = vx
+                    if (vy < minY) minY = vy; if (vy > maxY) maxY = vy
+                    i += 3
+                }
+                val boxW = (maxX - minX).coerceAtLeast(1f)
+                val boxH = (maxY - minY).coerceAtLeast(1f)
+                val scaleThreshold = 4f
+                if (dx.isFinite() && kotlin.math.abs(dx) > boxW * scaleThreshold) { dx = boxW; fromX = minX }
+                if (dy.isFinite() && kotlin.math.abs(dy) > boxH * scaleThreshold) { dy = boxH; fromY = minY }
+                val dot = dx * dx + dy * dy
+                if (dot > 0f) {
+                    val invDot = 1f / dot
+                    var vi = 0; var i = 0
+                    while (i + 2 < vertices.size) {
+                        val vx = vertices[i]; val vy = vertices[i + 1]
+                        val t = ((vx - fromX) * dx + (vy - fromY) * dy) * invDot
+                        colors[vi] = sampleGradient(t, shader.colors, shader.colorStops, shader.tileMode, alphaMul)
+                        vi++; i += 3
+                    }
+                } else {
+                    colors.fill(colors.firstOrNull() ?: 0)
+                }
+            }
+            is RadialGradientShaderData -> {
+                var vi = 0
+                var i = 0
+                while (i + 2 < vertices.size) {
+                    val vx = vertices[i]
+                    val vy = vertices[i + 1]
+                    val dx = vx - shader.center.x
+                    val dy = vy - shader.center.y
+                    val t = sqrt(dx * dx + dy * dy) / shader.radius.coerceAtLeast(1e-6f)
+                    colors[vi] = sampleGradient(t, shader.colors, shader.colorStops, shader.tileMode, alphaMul)
+                    vi++
+                    i += 3
+                }
+            }
+            is SweepGradientShaderData -> {
+                var vi = 0
+                var i = 0
+                while (i + 2 < vertices.size) {
+                    val vx = vertices[i]
+                    val vy = vertices[i + 1]
+                    val dx = vx - shader.center.x
+                    val dy = vy - shader.center.y
+                    var t = kotlin.math.atan2(dy, dx) / (2.0f * kotlin.math.PI.toFloat()) + 0.5f
+                    if (t < 0f) t += 1f
+                    colors[vi] = sampleGradient(t, shader.colors, shader.colorStops, TileMode.Clamp, alphaMul)
+                    vi++
+                    i += 3
+                }
+            }
+            else -> {
+                val base = Color.White.toArgbInt(alphaMul)
+                colors.fill(base)
+            }
+        }
+        return colors
+    }
+
+    private fun sampleGradient(
+        t: Float,
+        colors: List<Color>,
+        stops: List<Float>?,
+        tileMode: TileMode,
+        alphaMul: Float,
+    ): Int {
+        val clampedT = when (tileMode) {
+            TileMode.Clamp -> t.coerceIn(0f, 1f)
+            TileMode.Repeated -> {
+                val ft = t - floor(t)
+                ft.coerceIn(0f, 1f)
+            }
+            TileMode.Mirror -> {
+                val ft = t - floor(t)
+                val mt = (ft * 2f).let { if (it > 1f) 2f - it else it }
+                mt.coerceIn(0f, 1f)
+            }
+            TileMode.Decal -> {
+                if (t < 0f || t > 1f) return 0x00000000
+                t
+            }
+            else -> t.coerceIn(0f, 1f)
+        }
+        val color = if (stops == null) {
+            if (colors.size == 1) return colors[0].toArgbInt(alphaMul)
+            val idx = (clampedT * (colors.size - 1)).toInt().coerceIn(0, colors.size - 2)
+            val localT = clampedT * (colors.size - 1) - idx
+            lerpColorARGB(colors[idx], colors[idx + 1], localT, alphaMul)
+        } else {
+            if (clampedT <= stops.first()) {
+                return colors.first().toArgbInt(alphaMul)
+            }
+            if (clampedT >= stops.last()) {
+                return colors.last().toArgbInt(alphaMul)
+            }
+            for (i in 0 until stops.size - 1) {
+                if (clampedT >= stops[i] && clampedT <= stops[i + 1]) {
+                    val range = stops[i + 1] - stops[i]
+                    val localT = if (range > 0f) (clampedT - stops[i]) / range else 0f
+                    return lerpColorARGB(colors[i], colors[i + 1], localT, alphaMul)
+                }
+            }
+            colors.last().toArgbInt(alphaMul)
+        }
+        return color
+    }
+
+    private fun lerpColorARGB(a: Color, b: Color, t: Float, alphaMul: Float): Int {
+        val clampedT = t.coerceIn(0f, 1f)
+        val r = (a.red + (b.red - a.red) * clampedT) * 255f
+        val g = (a.green + (b.green - a.green) * clampedT) * 255f
+        val bl = (a.blue + (b.blue - a.blue) * clampedT) * 255f
+        val al = (a.alpha + (b.alpha - a.alpha) * clampedT) * alphaMul * 255f
+        return ((al.toInt().coerceIn(0, 255) shl 24) or
+            (r.toInt().coerceIn(0, 255) shl 16) or
+            (g.toInt().coerceIn(0, 255) shl 8) or
+            bl.toInt().coerceIn(0, 255))
+    }
+
+    private fun Color.toArgbInt(alphaMul: Float): Int {
+        val a = (alpha * alphaMul * 255f + 0.5f).toInt().coerceIn(0, 255)
+        val r = (red * 255f + 0.5f).toInt().coerceIn(0, 255)
+        val g = (green * 255f + 0.5f).toInt().coerceIn(0, 255)
+        val b = (blue * 255f + 0.5f).toInt().coerceIn(0, 255)
+        return (a shl 24) or (r shl 16) or (g shl 8) or b
     }
 
     // ── 图片:逆矩阵采样 ─────────────────────────────────────────────────────

@@ -1224,6 +1224,54 @@ internal object GeometryTessellator {
     }
 
     /**
+     * 矩形网格细分:把矩形切成 cols×rows 个四边形(每个 2 三角形)。
+     *
+     * 用于非线性渐变(径向/扫描等)等需要内部采样点的填充 —— 只用 4 角顶点时,
+     * 顶点色线性插值无法还原内部渐变:若角点全部超出渐变半径被 clamp 到
+     * 边缘色,整块会退化为纯色;网格太粗则会出现肉眼可见的三角形棱面
+     * (径向/扫描看起来「乱七八糟」)。
+     *
+     * 自适应细分:小矩形按 [minCell] 细分保证平滑,大矩形按总单元数
+     * [maxCells] 自动放大单元避免三角形数量失控;单边行列再封顶 [maxAxis]。
+     */
+    fun rectGrid(
+        left: Float, top: Float, right: Float, bottom: Float,
+        sink: Sink,
+    ) {
+        val w = right - left
+        val h = bottom - top
+        if (w <= 0f || h <= 0f) return
+
+        val minCell = 4f
+        val maxCells = 4096
+        val maxAxis = 128
+
+        var cols = max(1, ceil(w / minCell).toInt())
+        var rows = max(1, ceil(h / minCell).toInt())
+        val cells = cols.toLong() * rows
+        if (cells > maxCells.toLong()) {
+            // 等比放大单元边长,使总单元数 ≈ maxCells
+            val factor = sqrt(cells.toDouble() / maxCells)
+            cols = max(1, ceil(cols / factor).toInt())
+            rows = max(1, ceil(rows / factor).toInt())
+        }
+        cols = cols.coerceAtMost(maxAxis)
+        rows = rows.coerceAtMost(maxAxis)
+
+        val stepX = w / cols
+        val stepY = h / rows
+        for (r in 0 until rows) {
+            val y0 = top + stepY * r
+            val y1 = if (r == rows - 1) bottom else y0 + stepY
+            for (c in 0 until cols) {
+                val x0 = left + stepX * c
+                val x1 = if (c == cols - 1) right else x0 + stepX
+                sink.quad(x0, y0, x1, y0, x1, y1, x0, y1)
+            }
+        }
+    }
+
+    /**
      * 圆角矩形(半径钳制到半宽/半高)。fill → 三环填充;
      * stroke → 轮廓带(圆角处自然由细分提供圆 join,带 AA)。
      */
@@ -1240,7 +1288,8 @@ internal object GeometryTessellator {
         if (rx <= 0f || ry <= 0f) {
             // 退化为矩形
             if (fill) {
-                sink.quad(left, top, right, top, right, bottom, left, bottom)
+                // 用网格而不是单 quad:让径向/扫描等非线性渐变有内部采样顶点
+                rectGrid(left, top, right, bottom, sink)
             } else {
                 strokeRing(floatArrayOf(left, top, right, top, right, bottom, left, bottom), true, strokeWidth, StrokeCap.Butt, sink)
             }

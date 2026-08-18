@@ -1,8 +1,11 @@
 package moe.forpleuvoir.compose_minecraft.platform.render
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.LinearGradientShaderData
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.MinecraftCanvas
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawArcCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawCircleCommand
@@ -19,7 +22,11 @@ import androidx.compose.ui.graphics.MinecraftCanvas.PaintSnapshot
 import androidx.compose.ui.graphics.NativeColorFilter
 import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.PointMode
+import androidx.compose.ui.graphics.RadialGradientShaderData
+import androidx.compose.ui.graphics.Shader
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.SweepGradientShaderData
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.VertexMode
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.navigation.ScreenRectangle
@@ -31,6 +38,7 @@ import net.minecraft.client.renderer.state.gui.GuiTextRenderState
 import net.minecraft.locale.Language
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toComponent
 import org.joml.Matrix3x2f
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -101,8 +109,8 @@ internal class MinecraftRenderContext {
                 // 实心四边形(最快路径);Stroke 走三角化描边带(GeometryTessellator.
                 // roundRect radius=0 退化为矩形描边)。原实现无条件 blit,导致
                 // border(1.dp, color) 的描边矩形被画成整块实心色块,覆盖内部内容。
-                is DrawRectCommand ->
-                    if (command.paint.style == PaintingStyle.Fill) {
+                is DrawRectCommand                         ->
+                    if (command.paint.style == PaintingStyle.Fill && command.paint.shader == null) {
                         sink.addElement(
                             blit(
                                 command.matrix, scissor,
@@ -112,20 +120,47 @@ internal class MinecraftRenderContext {
                         )
                     } else {
                         addTriangles(sink, command, scissor) { sink ->
-                            GeometryTessellator.roundRect(
-                                command.left, command.top, command.right, command.bottom,
-                                0f, 0f,
-                                fill = false,
-                                strokeWidth = command.paint.strokeWidth,
-                                sink = sink,
-                            )
+                            val shader = command.paint.shader
+                            if (shader is LinearGradientShaderData && command.paint.style == PaintingStyle.Fill) {
+                                val l = command.left;
+                                val t = command.top
+                                val r = command.right;
+                                val b = command.bottom
+                                val segs = (shader.colors.size - 1).coerceIn(1, 32)
+                                val gradDx = shader.to.x - shader.from.x
+                                val gradDy = shader.to.y - shader.from.y
+                                // 沿梯度主方向细分
+                                if (kotlin.math.abs(gradDx) >= kotlin.math.abs(gradDy)) {
+                                    for (i in 0 until segs) {
+                                        val x0 = l + (r - l) * i / segs
+                                        val x1 = l + (r - l) * (i + 1) / segs
+                                        sink.quad(x0, t, x1, t, x1, b, x0, b)
+                                    }
+                                } else {
+                                    for (i in 0 until segs) {
+                                        val y0 = t + (b - t) * i / segs
+                                        val y1 = t + (b - t) * (i + 1) / segs
+                                        sink.quad(l, y0, r, y0, r, y1, l, y1)
+                                    }
+                                }
+                            } else {
+                                GeometryTessellator.roundRect(
+                                    command.left, command.top, command.right, command.bottom,
+                                    0f, 0f,
+                                    fill = command.paint.style == PaintingStyle.Fill,
+                                    strokeWidth = command.paint.strokeWidth,
+                                    sink = sink,
+                                )
+                            }
                         }
                     }
-                is DrawRoundRectCommand -> {
+
+                is DrawRoundRectCommand                    -> {
                     // 圆角为 0(或小于 1px)时退化为矩形;带圆角走三角化。
                     // Stroke 样式一律走三角化(描边带),不能走实心 blit。
+                    // 渐变着色器存在时强制走三角化(顶点色插值),不能走实心 blit。
                     if (command.radiusX <= 1f && command.radiusY <= 1f &&
-                        command.paint.style == PaintingStyle.Fill
+                        command.paint.style == PaintingStyle.Fill && command.paint.shader == null
                     ) {
                         sink.addElement(
                             blit(
@@ -146,7 +181,8 @@ internal class MinecraftRenderContext {
                         }
                     }
                 }
-                is DrawOvalCommand -> addTriangles(sink, command, scissor) { sink ->
+
+                is DrawOvalCommand                         -> addTriangles(sink, command, scissor) { sink ->
                     GeometryTessellator.oval(
                         command.left, command.top, command.right, command.bottom,
                         fill = command.paint.style == PaintingStyle.Fill,
@@ -154,7 +190,8 @@ internal class MinecraftRenderContext {
                         sink = sink,
                     )
                 }
-                is DrawCircleCommand -> addTriangles(sink, command, scissor) { sink ->
+
+                is DrawCircleCommand                       -> addTriangles(sink, command, scissor) { sink ->
                     GeometryTessellator.circle(
                         command.centerX, command.centerY, command.radius,
                         fill = command.paint.style == PaintingStyle.Fill,
@@ -162,7 +199,8 @@ internal class MinecraftRenderContext {
                         sink = sink,
                     )
                 }
-                is DrawArcCommand -> addTriangles(sink, command, scissor) { sink ->
+
+                is DrawArcCommand                          -> addTriangles(sink, command, scissor) { sink ->
                     GeometryTessellator.arc(
                         command.left, command.top, command.right, command.bottom,
                         command.startAngle, command.sweepAngle, command.useCenter,
@@ -171,7 +209,8 @@ internal class MinecraftRenderContext {
                         sink = sink,
                     )
                 }
-                is DrawLineCommand -> addTriangles(sink, command, scissor) { sink ->
+
+                is DrawLineCommand                         -> addTriangles(sink, command, scissor) { sink ->
                     GeometryTessellator.line(
                         command.p1x, command.p1y, command.p2x, command.p2y,
                         command.paint.strokeWidth,
@@ -179,7 +218,8 @@ internal class MinecraftRenderContext {
                         sink = sink,
                     )
                 }
-                is DrawPathCommand -> addTriangles(sink, command, scissor) { sink ->
+
+                is DrawPathCommand                         -> addTriangles(sink, command, scissor) { sink ->
                     GeometryTessellator.path(
                         command.segments,
                         fill = command.paint.style == PaintingStyle.Fill,
@@ -188,7 +228,8 @@ internal class MinecraftRenderContext {
                         sink = sink,
                     )
                 }
-                is DrawPointsCommand -> addTriangles(sink, command, scissor) { sink ->
+
+                is DrawPointsCommand                       -> addTriangles(sink, command, scissor) { sink ->
                     GeometryTessellator.points(
                         command.pointMode, command.points,
                         command.paint.strokeWidth,
@@ -196,7 +237,8 @@ internal class MinecraftRenderContext {
                         sink = sink,
                     )
                 }
-                is DrawTextCommand -> sink.addText(text(command, scissor))
+
+                is DrawTextCommand                         -> sink.addText(text(command, scissor))
                 is MinecraftCanvas.DrawGradientRectCommand -> sink.addElement(
                     // T.14 阴影(渐变保底):MC 原生双色垂直渐变矩形(GUI pipeline,与 blit 同排序组,
                     // 阴影命令先记录先绘制,层级正确)
@@ -213,7 +255,8 @@ internal class MinecraftRenderContext {
                         scissor?.toScreenRectangle(),
                     )
                 )
-                is MinecraftCanvas.DrawShadowCommand ->
+
+                is MinecraftCanvas.DrawShadowCommand       ->
                     // T.14 阴影(GPU 距离场):CPU 三角化 + 每顶点距离场,
                     // gui_shadow shader 高斯模糊解析解生成软阴影(参照 Skia SkShadowUtils)
                     MinecraftShadowRenderer.renderShadow(
@@ -232,10 +275,12 @@ internal class MinecraftRenderContext {
                         spotColorArgb = command.spotColorArgb,
                         scissor = scissor?.toScreenRectangle(),
                     )
-                is DrawImageRectCommand -> sink.addElement(
+
+                is DrawImageRectCommand                    -> sink.addElement(
                     blitImage(command, scissor)
                 )
-                is MinecraftCanvas.DrawVerticesCommand -> addVertices(sink, command, scissor)
+
+                is MinecraftCanvas.DrawVerticesCommand     -> addVertices(sink, command, scissor)
             }
         }
     }
@@ -263,6 +308,7 @@ internal class MinecraftRenderContext {
         val colorArgb = paint.toArgb()
         var output = FloatArray(384)
         var count = 0
+
         /** T.23:DrawVerticesCommand 的逐顶点色(其余命令为 null) */
         var outColors3D: IntArray? = null
 
@@ -310,7 +356,7 @@ internal class MinecraftRenderContext {
         when (command) {
             // 平台适配点(T.33 修复):3D 路径同样按 style 分流 —— Fill 走实心 quad,
             // Stroke 走三角化描边带(与主路径一致,见 render() 内 DrawRectCommand)。
-            is DrawRectCommand ->
+            is DrawRectCommand                     ->
                 if (paint.style == PaintingStyle.Fill) {
                     quad(command.left, command.top, command.right, command.bottom)
                 } else {
@@ -324,7 +370,8 @@ internal class MinecraftRenderContext {
                         )
                     }
                 }
-            is DrawRoundRectCommand ->
+
+            is DrawRoundRectCommand                ->
                 if (command.radiusX <= 1f && command.radiusY <= 1f &&
                     paint.style == PaintingStyle.Fill
                 ) {
@@ -340,7 +387,8 @@ internal class MinecraftRenderContext {
                         )
                     }
                 }
-            is DrawOvalCommand -> tessellated { sink ->
+
+            is DrawOvalCommand                     -> tessellated { sink ->
                 GeometryTessellator.oval(
                     command.left, command.top, command.right, command.bottom,
                     fill = paint.style == PaintingStyle.Fill,
@@ -348,7 +396,8 @@ internal class MinecraftRenderContext {
                     sink = sink,
                 )
             }
-            is DrawCircleCommand -> tessellated { sink ->
+
+            is DrawCircleCommand                   -> tessellated { sink ->
                 GeometryTessellator.circle(
                     command.centerX, command.centerY, command.radius,
                     fill = paint.style == PaintingStyle.Fill,
@@ -356,7 +405,8 @@ internal class MinecraftRenderContext {
                     sink = sink,
                 )
             }
-            is DrawArcCommand -> tessellated { sink ->
+
+            is DrawArcCommand                      -> tessellated { sink ->
                 GeometryTessellator.arc(
                     command.left, command.top, command.right, command.bottom,
                     command.startAngle, command.sweepAngle, command.useCenter,
@@ -365,7 +415,8 @@ internal class MinecraftRenderContext {
                     sink = sink,
                 )
             }
-            is DrawLineCommand -> tessellated { sink ->
+
+            is DrawLineCommand                     -> tessellated { sink ->
                 GeometryTessellator.line(
                     command.p1x, command.p1y, command.p2x, command.p2y,
                     command.paint.strokeWidth,
@@ -373,7 +424,8 @@ internal class MinecraftRenderContext {
                     sink = sink,
                 )
             }
-            is DrawPathCommand -> tessellated { sink ->
+
+            is DrawPathCommand                     -> tessellated { sink ->
                 GeometryTessellator.path(
                     command.segments,
                     fill = paint.style == PaintingStyle.Fill,
@@ -382,7 +434,8 @@ internal class MinecraftRenderContext {
                     sink = sink,
                 )
             }
-            is DrawPointsCommand -> tessellated { sink ->
+
+            is DrawPointsCommand                   -> tessellated { sink ->
                 GeometryTessellator.points(
                     command.pointMode, command.points,
                     command.paint.strokeWidth,
@@ -390,6 +443,7 @@ internal class MinecraftRenderContext {
                     sink = sink,
                 )
             }
+
             is MinecraftCanvas.DrawVerticesCommand -> {
                 // T.23:顶点网格 3D 透视 —— 逐顶点 map3D + 逐顶点色(alpha + colorFilter)
                 val vc = command.positions.size / 2
@@ -412,34 +466,39 @@ internal class MinecraftRenderContext {
                         outColors[count / 3 + 2] = applyColorFilter(scaleAlpha(command.colors[ci], alphaMul), paint.colorFilter)
                         count += 9
                     }
+
                     val idx = command.indices
                     if (idx.isNotEmpty()) {
                         when (command.vertexMode) {
-                            VertexMode.Triangles -> {
+                            VertexMode.Triangles     -> {
                                 var i = 0
                                 while (i + 2 < idx.size) {
                                     emitV(idx[i].toInt(), idx[i + 1].toInt(), idx[i + 2].toInt()); i += 3
                                 }
                             }
+
                             VertexMode.TriangleStrip -> {
                                 for (i in 0 until idx.size - 2) emitV(idx[i].toInt(), idx[i + 1].toInt(), idx[i + 2].toInt())
                             }
-                            VertexMode.TriangleFan -> {
+
+                            VertexMode.TriangleFan   -> {
                                 for (i in 1 until idx.size - 1) emitV(idx[0].toInt(), idx[i].toInt(), idx[i + 1].toInt())
                             }
                         }
                     } else {
                         when (command.vertexMode) {
-                            VertexMode.Triangles -> {
+                            VertexMode.Triangles     -> {
                                 var i = 0
                                 while (i + 2 < vc) {
                                     emitV(i, i + 1, i + 2); i += 3
                                 }
                             }
+
                             VertexMode.TriangleStrip -> {
                                 for (i in 0 until vc - 2) emitV(i, i + 1, i + 2)
                             }
-                            VertexMode.TriangleFan -> {
+
+                            VertexMode.TriangleFan   -> {
                                 for (i in 1 until vc - 1) emitV(0, i, i + 1)
                             }
                         }
@@ -447,7 +506,8 @@ internal class MinecraftRenderContext {
                     outColors3D = outColors
                 }
             }
-            else -> return // 文本/阴影/渐变在记录端已降级为 2D 近似,不会到这里
+
+            else                                   -> return // 文本/阴影/渐变在记录端已降级为 2D 近似,不会到这里
         }
 
         if (count >= 9) {
@@ -502,7 +562,6 @@ internal class MinecraftRenderContext {
         tessellate: (GeometryTessellator.Sink) -> Unit,
     ) {
         val paint = command.paint ?: return
-        // T.24:像素场景(1:1),AA 距离不再乘 guiScale
         val aaScale = matrixScale(command.matrix)
         val key = geometryFingerprint(command, paint, aaScale)
         var vertices = triangleCache[key]
@@ -517,6 +576,10 @@ internal class MinecraftRenderContext {
         }
         MinecraftGuiTriangles.ensureCompiled()
         BlendPipelines.ensureCompiled()
+        val shader = paint.shader
+        val vertexColors = if (shader != null) {
+            gradientVertexColors(shader, vertices, paint.alpha, paint.colorFilter)
+        } else null
         sink.addElement(
             GuiTriangleRenderState(
                 pose = command.matrix.toMatrix3x2f(),
@@ -525,6 +588,7 @@ internal class MinecraftRenderContext {
                 vertices = vertices,
                 stroke = paint.style == PaintingStyle.Stroke,
                 blendMode = paint.blendMode,
+                vertexColors = vertexColors,
             )
         )
     }
@@ -574,34 +638,39 @@ internal class MinecraftRenderContext {
             outColors[count / 3 + 2] = vertColors[ci]
             count += 9
         }
+
         val idx = command.indices
         if (idx.isNotEmpty()) {
             when (command.vertexMode) {
-                VertexMode.Triangles -> {
+                VertexMode.Triangles     -> {
                     var i = 0
                     while (i + 2 < idx.size) {
                         emit(idx[i].toInt(), idx[i + 1].toInt(), idx[i + 2].toInt()); i += 3
                     }
                 }
+
                 VertexMode.TriangleStrip -> {
                     for (i in 0 until idx.size - 2) emit(idx[i].toInt(), idx[i + 1].toInt(), idx[i + 2].toInt())
                 }
-                VertexMode.TriangleFan -> {
+
+                VertexMode.TriangleFan   -> {
                     for (i in 1 until idx.size - 1) emit(idx[0].toInt(), idx[i].toInt(), idx[i + 1].toInt())
                 }
             }
         } else {
             when (command.vertexMode) {
-                VertexMode.Triangles -> {
+                VertexMode.Triangles     -> {
                     var i = 0
                     while (i + 2 < vc) {
                         emit(i, i + 1, i + 2); i += 3
                     }
                 }
+
                 VertexMode.TriangleStrip -> {
                     for (i in 0 until vc - 2) emit(i, i + 1, i + 2)
                 }
-                VertexMode.TriangleFan -> {
+
+                VertexMode.TriangleFan   -> {
                     for (i in 1 until vc - 1) emit(0, i, i + 1)
                 }
             }
@@ -640,41 +709,60 @@ internal class MinecraftRenderContext {
             h1 = h1 * 31 + v.toRawBits()
             h2 = h2 * 31 + (h1 ushr 1)
         }
+
         fun mix(i: Int) {
             h1 = h1 * 31 + i
             h2 = h2 * 31 + (h1 ushr 1)
         }
+
         fun mixB(b: Boolean) = mix(if (b) 1 else 0)
         mix(aaScale)
         mix(if (paint.style == PaintingStyle.Fill) 0 else 1)
         mix(paint.strokeWidth)
         mix(
             when (paint.strokeCap) {
-                StrokeCap.Butt -> 0
-                StrokeCap.Round -> 1
+                StrokeCap.Butt   -> 0
+                StrokeCap.Round  -> 1
                 StrokeCap.Square -> 2
-                else -> 0
+                else             -> 0
+            }
+        )
+        // 渐变类型影响 DrawRectCommand 的三角化策略(Linear 走条带细分,
+        // Radial/Sweep 走网格细分),必须进缓存指纹,否则同一矩形换 brush
+        // 时会复用错误的顶点几何 → 渲染「乱七八糟」。
+        mix(
+            when (paint.shader) {
+                null -> 0
+                is LinearGradientShaderData  -> 1
+                is RadialGradientShaderData  -> 2
+                is SweepGradientShaderData   -> 3
+                else                         -> 4
             }
         )
         when (command) {
-            is DrawCircleCommand -> {
+            is DrawCircleCommand    -> {
                 mix(1); mix(command.centerX); mix(command.centerY); mix(command.radius)
             }
-            is DrawOvalCommand -> {
+
+            is DrawOvalCommand      -> {
                 mix(2); mix(command.left); mix(command.top); mix(command.right); mix(command.bottom)
             }
-            is DrawArcCommand -> {
+
+            is DrawArcCommand       -> {
                 mix(3); mix(command.left); mix(command.top); mix(command.right); mix(command.bottom)
                 mix(command.startAngle); mix(command.sweepAngle); mixB(command.useCenter)
             }
+
             is DrawRoundRectCommand -> {
                 mix(4); mix(command.left); mix(command.top); mix(command.right); mix(command.bottom)
                 mix(command.radiusX); mix(command.radiusY)
             }
-            is DrawLineCommand -> {
+
+            is DrawLineCommand      -> {
                 mix(5); mix(command.p1x); mix(command.p1y); mix(command.p2x); mix(command.p2y)
             }
-            is DrawPathCommand -> {
+
+            is DrawPathCommand      -> {
                 mix(6)
                 for (seg in command.segments) {
                     mix(seg.type.ordinal)
@@ -682,19 +770,27 @@ internal class MinecraftRenderContext {
                     for (v in seg.points) mix(v)
                 }
             }
-            is DrawPointsCommand -> {
+
+            is DrawPointsCommand    -> {
                 mix(7)
                 mix(
                     when (command.pointMode) {
-                        PointMode.Points -> 0
-                        PointMode.Lines -> 1
+                        PointMode.Points  -> 0
+                        PointMode.Lines   -> 1
                         PointMode.Polygon -> 2
-                        else -> 0
+                        else              -> 0
                     }
                 )
-                for (p in command.points) { mix(p.x); mix(p.y) }
+                for (p in command.points) {
+                    mix(p.x); mix(p.y)
+                }
             }
-            else -> return 0L // 不缓存(非三角化命令)
+
+            is DrawRectCommand      -> {
+                mix(8); mix(command.left); mix(command.top); mix(command.right); mix(command.bottom)
+            }
+
+            else                    -> return 0L // 不缓存(非三角化命令)
         }
         return (h1 shl 1) xor h2
     }
@@ -721,11 +817,18 @@ internal class MinecraftRenderContext {
      */
     private fun text(command: DrawTextCommand, scissor: Rect?): GuiTextRenderState {
         val font = Minecraft.getInstance().font
-        // 平台适配点:文本颜色 alpha 通道承载图层级透明度(样式色无 alpha 概念,
-        // TextColor.value 为 0xRRGGBB)。MC 字形颜色按 0xAARRGGBB 位模式消费。
-        val baseColor = command.style.color?.value?.or(0xFF000000.toInt()) ?: 0xFFFFFFFF.toInt()
         val alphaByte = (command.alpha * 255f).roundToInt().coerceIn(0, 255)
-        val color = (baseColor and 0x00FFFFFF) or (alphaByte shl 24)
+        val color = if (command.shader != null) {
+            // 渐变文本:以文本位置中心采样渐变颜色
+            val cx = command.x + command.text.length * 4f // 粗略居中
+            val cy = command.y + 4f
+            val t = gradientTAt(cx, cy, command.shader)
+            val argb = sampleGradient(t, command.shader, command.alpha)
+            argb
+        } else {
+            val baseColor = command.style.color?.value?.or(0xFF000000.toInt()) ?: 0xFFFFFFFF.toInt()
+            (baseColor and 0x00FFFFFF) or (alphaByte shl 24)
+        }
         return GuiTextRenderState(
             font,
             Language.getInstance().getVisualOrder(command.style.toComponent(command.text)),
@@ -740,6 +843,46 @@ internal class MinecraftRenderContext {
         )
     }
 
+    /** 取位置 (x, y) 处的渐变 t 值 */
+    private fun gradientTAt(x: Float, y: Float, shader: Shader): Float {
+        return when (shader) {
+            is LinearGradientShaderData -> {
+                val dx = shader.to.x - shader.from.x
+                val dy = shader.to.y - shader.from.y
+                val dot = dx * dx + dy * dy
+                if (dot > 0f) {
+                    ((x - shader.from.x) * dx + (y - shader.from.y) * dy) / dot
+                } else 0f
+            }
+
+            is RadialGradientShaderData -> {
+                val dx = x - shader.center.x
+                val dy = y - shader.center.y
+                sqrt(dx * dx + dy * dy) / shader.radius.coerceAtLeast(1e-6f)
+            }
+
+            is SweepGradientShaderData  -> {
+                val dx = x - shader.center.x
+                val dy = y - shader.center.y
+                var t = kotlin.math.atan2(dy, dx) / (2.0f * kotlin.math.PI.toFloat()) + 0.5f
+                if (t < 0f) t += 1f
+                t
+            }
+
+            else                        -> 0f
+        }
+    }
+
+    /** 采样渐变,返回 0xAARRGGBB(alpha 已含 [alphaMul]) */
+    private fun sampleGradient(t: Float, shader: Shader, alphaMul: Float): Int {
+        return when (shader) {
+            is LinearGradientShaderData -> sampleGradient(t, shader.colors, shader.colorStops, shader.tileMode, alphaMul, null)
+            is RadialGradientShaderData -> sampleGradient(t, shader.colors, shader.colorStops, shader.tileMode, alphaMul, null)
+            is SweepGradientShaderData  -> sampleGradient(t, shader.colors, shader.colorStops, TileMode.Clamp, alphaMul, null)
+            else                        -> Color.White.toArgb(alphaMul)
+        }
+    }
+
     /**
      * 把一条矩形绘制转成 [BlitRenderState]。
      *
@@ -748,6 +891,197 @@ internal class MinecraftRenderContext {
      * - 颜色:Compose Color → 0xAARRGGBB(alpha 叠加 Paint.alpha);
      * - scissor:命令记录时的裁剪矩形(记录时已换算为屏幕空间)。
      */
+    // ── 渐变着色器顶点色计算 ───────────────────────────────────────────────────
+
+    /**
+     * 计算三角化结果中每个顶点的渐变着色器颜色。
+     * 顶点坐标是局部坐标(pose 变换前),渐变定义在同一空间。
+     * 返回 [vertexColors] 数组(每顶点 0xAARRGGBB),顶点数 = vertices.size / 3。
+     */
+    private fun gradientVertexColors(
+        shader: Shader,
+        vertices: FloatArray,
+        alphaMul: Float,
+        colorFilter: NativeColorFilter?,
+    ): IntArray {
+        val vc = vertices.size / 3
+        val colors = IntArray(vc)
+        when (shader) {
+            is LinearGradientShaderData -> {
+                var dx = shader.to.x - shader.from.x
+                var dy = shader.to.y - shader.from.y
+                var fromX = shader.from.x
+                var fromY = shader.from.y
+                var minX = Float.MAX_VALUE;
+                var maxX = -Float.MAX_VALUE
+                var minY = Float.MAX_VALUE;
+                var maxY = -Float.MAX_VALUE
+                var i = 0; while (i + 2 < vertices.size) {
+                    val vx = vertices[i];
+                    val vy = vertices[i + 1]
+                    if (vx < minX) minX = vx; if (vx > maxX) maxX = vx
+                    if (vy < minY) minY = vy; if (vy > maxY) maxY = vy
+                    i += 3
+                }
+                val boxW = (maxX - minX).coerceAtLeast(1f)
+                val boxH = (maxY - minY).coerceAtLeast(1f)
+                val scaleThreshold = 4f
+                if (dx.isFinite() && kotlin.math.abs(dx) > boxW * scaleThreshold) {
+                    dx = boxW; fromX = minX
+                }
+                if (dy.isFinite() && kotlin.math.abs(dy) > boxH * scaleThreshold) {
+                    dy = boxH; fromY = minY
+                }
+                val dot = dx * dx + dy * dy
+                if (dot > 0f) {
+                    val invDot = 1f / dot
+                    for (i in 0 until vc) {
+                        val vx = vertices[i * 3];
+                        val vy = vertices[i * 3 + 1]
+                        val t = ((vx - fromX) * dx + (vy - fromY) * dy) * invDot
+                        colors[i] = sampleGradient(t, shader.colors, shader.colorStops, shader.tileMode, alphaMul, colorFilter)
+                    }
+                } else {
+                    val base = colorToArgb(shader.colors.first(), alphaMul, colorFilter)
+                    colors.fill(base)
+                }
+            }
+
+            is RadialGradientShaderData -> {
+                for (i in 0 until vc) {
+                    val vx = vertices[i * 3];
+                    val vy = vertices[i * 3 + 1]
+                    val dx = vx - shader.center.x
+                    val dy = vy - shader.center.y
+                    val t = sqrt(dx * dx + dy * dy) / shader.radius.coerceAtLeast(1e-6f)
+                    colors[i] = sampleGradient(t, shader.colors, shader.colorStops, shader.tileMode, alphaMul, colorFilter)
+                }
+            }
+
+            is SweepGradientShaderData  -> {
+                for (i in 0 until vc) {
+                    val vx = vertices[i * 3];
+                    val vy = vertices[i * 3 + 1]
+                    val dx = vx - shader.center.x
+                    val dy = vy - shader.center.y
+                    var t = kotlin.math.atan2(dy, dx) / (2.0f * kotlin.math.PI.toFloat()) + 0.5f
+                    if (t < 0f) t += 1f
+                    colors[i] = sampleGradient(t, shader.colors, shader.colorStops, TileMode.Clamp, alphaMul, colorFilter)
+                }
+            }
+
+            else                        -> {
+                val base = paintColorArgb(shader, alphaMul, colorFilter)
+                colors.fill(base)
+            }
+        }
+        return colors
+    }
+
+    /** 梯度的 fallback 纯色 */
+    private fun paintColorArgb(
+        shader: Shader,
+        alphaMul: Float,
+        colorFilter: NativeColorFilter?,
+    ): Int = applyColorFilter(
+        Color.White.toArgb(alphaMul),
+        colorFilter,
+    )
+
+    /**
+     * 采样渐变在位置 t(0..1) 处的颜色,经 alphaMul + colorFilter 后返回 0xAARRGGBB。
+     */
+    private fun sampleGradient(
+        t: Float,
+        colors: List<Color>,
+        stops: List<Float>?,
+        tileMode: TileMode,
+        alphaMul: Float,
+        colorFilter: NativeColorFilter?,
+    ): Int {
+        val clampedT = when (tileMode) {
+            TileMode.Clamp    -> t.coerceIn(0f, 1f)
+            TileMode.Repeated -> {
+                val ft = t - floor(t)
+                ft.coerceIn(0f, 1f)
+            }
+
+            TileMode.Mirror   -> {
+                val ft = t - floor(t)
+                val mt = (ft * 2f).let { if (it > 1f) 2f - it else it }
+                mt.coerceIn(0f, 1f)
+            }
+
+            TileMode.Decal    -> {
+                if (t < 0f || t > 1f) return 0x00000000
+                t
+            }
+
+            else              -> t.coerceIn(0f, 1f)
+        }
+        return when {
+            stops == null             -> {
+                if (colors.size == 1) return colorToArgb(colors[0], alphaMul, colorFilter)
+                val idx = (clampedT * (colors.size - 1)).toInt().coerceIn(0, colors.size - 2)
+                val localT = clampedT * (colors.size - 1) - idx
+                colorToArgb(lerpColor(colors[idx], colors[idx + 1], localT), alphaMul, colorFilter)
+            }
+
+            clampedT <= stops.first() -> colorToArgb(colors.first(), alphaMul, colorFilter)
+            clampedT >= stops.last()  -> colorToArgb(colors.last(), alphaMul, colorFilter)
+            else                      -> {
+                var result = colors.last()
+                for (i in 0 until stops.size - 1) {
+                    if (clampedT >= stops[i] && clampedT <= stops[i + 1]) {
+                        val range = stops[i + 1] - stops[i]
+                        val localT = if (range > 0f) (clampedT - stops[i]) / range else 0f
+                        result = lerpColor(colors[i], colors[i + 1], localT)
+                        break
+                    }
+                }
+                colorToArgb(result, alphaMul, colorFilter)
+            }
+        }
+    }
+
+    private fun lerpColor(a: Color, b: Color, t: Float): Color {
+        val ct = t.coerceIn(0f, 1f)
+
+        // HSV 空间插值:先转 HSV,插 H/S/V,再转回 RGB
+        fun Color.toHsv(): FloatArray {
+            val r = red;
+            val g = green;
+            val b = blue
+            val mx = maxOf(r, g, b);
+            val mn = minOf(r, g, b)
+            val v = mx;
+            val s = if (mx > 0f) (mx - mn) / mx else 0f
+            val h = when {
+                mx == mn -> 0f
+                mx == r  -> ((g - b) / (mx - mn) * 60f + 360f) % 360f
+                mx == g  -> (b - r) / (mx - mn) * 60f + 120f
+                else     -> (r - g) / (mx - mn) * 60f + 240f
+            }
+            return floatArrayOf(h, s, v)
+        }
+
+        val ha = a.toHsv();
+        val hb = b.toHsv()
+        var dh = hb[0] - ha[0]
+        // 色相环绕:取最短路径
+        if (dh > 180f) dh -= 360f
+        else if (dh < -180f) dh += 360f
+        var h = (ha[0] + dh * ct) % 360f
+        if (h < 0f) h += 360f
+        val s = ha[1] + (hb[1] - ha[1]) * ct
+        val v = ha[2] + (hb[2] - ha[2]) * ct
+        return Color.hsv(h, s.coerceIn(0f, 1f), v.coerceIn(0f, 1f))
+    }
+
+    private fun colorToArgb(color: Color, alphaMul: Float, colorFilter: NativeColorFilter?): Int {
+        return applyColorFilter(color.toArgb(alphaMul), colorFilter)
+    }
+
     private fun blit(
         matrix: FloatArray,
         clip: Rect?,
@@ -844,9 +1178,9 @@ internal class MinecraftRenderContext {
     private fun Color.toArgb(alphaMultiplier: Float): Int {
         val a = (alpha * alphaMultiplier).coerceIn(0f, 1f)
         return ((a * 255f).roundToInt() shl 24) or
-            ((red * 255f).roundToInt() shl 16) or
-            ((green * 255f).roundToInt() shl 8) or
-            (blue * 255f).roundToInt()
+                ((red * 255f).roundToInt() shl 16) or
+                ((green * 255f).roundToInt() shl 8) or
+                (blue * 255f).roundToInt()
     }
 
     /**
@@ -889,7 +1223,7 @@ internal class MinecraftRenderContext {
                 val da = (argb ushr 24) and 0xFF
                 return when (filter.blendMode) {
                     // SrcOver:出 = src×sa + dst×(1-sa)(draw 级近似,无背景知识)
-                    BlendMode.SrcOver -> {
+                    BlendMode.SrcOver  -> {
                         val ia = 255 - sa
                         val r = (sr * sa + dr * ia) / 255
                         val g = (sg * sa + dg * ia) / 255
@@ -904,7 +1238,7 @@ internal class MinecraftRenderContext {
                         (da shl 24) or (r shl 16) or (g shl 8) or b
                     }
                     // 其他 blendMode 的 draw 级近似:SrcIn 之外回退到 tint 色 + 源 alpha
-                    else -> (da shl 24) or (sr shl 16) or (sg shl 8) or sb
+                    else               -> (da shl 24) or (sr shl 16) or (sg shl 8) or sb
                 }
             }
             // LightingColorFilter:out = src × multiply + add × 255
@@ -916,9 +1250,9 @@ internal class MinecraftRenderContext {
             fun mix(v: Int, mul: Float, aoff: Float): Int =
                 (v * mul + aoff * 255f).roundToInt().coerceIn(0, 255)
             return (mix(a, c.alpha, add?.alpha ?: 0f) shl 24) or
-                (mix(r, c.red, add?.red ?: 0f) shl 16) or
-                (mix(g, c.green, add?.green ?: 0f) shl 8) or
-                mix(b, c.blue, add?.blue ?: 0f)
+                    (mix(r, c.red, add?.red ?: 0f) shl 16) or
+                    (mix(g, c.green, add?.green ?: 0f) shl 8) or
+                    mix(b, c.blue, add?.blue ?: 0f)
         }
         val m = filter.colorMatrix
         if (m != null) {
