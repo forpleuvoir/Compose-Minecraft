@@ -67,11 +67,13 @@ import androidx.compose.ui.unit.dp
  *
  * Example usage:
  */
+@Suppress("DEPRECATION") // 函数体调用已弃用的 5 参重载(本文件内自引用,见弃用说明)
 @Deprecated(
-    "Replace with shadow which accepts ambientColor and spotColor parameters",
+    "Replace with platform Modifier.shadow (moe.forpleuvoir.compose_minecraft.platform.render.shadow) " +
+        "which accepts ambientColor and spotColor parameters and supports LocalShadowLight",
     ReplaceWith(
         "Modifier.shadow(elevation, shape, clip, DefaultShadowColor, DefaultShadowColor)",
-        "androidx.compose.ui.draw",
+        "moe.forpleuvoir.compose_minecraft.platform.render.shadow",
     ),
     DeprecationLevel.HIDDEN,
 )
@@ -105,8 +107,24 @@ fun Modifier.shadow(
  * @sample androidx.compose.ui.samples.ShadowSample
  * @see graphicsLayer
  *
+ * 平台适配点(2025-08):本 API 在本平台标注**弃用**,业务请使用平台扩展
+ * `moe.forpleuvoir.compose_minecraft.platform.render.shadow`(`platform/render/ShadowLight.kt`)
+ * —— 能力与之完全相同(同一 GraphicsLayer 属性 + 同一 GPU 距离场渲染管线),并额外支持
+ * `LocalShadowLight` 光源方向配置。本 API 保留可用、不再演进。替换后请同步更新 import
+ * 为 `moe.forpleuvoir.compose_minecraft.platform.render.shadow`(两扩展同名,不可同时 import)。
+ *
  * Example usage:
  */
+@Deprecated(
+    message = "请使用平台扩展 Modifier.shadow(moe.forpleuvoir.compose_minecraft.platform.render.shadow):" +
+        "官方 GraphicsLayer 阴影在本平台由 ComposeGuiRenderer 渲染(参数语义与 Skia SkShadowUtils 对齐)," +
+        "平台扩展额外支持 LocalShadowLight 光源方向配置;本 API 保留兼容、不再演进。",
+    replaceWith = ReplaceWith(
+        "Modifier.shadow(elevation, shape, clip, ambientColor, spotColor)",
+        imports = ["moe.forpleuvoir.compose_minecraft.platform.render.shadow"],
+    ),
+    level = DeprecationLevel.WARNING,
+)
 @Stable
 fun Modifier.shadow(
     elevation: Dp,

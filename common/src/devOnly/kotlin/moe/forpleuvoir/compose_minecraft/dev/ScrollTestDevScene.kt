@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 import androidx.compose.foundation.text.BasicText
+import moe.forpleuvoir.compose_minecraft.platform.render.shadow
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
@@ -58,19 +60,21 @@ fun ScrollTestDevScene() {
 
             Column(
                 Modifier
-                    .padding(top = 8.dp)
                     .fillMaxWidth()
-                    .height(240.dp)
+                    .fillMaxHeight()
                     .background(Color(0xFF263238))
+                    .padding(8.dp)
                     .verticalScroll(scrollState),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 repeat(40) { index ->
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .height(22.dp)
-                            .background(if (index % 2 == 0) Color(0xFF37474F) else Color(0xFF2F3E46), shape = RoundedCornerShape(12.dp)),
+                            .padding(4.dp)
+                            .shadow(2.dp, RoundedCornerShape(12.dp))
+                            .background(if (index % 2 == 0) Color(0xFF37474F) else Color(0xFF2F3E46), shape = RoundedCornerShape(12.dp))
+                            .padding(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         BasicText(
