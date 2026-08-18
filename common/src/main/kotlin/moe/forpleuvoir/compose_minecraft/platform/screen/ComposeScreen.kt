@@ -144,6 +144,9 @@ class ComposeScreen(
                 }
             }
         }
+        // T.38:vanillaDraw 帧态由 renderFrame 内部驱动(1:1 绘制桥经
+        // GuiCommandSink 注入本屏收集器,不依赖本参数 —— 本参数仍供 requestCursor
+        // 等原版通道使用,见下方 I9 光标块)。
         composeScene?.renderFrame()
         // 复述系统:语义变化(Compose 内部焦点迁移)补触发原版朗读。extractRenderState
         // 帧内调用是安全的(不在语义快照提交期,不会递归);triggerImmediateNarration

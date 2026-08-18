@@ -134,6 +134,18 @@ fun MinecraftDevSceneContent() {
             )
 
             DevMenuButton(
+                title = "原版绘制修饰符测试 (vanillaDraw)",
+                subtitle = "DrawScope 内直调原版 GuiGraphicsExtractor:fill/text/scissor,坐标换算与层级",
+                onClick = { ComposeScreen.open { VanillaDrawDevScene() } },
+            )
+
+            DevMenuButton(
+                title = "vanillaDraw 遮挡/弹层测试 (Layer Occlusion)",
+                subtitle = "vanilla 与 Compose 互相遮盖矩阵 + Popup/Dialog 弹层内 vanillaDraw + 滚动跟随",
+                onClick = { ComposeScreen.open { VanillaDrawLayerDevScene() } },
+            )
+
+            DevMenuButton(
                 title = "父屏幕能力测试 (ParentScreen)",
                 subtitle = "关闭时返回父屏(dev 菜单);渲染父屏开关(半透明背景透出 dev 菜单)",
                 onClick = {
