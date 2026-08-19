@@ -12,17 +12,22 @@ import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.client.gui.render.TextureSetup
 import net.minecraft.client.renderer.Projection
 import net.minecraft.client.renderer.ProjectionMatrixBuffer
+import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.client.renderer.StagedVertexBuffer
+import net.minecraft.client.renderer.item.TrackingItemStackRenderState
 import net.minecraft.client.renderer.state.WindowRenderState
 import net.minecraft.client.renderer.state.gui.GlyphRenderState
 import net.minecraft.client.renderer.state.gui.GuiElementRenderState
+import net.minecraft.client.renderer.state.gui.GuiItemRenderState
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState
+import net.minecraft.client.renderer.state.gui.pip.OversizedItemRenderState
+import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState
+import org.joml.Matrix3x2f
 import org.joml.Matrix4f
-import java.util.ArrayList
-import java.util.Optional
-import java.util.OptionalDouble
+import java.util.*
 import kotlin.math.max
 import kotlin.math.min
+
 
 /**
  * Compose 命令收集器:渲染上下文只向 sink 追加渲染状态,不接触 MC 的 [net.minecraft.client.renderer.state.gui.GuiRenderState]。
@@ -33,6 +38,20 @@ interface GuiCommandSink {
     fun addElement(element: GuiElementRenderState)
 
     fun addText(text: GuiTextRenderState)
+
+    /**
+     * 追加一个物品渲染状态(T.37):与 [GuiRenderState.addItem] 对齐 ——
+     * 由渲染器在 prepare 阶段统一经 [GuiItemAtlas] 烘焙后转为 blit 提交。
+     * 默认空实现(不支持物品的 sink 忽略)。
+     */
+    fun addItem(item: ItemRenderState) = Unit
+
+    /**
+     * 追加一个画中画渲染状态(T.37,原版 [GuiRenderState.addPicturesInPictureState]):
+     * 实体预览(GuiEntityRenderState)、oversized 物品等 PIP 内容。
+     * 默认空实现(不支持 PIP 的 sink 忽略)。
+     */
+    fun addPicturesInPictureState(state: PictureInPictureRenderState) = Unit
 }
 
 /**
@@ -64,17 +83,21 @@ interface GuiCommandSink {
 class ComposeGuiRenderer : GuiCommandSink {
 
     /**
-     * 本帧收集的 GUI 命令(**按记录顺序**,元素与文本交错)。
-     *
-     * 顺序即 Compose z 序:文本与几何必须保持交错 —— 若把文本单独收集、
-     * 提交时批量挪到末尾,会破坏图层语义(如 Dialog scrim 盖住主场景文本,
-     * 文本却被挪到 scrim 之上"穿透"遮罩)。因此 addElement/addText 写入
-     * 同一个有序列表,prepare 时按序处理:元素建 mesh,文本即时转 glyph 建 mesh。
+     * 本帧收集的 GUI 命令(**按记录顺序交错**)—— 保持 Compose z 序:
+     * 元素/文本/物品/画中画全部交错记录,prepare 时按记录顺序逐条处理,
+     * 不做任何分列批量渲染(否则会穿透上方元素,如 Dialog scrim)。
      */
     private val items = ArrayList<Item>()
 
-    /** 单个有序命令:元素与文本二选一(不可同时为 null) */
-    private class Item(val element: GuiElementRenderState?, val text: GuiTextRenderState?)
+    /** 单个有序命令:元素/文本/物品/画中画四选一 */
+    private class Item(
+        val element: GuiElementRenderState? = null,
+        val text: GuiTextRenderState? = null,
+        val itemState: ItemRenderState? = null,
+        val pipState: PictureInPictureRenderState? = null,
+    )
+
+    /** 画中画状态(实体预览等);本版先收集,PIP renderer 机制待接入 */
 
     /**
      * T.25:吸收另一收集器的命令到**本收集器末尾**(元素顺序在自身之前,用于
@@ -101,14 +124,35 @@ class ComposeGuiRenderer : GuiCommandSink {
     private var previousTextureSetup: TextureSetup? = null
     private var previousDraw: StagedVertexBuffer.Draw? = null
 
+    /**
+     * 物品离屏(PIP)渲染器缓存:按稳定 key([ItemRenderState.identityKey],如 Item 单例)各持独立纹理,
+     * 同一物品跨帧复用;LRU 上限 [PIP_RENDERER_CACHE_LIMIT],淘汰时 [ComposeOversizedItemRenderer.close]
+     * 释放纹理,防显存泄漏。
+     */
+    private val itemPipRenderers = object : LinkedHashMap<Any, ComposeOversizedItemRenderer>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Any, ComposeOversizedItemRenderer>?): Boolean {
+            if (size <= PIP_RENDERER_CACHE_LIMIT) return false
+            eldest?.value?.close()
+            return true
+        }
+    }
+
     // ── GuiCommandSink ─────────────────────────────────────────
 
     override fun addElement(element: GuiElementRenderState) {
-        items.add(Item(element, null))
+        items.add(Item(element = element))
     }
 
     override fun addText(text: GuiTextRenderState) {
-        items.add(Item(null, text))
+        items.add(Item(text = text))
+    }
+
+    override fun addItem(item: ItemRenderState) {
+        items.add(Item(itemState = item))
+    }
+
+    override fun addPicturesInPictureState(state: PictureInPictureRenderState) {
+        items.add(Item(pipState = state))
     }
 
     // ── 提交(仿原版 GuiRenderer.render:prepare → upload → draw)────
@@ -138,14 +182,12 @@ class ComposeGuiRenderer : GuiCommandSink {
      * 准备阶段:按**记录顺序**逐条处理本帧命令:
      * - 元素 → 直接追加到 mesh(按 pipeline/scissor/textureSetup 分组);
      * - 文本 → [GuiTextRenderState] 立即 [GlyphRenderState] 化(复用原版字体渲染)
-     *   并就地追加到 mesh —— 保持文本与几何的相对绘制顺序(z 序)。
+     *   并就地追加到 mesh;
+     * - 物品 → 离屏 PIP 渲染(按 [ItemRenderState.size])→ blit 追加到 mesh;
+     * - 画中画 → 待接入专用 renderer。
      *
-     * **不做任何重排**:记录顺序即 Compose z 序 —— 阴影由 Modifier 链保证画在
-     * 其内容之前、父背景之后(shadow 修饰符在链上更早 = 更底层)。若把阴影
-     * 提到"绝对最前",会被场景全屏不透明背景盖住(T.27 实测:阴影 draw 正常
-     * 执行但完全不可见,alpha 放大 13 倍/纯红输出均无显示 —— 根因即排序)。
-     * 文本同理:批量挪到末尾会破坏图层语义(如 Dialog scrim 之下本应被遮罩的
-     * 主场景文本被画到 scrim 之上,见 [items] 注释)。
+     * **不做任何重排**:记录顺序即 Compose z 序。物品/画中画必须与元素/文本交错,
+     * 否则会穿透上方元素(如 Popup 盖不住物品)。
      */
     private fun prepare() {
         previousScissorArea = null
@@ -153,21 +195,53 @@ class ComposeGuiRenderer : GuiCommandSink {
         previousTextureSetup = null
         previousDraw = null
         for (item in items) {
-            val element = item.element
-            if (element != null) {
-                addElementToMesh(element)
-            } else {
-                val text = item.text ?: continue
-                val pose = text.pose
-                val scissor = text.scissor
-                // GlyphVisitor 是 MC Java 嵌套接口,Kotlin 无 SAM 构造器,用匿名对象
-                text.ensurePrepared().visit(object : Font.GlyphVisitor {
-                    override fun acceptRenderable(renderable: TextRenderable) {
-                        addElementToMesh(GlyphRenderState(pose, renderable, scissor))
-                    }
-                })
+            when {
+                item.element != null -> addElementToMesh(item.element)
+                item.text != null -> {
+                    val text = item.text
+                    val pose = text.pose
+                    val scissor = text.scissor
+                    text.ensurePrepared().visit(object : Font.GlyphVisitor {
+                        override fun acceptRenderable(renderable: TextRenderable) {
+                            addElementToMesh(GlyphRenderState(pose, renderable, scissor))
+                        }
+                    })
+                }
+                item.itemState != null -> prepareItem(item.itemState, Minecraft.getInstance())
+                item.pipState != null -> { /* TODO: PIP renderer 机制待接入 */ }
             }
         }
+    }
+
+    /**
+     * 物品渲染:所有物品走离屏 PIP([ComposeOversizedItemRenderer] 原 OversizedItemRenderer 机制),
+     * 每个物品按 [ItemRenderState.size] 渲染到独立纹理再 blit —— 内容分辨率 = 目标尺寸,
+     * 不写死 16×16,支持任意 size/动画。画在 Compose 内容之上(原版 item 同批次语义)。
+     */
+
+    /** 单物品离屏渲染:每个模型 identity 一个独立 renderer/纹理(防止同帧互相覆盖)。 */
+    private fun prepareItem(entry: ItemRenderState, mc: Minecraft) {
+        val renderer = itemPipRenderers.getOrPut(entry.itemStackRenderState.modelIdentity) {
+            ComposeOversizedItemRenderer { addElementToMesh(it) }
+        }
+        renderer.prepare(
+            OversizedItemRenderState(
+                GuiItemRenderState(
+                    entry.pose,
+                    entry.itemStackRenderState,
+                    entry.x,
+                    entry.y,
+                    entry.scissorArea,
+                ),
+                entry.x,
+                entry.y,
+                entry.x + entry.size.width,
+                entry.y + entry.size.height,
+            ),
+            mc.gameRenderer.featureRenderDispatcher(),
+            1,
+            entry.color,
+        )
     }
 
     private fun addElementToMesh(elementState: GuiElementRenderState) {
@@ -288,6 +362,9 @@ class ComposeGuiRenderer : GuiCommandSink {
     )
 
     companion object {
+        /** 物品离屏渲染器缓存上限(LRU 淘汰,防显存泄漏) */
+        private const val PIP_RENDERER_CACHE_LIMIT = 64
+
         /**
          * 当前打开的 Compose 屏渲染器([ComposeScreen] init/removed 维护,渲染线程读写)。
          * [moe.forpleuvoir.compose_minecraft.mixin.GuiRendererMixin] 在 GuiRenderer.render
@@ -308,4 +385,18 @@ class ComposeGuiRenderer : GuiCommandSink {
             if (active === renderer) active = null
         }
     }
+}
+
+/**
+ * 将调制色预乘 alpha(T.37):物品图集走 [RenderPipelines.GUI_TEXTURED_PREMULTIPLIED_ALPHA]
+ * 预乘 alpha 管线,顶点色作为采样结果乘数,RGB 必须与 alpha 同步缩放 —— 否则单独降 alpha
+ * 会发白(覆盖率下降但颜色贡献未降)。alpha == 0xFF 时恒等(不影响纯白/不透明染色)。
+ */
+internal fun Int.premultipliedForPipeline(): Int {
+    val a = (this ushr 24) and 0xFF
+    if (a == 0xFF) return this
+    val r = ((this ushr 16) and 0xFF) * a / 255
+    val g = ((this ushr 8) and 0xFF) * a / 255
+    val b = (this and 0xFF) * a / 255
+    return (a shl 24) or (r shl 16) or (g shl 8) or b
 }

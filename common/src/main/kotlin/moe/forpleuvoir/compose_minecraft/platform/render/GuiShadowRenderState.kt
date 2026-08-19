@@ -31,10 +31,8 @@ internal class GuiShadowRenderState(
     val scissor: ScreenRectangle?,
     /** 交错 [x, y, distNorm] 平铺,每 3 个顶点一个三角形 */
     val vertices: FloatArray,
-    elementBounds: ScreenRectangle,
+    private val elementBounds: ScreenRectangle,
 ) : GuiElementRenderState {
-
-    private val elementBounds: ScreenRectangle = elementBounds
 
     override fun pipeline(): RenderPipeline = MinecraftGuiTriangles.shadowPipeline
 

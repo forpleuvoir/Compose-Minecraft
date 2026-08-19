@@ -1,5 +1,6 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.backend
 
+import androidx.compose.ui.graphics.DrawCustomCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawArcCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawCircleCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawCommand
@@ -16,18 +17,17 @@ import androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawVerticesCommand
 
 /**
- * 渲染后端接口(P2,D2 定稿:sealed 接口、方法按命令类型细分)。
+ * 渲染后端接口(T.37:开放接口,支持自定义命令扩展)。
  *
- * 每个命令类型一个方法 —— 双向扩展均由编译器强制:
- * - 新增命令类型 = 接口加一个方法,所有后端必须实现(不会漏);
- * - 新增后端(输出端)= 新实现类,必须实现全部命令方法。
+ * 每个命令类型一个方法 —— 新增后端须实现全部方法。
+ * [drawCustom] 有默认空实现,用于处理 [DrawCustomCommand]。
  *
  * 当前实现:
  * - [GuiStateBackend]:2D GUI 回放(命令 → GuiElementRenderState);
  * - [RasterBackend]:CPU 快照(命令 → 像素缓冲 IntArray);
  * - 3D 透视路径(P3):复用同一分派,后端内做 CPU 顶点变换。
  */
-internal sealed interface GeometryBackend {
+internal interface GeometryBackend {
     fun drawRect(cmd: DrawRectCommand)
     fun drawRoundRect(cmd: DrawRoundRectCommand)
     fun drawOval(cmd: DrawOvalCommand)
@@ -41,6 +41,9 @@ internal sealed interface GeometryBackend {
     fun drawShadow(cmd: DrawShadowCommand)
     fun drawImageRect(cmd: DrawImageRectCommand)
     fun drawVertices(cmd: DrawVerticesCommand)
+
+    /** 自定义绘制命令(T.37):默认空实现,由 [GuiStateBackend] 重写。 */
+    fun drawCustom(cmd: DrawCustomCommand)
 }
 
 /**
@@ -51,19 +54,20 @@ internal sealed interface GeometryBackend {
 internal object CommandDispatcher {
     fun dispatch(cmd: DrawCommand, backend: GeometryBackend) {
         when (cmd) {
-            is DrawRectCommand -> backend.drawRect(cmd)
-            is DrawRoundRectCommand -> backend.drawRoundRect(cmd)
-            is DrawOvalCommand -> backend.drawOval(cmd)
-            is DrawCircleCommand -> backend.drawCircle(cmd)
-            is DrawArcCommand -> backend.drawArc(cmd)
-            is DrawLineCommand -> backend.drawLine(cmd)
-            is DrawPathCommand -> backend.drawPath(cmd)
-            is DrawPointsCommand -> backend.drawPoints(cmd)
-            is DrawTextCommand -> backend.drawText(cmd)
+            is DrawRectCommand         -> backend.drawRect(cmd)
+            is DrawRoundRectCommand    -> backend.drawRoundRect(cmd)
+            is DrawOvalCommand         -> backend.drawOval(cmd)
+            is DrawCircleCommand       -> backend.drawCircle(cmd)
+            is DrawArcCommand          -> backend.drawArc(cmd)
+            is DrawLineCommand         -> backend.drawLine(cmd)
+            is DrawPathCommand         -> backend.drawPath(cmd)
+            is DrawPointsCommand       -> backend.drawPoints(cmd)
+            is DrawTextCommand         -> backend.drawText(cmd)
             is DrawGradientRectCommand -> backend.drawGradientRect(cmd)
-            is DrawShadowCommand -> backend.drawShadow(cmd)
-            is DrawImageRectCommand -> backend.drawImageRect(cmd)
-            is DrawVerticesCommand -> backend.drawVertices(cmd)
+            is DrawShadowCommand       -> backend.drawShadow(cmd)
+            is DrawImageRectCommand    -> backend.drawImageRect(cmd)
+            is DrawVerticesCommand     -> backend.drawVertices(cmd)
+            is DrawCustomCommand       -> backend.drawCustom(cmd)
         }
     }
 }

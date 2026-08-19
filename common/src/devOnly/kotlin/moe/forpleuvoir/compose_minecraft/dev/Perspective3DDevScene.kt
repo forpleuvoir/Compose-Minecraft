@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -213,7 +214,7 @@ private fun AngleBox(
                 this.rotationY = rotationY
                 this.rotationZ = rotationZ
             }
-            .background(boxColor),
+            .background(boxColor, RoundedCornerShape(8.dp)),
     ) {
         BasicText(
             label,

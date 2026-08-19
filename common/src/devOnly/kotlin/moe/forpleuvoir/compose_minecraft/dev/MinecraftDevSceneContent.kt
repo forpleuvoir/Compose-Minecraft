@@ -183,6 +183,18 @@ fun MinecraftDevSceneContent() {
                 subtitle = "枚举系统字体目录,点击注册为自定义字体并经 LocalDefaultFont 切换渲染",
                 onClick = { ComposeScreen.open { FontDevScene() } },
             )
+
+            DevMenuButton(
+                title = "原生纹理测试 (MinecraftTexture)",
+                subtitle = "MC 原生纹理/物品渲染: 纹理、方块、物品、DrawScope 扩展、尺寸变换",
+                onClick = { ComposeScreen.open { TextureDevScene() } },
+            )
+
+            DevMenuButton(
+                title = "Alpha 透传测试",
+                subtitle = "单个 Box + graphicsLayer(alpha=0.5) + drawMinecraftTexture, 验证透明度",
+                onClick = { ComposeScreen.open { AlphaTestScene() } },
+            )
         }
     }
 }

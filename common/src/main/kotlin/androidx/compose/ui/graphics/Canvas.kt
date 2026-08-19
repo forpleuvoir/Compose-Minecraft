@@ -27,9 +27,6 @@ fun Canvas(image: ImageBitmap): Canvas = ActualCanvas(image)
 
 internal fun ActualCanvas(image: ImageBitmap): Canvas = MinecraftCanvas(image)
 
-@Deprecated("Use direct reference to platform type instead of typealias")
-typealias NativeCanvas = NativeCanvasHolder
-
 /**
  * Saves a copy of the current transform and clip on the save stack and executes the provided lambda
  * with the current transform applied. Once the lambda has been executed, the transformation is

@@ -1,5 +1,7 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.backend
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.MinecraftCanvas
 import androidx.compose.ui.graphics.MinecraftCanvas.PaintSnapshot
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawArcCommand
@@ -286,8 +288,11 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
      * → 屏幕空间。返回 null 表示顶点在相机后方(w <= 0)。
      */
     private fun map3D(m2: FloatArray, layer3D: FloatArray, x: Float, y: Float): FloatArray? {
-        val x1 = m2[0] * x + m2[4] * y + m2[12]
-        val y1 = m2[1] * x + m2[5] * y + m2[13]
+        // m2 是纯 2D 仿射(透视列恒 0/1),Matrix.map 退化为普通 2D 映射,逐位等价
+        val p = Matrix(m2).map(Offset(x, y))
+        val x1 = p.x
+        val y1 = p.y
+        // layer3D 含真实透视:保持手写(Matrix.map 在 w<=0 时不具备剔除语义)
         val w = layer3D[3] * x1 + layer3D[7] * y1 + layer3D[15]
         if (w <= 0f) return null
         val iw = 1f / w

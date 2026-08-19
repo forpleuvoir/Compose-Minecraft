@@ -41,7 +41,7 @@ import kotlin.math.sin
 // fail), but only to influence code generation.
 //
 // DO NOT REMOVE THOSE TESTS.
-@kotlin.jvm.JvmInline
+@JvmInline
 value class Matrix(
     val values: FloatArray =
         floatArrayOf(1f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 1f)

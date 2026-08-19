@@ -20,7 +20,7 @@ import androidx.compose.runtime.Immutable
 
 /** Quality levels for image filters. See [Paint.filterQuality]. */
 @Immutable
-@kotlin.jvm.JvmInline
+@JvmInline
 value class FilterQuality internal constructor(val value: Int) {
 
     companion object {

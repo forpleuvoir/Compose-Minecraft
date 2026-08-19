@@ -1,6 +1,7 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.backend
 
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.DrawCustomCommand
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawArcCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawCircleCommand
@@ -174,6 +175,8 @@ internal class RasterBackend(
     override fun drawVertices(cmd: DrawVerticesCommand) {
         fillVertices(out, width, height, cmd)
     }
+
+    override fun drawCustom(cmd: DrawCustomCommand) = Unit
 
     // ── 形状:三角化 → 逐三角形重心填充 ─────────────────────────────────────
 
@@ -488,13 +491,13 @@ internal class RasterBackend(
         val a01 = (1f - fx) * fy
         val a11 = fx * fy
         val r = (p00 ushr 16 and 0xFF) * a00 + (p10 ushr 16 and 0xFF) * a10 +
-            (p01 ushr 16 and 0xFF) * a01 + (p11 ushr 16 and 0xFF) * a11
+                (p01 ushr 16 and 0xFF) * a01 + (p11 ushr 16 and 0xFF) * a11
         val g = (p00 ushr 8 and 0xFF) * a00 + (p10 ushr 8 and 0xFF) * a10 +
-            (p01 ushr 8 and 0xFF) * a01 + (p11 ushr 8 and 0xFF) * a11
+                (p01 ushr 8 and 0xFF) * a01 + (p11 ushr 8 and 0xFF) * a11
         val b = (p00 and 0xFF) * a00 + (p10 and 0xFF) * a10 +
-            (p01 and 0xFF) * a01 + (p11 and 0xFF) * a11
+                (p01 and 0xFF) * a01 + (p11 and 0xFF) * a11
         val a = (p00 ushr 24 and 0xFF) * a00 + (p10 ushr 24 and 0xFF) * a10 +
-            (p01 ushr 24 and 0xFF) * a01 + (p11 ushr 24 and 0xFF) * a11
+                (p01 ushr 24 and 0xFF) * a01 + (p11 ushr 24 and 0xFF) * a11
         return (a.toInt() shl 24) or (r.toInt() shl 16) or (g.toInt() shl 8) or b.toInt()
     }
 
@@ -516,7 +519,7 @@ internal class RasterBackend(
         // 三角形顶点索引展开(与 GPU 回放同一套逻辑)
         val tris = ArrayList<Int>(vc)
         when (cmd.vertexMode) {
-            VertexMode.Triangles -> {
+            VertexMode.Triangles     -> {
                 if (indices.isNotEmpty()) {
                     var i = 0
                     while (i + 2 < indices.size) {
@@ -531,21 +534,34 @@ internal class RasterBackend(
                     }
                 }
             }
+
             VertexMode.TriangleStrip -> {
-                for (i in 0 until vc - 2) { tris += i; tris += i + 1; tris += i + 2 }
+                for (i in 0 until vc - 2) {
+                    tris += i; tris += i + 1; tris += i + 2
+                }
             }
-            VertexMode.TriangleFan -> {
-                for (i in 1 until vc - 1) { tris += 0; tris += i; tris += i + 1 }
+
+            VertexMode.TriangleFan   -> {
+                for (i in 1 until vc - 1) {
+                    tris += 0; tris += i; tris += i + 1
+                }
             }
         }
         if (tris.size < 9) return
 
         val m = cmd.matrix
-        val m00 = m[0]; val m10 = m[1]; val m01 = m[4]; val m11 = m[5]; val m20 = m[12]; val m21 = m[13]
+        val m00 = m[0];
+        val m10 = m[1];
+        val m01 = m[4];
+        val m11 = m[5];
+        val m20 = m[12];
+        val m21 = m[13]
         val clip = cmd.clip
         var k = 0
         while (k + 2 < tris.size) {
-            val ai = tris[k]; val bi = tris[k + 1]; val ci = tris[k + 2]; k += 3
+            val ai = tris[k];
+            val bi = tris[k + 1];
+            val ci = tris[k + 2]; k += 3
             val ax = positions[ai * 2] * m00 + positions[ai * 2 + 1] * m01 + m20
             val ay = positions[ai * 2] * m10 + positions[ai * 2 + 1] * m11 + m21
             val bx = positions[bi * 2] * m00 + positions[bi * 2 + 1] * m01 + m20

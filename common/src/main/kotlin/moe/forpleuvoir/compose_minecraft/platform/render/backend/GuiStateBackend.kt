@@ -1,42 +1,13 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.backend
 
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.LinearGradientShaderData
-import androidx.compose.ui.graphics.RadialGradientShaderData
-import androidx.compose.ui.graphics.SweepGradientShaderData
-import androidx.compose.ui.graphics.MinecraftCanvas
-import androidx.compose.ui.graphics.MinecraftCanvas.DrawArcCommand
-import androidx.compose.ui.graphics.MinecraftCanvas.DrawCircleCommand
-import androidx.compose.ui.graphics.MinecraftCanvas.DrawCommand
-import androidx.compose.ui.graphics.MinecraftCanvas.DrawGradientRectCommand
-import androidx.compose.ui.graphics.MinecraftCanvas.DrawImageRectCommand
-import androidx.compose.ui.graphics.MinecraftCanvas.DrawLineCommand
-import androidx.compose.ui.graphics.MinecraftCanvas.DrawOvalCommand
-import androidx.compose.ui.graphics.MinecraftCanvas.DrawPathCommand
-import androidx.compose.ui.graphics.MinecraftCanvas.DrawPointsCommand
-import androidx.compose.ui.graphics.MinecraftCanvas.DrawRectCommand
-import androidx.compose.ui.graphics.MinecraftCanvas.DrawRoundRectCommand
-import androidx.compose.ui.graphics.MinecraftCanvas.DrawShadowCommand
-import androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand
-import androidx.compose.ui.graphics.MinecraftCanvas.DrawVerticesCommand
-import androidx.compose.ui.graphics.MinecraftCanvas.PaintSnapshot
-import androidx.compose.ui.graphics.PaintingStyle
-import androidx.compose.ui.graphics.PointMode
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.VertexMode
-import moe.forpleuvoir.compose_minecraft.platform.render.BlendPipelines
-import moe.forpleuvoir.compose_minecraft.platform.render.GeometryTessellator
-import moe.forpleuvoir.compose_minecraft.platform.render.GuiCommandSink
-import moe.forpleuvoir.compose_minecraft.platform.render.GuiTriangleRenderState
-import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftGuiTriangles
-import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftImageTextureCache
-import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftShadowRenderer
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.MinecraftCanvas.*
+import moe.forpleuvoir.compose_minecraft.platform.render.*
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.ColorEvaluator
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.toArgb
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toComponent
 import net.minecraft.client.Minecraft
-import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.client.gui.render.TextureSetup
 import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.client.renderer.state.gui.BlitRenderState
@@ -44,7 +15,6 @@ import net.minecraft.client.renderer.state.gui.ColoredRectangleRenderState
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState
 import net.minecraft.locale.Language
 import org.joml.Matrix3x2f
-import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -315,6 +285,39 @@ internal class GuiStateBackend : GeometryBackend {
         val scissor = scissorFor(cmd)
         if (cmd.clip != null && scissor == null) return
         addVertices(sink, cmd, scissor)
+    }
+
+    override fun drawCustom(cmd: DrawCustomCommand) {
+        val sink = sink ?: return
+        val scissor = scissorFor(cmd)
+        if (cmd.clip != null && scissor == null) return
+
+        // 重建绘制参数快照为 MinecraftPaint(Paint 接口,插件可读全部公开字段)
+        val paint = cmd.paint?.let { snap ->
+            MinecraftPaint(
+                color = snap.color,
+                alpha = snap.alpha,
+                style = snap.style,
+                strokeWidth = snap.strokeWidth,
+                strokeCap = snap.strokeCap,
+                filterQuality = snap.filterQuality,
+                blendMode = snap.blendMode,
+                shader = snap.shader,
+            ).apply {
+                nativeColorFilter = snap.colorFilter
+            }
+        }
+
+        // 委托给已注册的插件(包括默认注册的 mc_texture 等)
+        val ctx = CustomDrawContext(
+            sink = sink,
+            matrix = cmd.matrix,
+            clip = cmd.clip,
+            scissor = scissor,
+            layer3D = cmd.layer3D,
+            paint = paint,
+        )
+        MinecraftRenderPlugins.dispatch(cmd.tag, cmd.data, ctx)
     }
 
     // ── scissor(原 render() 循环内联逻辑,提取为单方法,P2)──────────────────
@@ -731,9 +734,3 @@ private fun PaintSnapshot.toArgb(): Int = ColorEvaluator.applyColorFilter(color.
 private fun FloatArray.toMatrix3x2f(): Matrix3x2f =
     Matrix3x2f(this[0], this[1], this[4], this[5], this[12], this[13])
 
-private fun Rect.toScreenRectangle(): ScreenRectangle = ScreenRectangle(
-    left.roundToInt(),
-    top.roundToInt(),
-    width.roundToInt(),
-    height.roundToInt(),
-)

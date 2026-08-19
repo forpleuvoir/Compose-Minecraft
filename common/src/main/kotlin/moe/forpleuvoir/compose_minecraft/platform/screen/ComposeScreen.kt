@@ -15,6 +15,7 @@ import moe.forpleuvoir.compose_minecraft.platform.textinput.ComposeInputBridge.t
 import moe.forpleuvoir.compose_minecraft.platform.textinput.ComposeInputBridge.toPointerKeyboardModifiers
 import moe.forpleuvoir.compose_minecraft.platform.textinput.MinecraftTextInputService
 import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiRenderer
+import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderPlugins
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.narration.NarrationElementOutput
@@ -151,10 +152,12 @@ class ComposeScreen(
         // 本屏收集器);本参数仍供 requestCursor 等原版通道使用,见下方 I9 光标块。
         composeScene?.let { scene ->
             scene.vanillaDrawState.graphics = graphics
+            MinecraftRenderPlugins.currentGraphics = graphics
             try {
                 scene.renderFrame()
             } finally {
                 scene.vanillaDrawState.graphics = null
+                MinecraftRenderPlugins.currentGraphics = null
             }
         }
         // 复述系统:语义变化(Compose 内部焦点迁移)补触发原版朗读。extractRenderState

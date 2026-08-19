@@ -23,7 +23,9 @@ import androidx.compose.ui.graphics.colorspace.ColorSpace
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import moe.forpleuvoir.compose_minecraft.platform.ui.draw.toPaintSnapshot
 import net.minecraft.network.chat.Style
+import net.minecraft.resources.Identifier
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -623,7 +625,7 @@ internal class MinecraftCanvas internal constructor(
     )
 
     /** 绘制命令基类 */
-    sealed interface DrawCommand {
+    interface DrawCommand {
         /** 记录时的矩阵快照(4x4,列主序,同 [Matrix.values]) */
         val matrix: FloatArray
 
@@ -840,7 +842,7 @@ internal class MinecraftCanvas internal constructor(
         override val paint: PaintSnapshot? = null
     }
 
-    private val drawCommands = ArrayList<DrawCommand>()
+    internal val drawCommands = ArrayList<DrawCommand>()
 
     /** 回放用:当前帧的全部绘制命令(阶段 C 由 MinecraftRenderContext 消费) */
     internal fun commands(): List<DrawCommand> = drawCommands
@@ -1009,14 +1011,15 @@ internal class MinecraftCanvas internal constructor(
                         .apply { timesAssign(baseRow) }
                         .values
                     when (command) {
-                        is DrawRectCommand -> record(
+                        is DrawRectCommand         -> record(
                             DrawRectCommand(
                                 origM, clipNow, paintSnap,
                                 command.left, command.top, command.right, command.bottom,
                                 layer3D = layer3DWithBase,
                             )
                         )
-                        is DrawRoundRectCommand -> record(
+
+                        is DrawRoundRectCommand    -> record(
                             DrawRoundRectCommand(
                                 origM, clipNow, paintSnap,
                                 command.left, command.top, command.right, command.bottom,
@@ -1024,21 +1027,24 @@ internal class MinecraftCanvas internal constructor(
                                 layer3D = layer3DWithBase,
                             )
                         )
-                        is DrawOvalCommand -> record(
+
+                        is DrawOvalCommand         -> record(
                             DrawOvalCommand(
                                 origM, clipNow, paintSnap,
                                 command.left, command.top, command.right, command.bottom,
                                 layer3D = layer3DWithBase,
                             )
                         )
-                        is DrawCircleCommand -> record(
+
+                        is DrawCircleCommand       -> record(
                             DrawCircleCommand(
                                 origM, clipNow, paintSnap,
                                 command.centerX, command.centerY, command.radius,
                                 layer3D = layer3DWithBase,
                             )
                         )
-                        is DrawArcCommand -> record(
+
+                        is DrawArcCommand          -> record(
                             DrawArcCommand(
                                 origM, clipNow, paintSnap,
                                 command.left, command.top, command.right, command.bottom,
@@ -1046,34 +1052,39 @@ internal class MinecraftCanvas internal constructor(
                                 layer3D = layer3DWithBase,
                             )
                         )
-                        is DrawLineCommand -> record(
+
+                        is DrawLineCommand         -> record(
                             DrawLineCommand(
                                 origM, clipNow, paintSnap,
                                 command.p1x, command.p1y, command.p2x, command.p2y,
                                 layer3D = layer3DWithBase,
                             )
                         )
-                        is DrawPathCommand -> record(
+
+                        is DrawPathCommand         -> record(
                             DrawPathCommand(
                                 origM, clipNow, paintSnap, command.segments,
                                 layer3D = layer3DWithBase,
                             )
                         )
-                        is DrawPointsCommand -> record(
+
+                        is DrawPointsCommand       -> record(
                             DrawPointsCommand(
                                 origM, clipNow, paintSnap,
                                 command.pointMode, command.points,
                                 layer3D = layer3DWithBase,
                             )
                         )
-                        is DrawVerticesCommand -> record(
+
+                        is DrawVerticesCommand     -> record(
                             DrawVerticesCommand(
                                 origM, clipNow, paintSnap,
                                 command.vertexMode, command.positions, command.colors, command.indices,
                                 layer3D = layer3DWithBase,
                             )
                         )
-                        is DrawImageRectCommand -> drawImageRect(
+
+                        is DrawImageRectCommand    -> drawImageRect(
                             command.image,
                             IntOffset(command.srcOffsetX, command.srcOffsetY),
                             IntSize(command.srcWidth, command.srcHeight),
@@ -1081,67 +1092,86 @@ internal class MinecraftCanvas internal constructor(
                             IntSize(command.dstWidth, command.dstHeight),
                             paint,
                         )
-                        is DrawTextCommand -> Unit // 文本在 else 分支处理
+
+                        is DrawTextCommand         -> Unit // 文本在 else 分支处理
                         is DrawGradientRectCommand -> Unit // 渐变矩形在 else 分支处理
-                        is DrawShadowCommand -> Unit // 阴影在 else 分支处理
+                        is DrawShadowCommand       -> Unit // 阴影在 else 分支处理
+                        is DrawCustomCommand       -> record(
+                            DrawCustomCommand(
+                                matrix = command.matrix, clip = currentClip,
+                                paint = paint.snapshot(), layer3D = command.layer3D,
+                                tag = command.tag, data = command.data
+                            )
+                        )
+
+                        else                       -> Unit
                     }
                 } else
-                when (command) {
-                    is DrawRectCommand      ->
-                        drawRect(command.left, command.top, command.right, command.bottom, paint)
+                    when (command) {
+                        is DrawRectCommand         ->
+                            drawRect(command.left, command.top, command.right, command.bottom, paint)
 
-                    is DrawRoundRectCommand ->
-                        drawRoundRect(
-                            command.left, command.top, command.right, command.bottom,
-                            command.radiusX, command.radiusY, paint,
+                        is DrawRoundRectCommand    ->
+                            drawRoundRect(
+                                command.left, command.top, command.right, command.bottom,
+                                command.radiusX, command.radiusY, paint,
+                            )
+
+                        is DrawOvalCommand         ->
+                            drawOval(command.left, command.top, command.right, command.bottom, paint)
+
+                        is DrawCircleCommand       ->
+                            drawCircle(Offset(command.centerX, command.centerY), command.radius, paint)
+
+                        is DrawArcCommand          ->
+                            drawArc(
+                                command.left, command.top, command.right, command.bottom,
+                                command.startAngle, command.sweepAngle, command.useCenter, paint,
+                            )
+
+                        is DrawLineCommand         ->
+                            drawLine(
+                                Offset(command.p1x, command.p1y),
+                                Offset(command.p2x, command.p2y),
+                                paint,
+                            )
+
+                        is DrawPathCommand         ->
+                            drawPath(MinecraftPath(command.segments), paint)
+
+                        is DrawPointsCommand       ->
+                            drawPoints(command.pointMode, command.points, paint)
+
+                        is DrawVerticesCommand     -> record(
+                            DrawVerticesCommand(
+                                snapshot(), currentClip, paint.snapshot(),
+                                command.vertexMode, command.positions, command.colors, command.indices,
+                            )
                         )
 
-                    is DrawOvalCommand      ->
-                        drawOval(command.left, command.top, command.right, command.bottom, paint)
+                        is DrawImageRectCommand    ->
+                            drawImageRect(
+                                command.image,
+                                IntOffset(command.srcOffsetX, command.srcOffsetY),
+                                IntSize(command.srcWidth, command.srcHeight),
+                                IntOffset(command.dstOffsetX, command.dstOffsetY),
+                                IntSize(command.dstWidth, command.dstHeight),
+                                paint,
+                            )
 
-                    is DrawCircleCommand    ->
-                        drawCircle(Offset(command.centerX, command.centerY), command.radius, paint)
-
-                    is DrawArcCommand       ->
-                        drawArc(
-                            command.left, command.top, command.right, command.bottom,
-                            command.startAngle, command.sweepAngle, command.useCenter, paint,
+                        is DrawTextCommand         -> Unit // 文本在 else 分支处理
+                        is DrawGradientRectCommand -> Unit // 渐变矩形在 else 分支处理
+                        is DrawShadowCommand       -> Unit // 阴影在 else 分支处理
+                        is DrawCustomCommand       -> record(
+                            DrawCustomCommand(
+                                matrix = snapshot(), clip = currentClip,
+                                paint = paint.snapshot(), layer3D = command.layer3D,
+                                tag = command.tag, data = command.data
+                            )
                         )
 
-                    is DrawLineCommand      ->
-                        drawLine(
-                            Offset(command.p1x, command.p1y),
-                            Offset(command.p2x, command.p2y),
-                            paint,
-                        )
-
-                    is DrawPathCommand      ->
-                        drawPath(MinecraftPath(command.segments), paint)
-
-                    is DrawPointsCommand    ->
-                        drawPoints(command.pointMode, command.points, paint)
-
-                    is DrawVerticesCommand  -> record(
-                        DrawVerticesCommand(
-                            snapshot(), currentClip, paint.snapshot(),
-                            command.vertexMode, command.positions, command.colors, command.indices,
-                        )
-                    )
-
-                    is DrawImageRectCommand ->
-                        drawImageRect(
-                            command.image,
-                            IntOffset(command.srcOffsetX, command.srcOffsetY),
-                            IntSize(command.srcWidth, command.srcHeight),
-                            IntOffset(command.dstOffsetX, command.dstOffsetY),
-                            IntSize(command.dstWidth, command.dstHeight),
-                            paint,
-                        )
-
-                    is DrawTextCommand      -> Unit // 文本在 else 分支处理
-                    is DrawGradientRectCommand -> Unit // 渐变矩形在 else 分支处理
-                    is DrawShadowCommand    -> Unit // 阴影在 else 分支处理
-                }
+                        else                       -> Unit
+                    }
             } else if (command is DrawTextCommand) {
                 // 平台适配点(T.36):回放阶段视口剔除 —— 文本命令在回放阶段才拿到
                 // 目标画布的完整裁剪(窗口/视口图层 clip);paint() 录制阶段 clip 恒 null
@@ -1169,6 +1199,14 @@ internal class MinecraftCanvas internal constructor(
                     command.elevation, command.offsetX, command.offsetY, command.cornerRadius,
                     command.pathSegments,
                     command.ambientColorArgb, command.spotColorArgb,
+                )
+            } else if (command is DrawCustomCommand) {
+                record(
+                    DrawCustomCommand(
+                        matrix = snapshot(), clip = currentClip,
+                        paint = command.paint, layer3D = command.layer3D,
+                        tag = command.tag, data = command.data
+                    )
                 )
             }
             if (clipPushed) clipStack.removeLast()
@@ -1257,6 +1295,7 @@ internal class MinecraftCanvas internal constructor(
             0f, 0f, 1f, 0f,
             layer3D[12], layer3D[13], 0f, 1f,
         )
+
         fun combine(m: FloatArray): FloatArray {
             // 2x2 部分:approx2D × m 的 2x2(文本随图层变换压扁/剪切,2D 近似)。
             // m 是纯平移(2x2 = 单位),故 2x2 = approx2D 的 2x2。
@@ -1282,6 +1321,7 @@ internal class MinecraftCanvas internal constructor(
                 px, py, 0f, 1f,
             )
         }
+
         // 纯色几何 3D 分支:图层 alpha(alphaMultiplier)叠加进 paint 快照
         // (与原 replayFrom 的 MinecraftPaint(alpha = snapshot.alpha * alphaMultiplier)
         // 语义一致;渲染端 render3D 直接消费 paint.alpha)。
@@ -1312,58 +1352,71 @@ internal class MinecraftCanvas internal constructor(
             }
         }
         return when (this) {
-            is DrawRectCommand -> DrawRectCommand(
+            is DrawRectCommand         -> DrawRectCommand(
                 matrix, clip, paint3D(), left, top, right, bottom,
                 layer3D = layer3D,
             )
-            is DrawRoundRectCommand -> DrawRoundRectCommand(
+
+            is DrawRoundRectCommand    -> DrawRoundRectCommand(
                 matrix, clip, paint3D(), left, top, right, bottom, radiusX, radiusY,
                 layer3D = layer3D,
             )
-            is DrawOvalCommand -> DrawOvalCommand(
+
+            is DrawOvalCommand         -> DrawOvalCommand(
                 matrix, clip, paint3D(), left, top, right, bottom,
                 layer3D = layer3D,
             )
-            is DrawCircleCommand -> DrawCircleCommand(
+
+            is DrawCircleCommand       -> DrawCircleCommand(
                 matrix, clip, paint3D(), centerX, centerY, radius,
                 layer3D = layer3D,
             )
-            is DrawArcCommand -> DrawArcCommand(
+
+            is DrawArcCommand          -> DrawArcCommand(
                 matrix, clip, paint3D(), left, top, right, bottom,
                 startAngle, sweepAngle, useCenter,
                 layer3D = layer3D,
             )
-            is DrawLineCommand -> DrawLineCommand(
+
+            is DrawLineCommand         -> DrawLineCommand(
                 matrix, clip, paint3D(), p1x, p1y, p2x, p2y,
                 layer3D = layer3D,
             )
-            is DrawPathCommand -> DrawPathCommand(
+
+            is DrawPathCommand         -> DrawPathCommand(
                 matrix, clip, paint3D(), segments,
                 layer3D = layer3D,
             )
-            is DrawPointsCommand -> DrawPointsCommand(
+
+            is DrawPointsCommand       -> DrawPointsCommand(
                 matrix, clip, paint3D(), pointMode, points,
                 layer3D = layer3D,
             )
-            is DrawVerticesCommand -> DrawVerticesCommand(
+
+            is DrawVerticesCommand     -> DrawVerticesCommand(
                 matrix, clip, paint3D(), vertexMode, positions, colors, indices,
                 layer3D = layer3D,
             )
-            is DrawTextCommand -> DrawTextCommand(
+
+            is DrawTextCommand         -> DrawTextCommand(
                 combine(matrix), clip, text, x, y, style,
                 alpha = alpha * alphaMultiplier,
                 shader = shader,
             )
+
             is DrawGradientRectCommand -> DrawGradientRectCommand(
                 combine(matrix), clip, left, top, right, bottom,
                 topColorArgb, bottomColorArgb,
             )
-            is DrawShadowCommand -> DrawShadowCommand(
+
+            is DrawShadowCommand       -> DrawShadowCommand(
                 combine(matrix), clip, left, top, right, bottom,
                 elevation, offsetX, offsetY, cornerRadius, pathSegments,
                 ambientColorArgb, spotColorArgb,
             )
-            is DrawImageRectCommand -> null
+
+            is DrawImageRectCommand    -> null
+            else                       -> null // DrawCustomCommand 等自定义命令
         }
     }
 
@@ -1669,6 +1722,42 @@ internal class MinecraftCanvas internal constructor(
     }
 }
 
+fun Canvas.recordCustomDraw(
+    tag: Identifier,
+    data: Any?,
+    paint: Paint?,
+    layer3D: FloatArray?,
+) {
+    if (this !is MinecraftCanvas) return
+    drawCommands.add(
+        DrawCustomCommand(
+            matrix = currentMatrix.values.copyOf(),
+            clip = currentClip,
+            paint = paint?.toPaintSnapshot(),
+            layer3D = layer3D,
+            tag = tag,
+            data = data,
+        )
+    )
+}
+
+/**
+ * 自定义绘制命令(T.37):扩展点,用于承载非标准 Compose 绘制的自定义渲染内容。
+ *
+ * 由 [MinecraftRenderPlugin] 机制消费,内置标签:
+ * - `"mc_texture"`:MC 纹理渲染,data 为 [TextureDrawData]
+ *
+ * 外部 mod 开发者通过注册 [MinecraftRenderPlugin] 处理自定义标签,无需直接使用本类。
+ */
+internal class DrawCustomCommand(
+    override val matrix: FloatArray,
+    override val clip: Rect?,
+    override val paint: MinecraftCanvas.PaintSnapshot?,
+    override val layer3D: FloatArray?,
+    val tag: Identifier,
+    val data: Any?,
+) : MinecraftCanvas.DrawCommand
+
 /** MC 字体行高固定 9px(1x 基准),供回放阶段文本视口剔除(T.36)使用。 */
 private const val MC_TEXT_LINE_HEIGHT = 9f
 
@@ -1678,8 +1767,3 @@ private val Line = MinecraftPath.PathSegmentType.Line
 private val Quadratic = MinecraftPath.PathSegmentType.Quadratic
 private val Cubic = MinecraftPath.PathSegmentType.Cubic
 private val Close = MinecraftPath.PathSegmentType.Close
-
-/** Minecraft 平台 NativeCanvas(NativeCanvas 的别名目标) */
-class NativeCanvasHolder {
-    val canvas: Canvas = MinecraftCanvas()
-}
