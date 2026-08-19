@@ -14,7 +14,6 @@ import net.minecraft.client.renderer.Projection
 import net.minecraft.client.renderer.ProjectionMatrixBuffer
 import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.client.renderer.StagedVertexBuffer
-import net.minecraft.client.renderer.item.TrackingItemStackRenderState
 import net.minecraft.client.renderer.state.WindowRenderState
 import net.minecraft.client.renderer.state.gui.GlyphRenderState
 import net.minecraft.client.renderer.state.gui.GuiElementRenderState
@@ -22,7 +21,6 @@ import net.minecraft.client.renderer.state.gui.GuiItemRenderState
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState
 import net.minecraft.client.renderer.state.gui.pip.OversizedItemRenderState
 import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState
-import org.joml.Matrix3x2f
 import org.joml.Matrix4f
 import java.util.*
 import kotlin.math.max
@@ -45,6 +43,13 @@ interface GuiCommandSink {
      * 默认空实现(不支持物品的 sink 忽略)。
      */
     fun addItem(item: ItemRenderState) = Unit
+
+    /**
+     * 追加一个实体渲染状态(T.37):包装原版 [GuiEntityRenderState] + 色调色,
+     * 由渲染器在 prepare 阶段经 [ComposeOversizedEntityRenderer] 离屏 PIP 渲染。
+     * 默认空实现(不支持实体的 sink 忽略)。
+     */
+    fun addEntity(entity: EntityPipRenderState) = Unit
 
     /**
      * 追加一个画中画渲染状态(T.37,原版 [GuiRenderState.addPicturesInPictureState]):
@@ -89,15 +94,14 @@ class ComposeGuiRenderer : GuiCommandSink {
      */
     private val items = ArrayList<Item>()
 
-    /** 单个有序命令:元素/文本/物品/画中画四选一 */
+    /** 单个有序命令:元素/文本/物品/实体画中画/画中画五选一 */
     private class Item(
         val element: GuiElementRenderState? = null,
         val text: GuiTextRenderState? = null,
         val itemState: ItemRenderState? = null,
+        val entityState: EntityPipRenderState? = null,
         val pipState: PictureInPictureRenderState? = null,
     )
-
-    /** 画中画状态(实体预览等);本版先收集,PIP renderer 机制待接入 */
 
     /**
      * T.25:吸收另一收集器的命令到**本收集器末尾**(元素顺序在自身之前,用于
@@ -137,6 +141,19 @@ class ComposeGuiRenderer : GuiCommandSink {
         }
     }
 
+    /**
+     * 实体离屏(PIP)渲染器缓存:按稳定 key([EntityPipRenderState.identityKey],如实体实例标识)
+     * 各持独立纹理,同一实体跨帧复用;LRU 上限与物品 PIP 缓存共享 [PIP_RENDERER_CACHE_LIMIT],
+     * 淘汰时 [ComposeOversizedEntityRenderer.close] 释放纹理。
+     */
+    private val entityPipRenderers = object : LinkedHashMap<Any, ComposeOversizedEntityRenderer>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Any, ComposeOversizedEntityRenderer>?): Boolean {
+            if (size <= PIP_RENDERER_CACHE_LIMIT) return false
+            eldest?.value?.close()
+            return true
+        }
+    }
+
     // ── GuiCommandSink ─────────────────────────────────────────
 
     override fun addElement(element: GuiElementRenderState) {
@@ -149,6 +166,10 @@ class ComposeGuiRenderer : GuiCommandSink {
 
     override fun addItem(item: ItemRenderState) {
         items.add(Item(itemState = item))
+    }
+
+    override fun addEntity(entity: EntityPipRenderState) {
+        items.add(Item(entityState = entity))
     }
 
     override fun addPicturesInPictureState(state: PictureInPictureRenderState) {
@@ -208,7 +229,8 @@ class ComposeGuiRenderer : GuiCommandSink {
                     })
                 }
                 item.itemState != null -> prepareItem(item.itemState, Minecraft.getInstance())
-                item.pipState != null -> { /* TODO: PIP renderer 机制待接入 */ }
+                item.entityState != null -> prepareEntity(item.entityState, Minecraft.getInstance())
+                item.pipState != null -> { /* 其他 PIP 类型暂不处理 */ }
             }
         }
     }
@@ -242,6 +264,17 @@ class ComposeGuiRenderer : GuiCommandSink {
             1,
             entry.color,
         )
+    }
+
+    /**
+     * 实体离屏渲染:每个实体实例(identityKey)一个独立 renderer/纹理
+     * (防止同帧多个实体实例互相覆盖纹理),色调色经 [EntityPipRenderState.color] 传入。
+     */
+    private fun prepareEntity(entry: EntityPipRenderState, mc: Minecraft) {
+        val renderer = entityPipRenderers.getOrPut(entry.identityKey) {
+            ComposeOversizedEntityRenderer { addElementToMesh(it) }
+        }
+        renderer.prepare(entry.state, mc.gameRenderer.featureRenderDispatcher(), 1, entry.color, entry.pose)
     }
 
     private fun addElementToMesh(elementState: GuiElementRenderState) {

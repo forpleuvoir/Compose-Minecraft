@@ -17,37 +17,52 @@ import kotlin.math.roundToInt
 /**
  * 在背景绘制一个 MC 实体(与 [Modifier.minecraftTexture] 同模式 —— 节点参与 DrawScope 管道,
  * 捕获 alpha/colorFilter/blendMode,[color] 为色调色)。
+ *
+ * @param rotationX X 轴旋转(弧度,正 = 前倾),配合 [rotationY] 构成实体朝向。
+ * @param rotationY Y 轴旋转(弧度,正 = 向右转),为 0 时实体正面朝前。
  */
 @Stable
 fun Modifier.minecraftEntity(
     entity: Entity,
     color: Color = Color.White,
+    rotationX: Float = 0f,
+    rotationY: Float = 0f,
 ): Modifier = this.then(
     MinecraftEntityElement(
         entity = entity,
         color = color,
+        rotationX = rotationX,
+        rotationY = rotationY,
     )
 )
 
 private class MinecraftEntityElement(
     private val entity: Entity,
     private val color: Color,
+    private val rotationX: Float,
+    private val rotationY: Float,
 ) : ModifierNodeElement<MinecraftEntityNode>() {
 
-    override fun create(): MinecraftEntityNode = MinecraftEntityNode(entity = entity, color = color)
+    override fun create(): MinecraftEntityNode =
+        MinecraftEntityNode(entity = entity, color = color, rotationX = rotationX, rotationY = rotationY)
 
     override fun update(node: MinecraftEntityNode) {
         node.entity = entity
         node.color = color
+        node.rotationX = rotationX
+        node.rotationY = rotationY
         node.invalidateDraw()
     }
 
     override fun equals(other: Any?): Boolean =
-        other is MinecraftEntityElement && other.entity == entity && other.color == color
+        other is MinecraftEntityElement && other.entity == entity && other.color == color &&
+            other.rotationX == rotationX && other.rotationY == rotationY
 
     override fun hashCode(): Int {
         var result = entity.hashCode()
         result = 31 * result + color.hashCode()
+        result = 31 * result + rotationX.hashCode()
+        result = 31 * result + rotationY.hashCode()
         return result
     }
 }
@@ -55,6 +70,8 @@ private class MinecraftEntityElement(
 private class MinecraftEntityNode(
     var entity: Entity,
     var color: Color,
+    var rotationX: Float,
+    var rotationY: Float,
 ) : DrawModifierNode, Modifier.Node() {
 
     override fun ContentDrawScope.draw() {
@@ -73,7 +90,13 @@ private class MinecraftEntityNode(
                 paint = paint.toPaintSnapshot(),
                 layer3D = null,
                 tag = McEntityPlugin.TAG,
-                data = EntityDrawData(entity = entity, size = size),
+                data = EntityDrawData(
+                    entity = entity,
+                    size = size,
+                    color = -1, // 色调色经 paint 传递(与物品一致:节点 buildPaint 已含 color)
+                    rotationX = rotationX,
+                    rotationY = rotationY,
+                ),
             )
         )
 

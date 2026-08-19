@@ -191,6 +191,12 @@ fun MinecraftDevSceneContent() {
             )
 
             DevMenuButton(
+                title = "实体渲染测试 (MinecraftEntity)",
+                subtitle = "玩家/生物实体离屏 PIP 渲染: 旋转 rotationX/Y、色调色、alpha 透传",
+                onClick = { ComposeScreen.open { EntityDevScene() } },
+            )
+
+            DevMenuButton(
                 title = "Alpha 透传测试",
                 subtitle = "单个 Box + graphicsLayer(alpha=0.5) + drawMinecraftTexture, 验证透明度",
                 onClick = { ComposeScreen.open { AlphaTestScene() } },
