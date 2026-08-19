@@ -262,7 +262,7 @@ fun EntityDevScene() {
                     ) {
                         Column(
                             Modifier
-                                .border(3.dp, Color(0xFFFF9800))
+                                .border(2.dp, Color(0xFFFF9800))
                                 .background(Color(0xFF263238))
                                 .padding(8.dp)
                         ) {

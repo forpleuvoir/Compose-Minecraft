@@ -1046,6 +1046,14 @@ internal object GeometryTessellator {
             if (angle > PI) angle -= 2.0 * PI
             if (angle < -PI) angle += 2.0 * PI
             val k = max(1, ceil(abs(angle) * h * aaScale / 2.0).toInt())
+            // 修复(border 2px 每边只渲染一半):必须发射 in 法线起点(t=0)。
+            // 原实现 for(i in 1..k) 从不发射起点:当 k=1(如 2px 矩形的 90° 角,
+            // h=1 → ceil(π/2·1/2)=1)时每个角只发 out 法线单点,相邻直边段两端
+            // 的带法线是相邻两边法线(跳 90°)→ 带为斜平行四边形,每条边只盖一半。
+            // 先发 in 起点后,直边段两端法线一致(该边法线)→ 平直完整。
+            if (abs(angle) > 1e-4f) {
+                em.emit(px, py, inX, inY)
+            }
             for (i in 1..k) {
                 val t = i.toFloat() / k
                 val a = angle * t
