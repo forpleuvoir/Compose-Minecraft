@@ -27,9 +27,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.TextStyle
 import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.ui.draw.minecraftItem
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.item.Items
 
 /**
  * 密度参数测试(T.26):验证 `ComposeScreen.open(density = …)` 场景密度可配置。
@@ -71,7 +74,7 @@ fun DensityDevScene() {
             )
             BasicText(
                 "T.26:场景 density 可配置。本屏经 ComposeScreen.open(density = 2f) 打开 ——\n" +
-                    "dp 尺寸与 sp 字号全部放大 2 倍(官方桌面 density 语义)。",
+                        "dp 尺寸与 sp 字号全部放大 2 倍(官方桌面 density 语义)。",
                 style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
             )
 
@@ -119,6 +122,7 @@ fun DensityDevScene() {
                     style = Style.EMPTY.withColor(Color.White).toTextStyle().merge(TextStyle(fontSize = s)),
                 )
             }
+            Spacer(modifier = Modifier.size(64.dp).minecraftItem(ItemStack(Items.DIAMOND_SWORD)))
 
             // ── ④ 输入框(默认 18sp,随 density 放大)──
             SectionLabel("④ BasicTextField(默认 fontSize=18sp)")

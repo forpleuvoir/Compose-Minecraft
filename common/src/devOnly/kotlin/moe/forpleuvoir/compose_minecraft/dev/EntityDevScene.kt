@@ -269,7 +269,7 @@ fun EntityDevScene() {
                             // 拖动条:拖动移动弹层(像物品测试那样)
                             Box(
                                 Modifier
-                                    .fillMaxWidth()
+                                    .width(800.dp)
                                     .background(Color(0xFF37474F))
                                     .pointerInput(Unit) {
                                         detectDragGestures { change, dragAmount ->

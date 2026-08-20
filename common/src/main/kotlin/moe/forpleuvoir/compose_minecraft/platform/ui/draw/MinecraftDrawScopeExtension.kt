@@ -26,7 +26,9 @@ import moe.forpleuvoir.compose_minecraft.platform.render.plugins.UVMapping
 import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.resources.Identifier
 import net.minecraft.world.entity.Entity
+import net.minecraft.world.entity.player.Player
 import net.minecraft.world.item.ItemStack
+import net.minecraft.world.level.Level
 import kotlin.math.roundToInt
 
 /**
@@ -67,12 +69,15 @@ fun DrawScope.drawItemStack(
     stack: ItemStack,
     size: Float = this.size.width.coerceAtMost(this.size.height),
     color: Color = Color.White,
+    level: Level? = null,
+    player: Player? = null,
+    seed: Int = 0,
 ) {
     val s = size.roundToInt().coerceAtLeast(1)
     drawIntoCanvas { canvas ->
         canvas.recordCustomDraw(
             McItemPlugin.TAG,
-            ItemStackDrawData(stack, IntSize(s, s)),
+            ItemStackDrawData(stack, IntSize(s, s), level, player, seed),
             buildPaint(color),
             null
         )
@@ -114,10 +119,19 @@ fun MinecraftTexture(
 fun MinecraftItem(
     stack: ItemStack,
     modifier: Modifier = Modifier,
-    size: DpSize = DpSize(24.dp, 24.dp),
+    size: DpSize = DpSize(64.dp, 64.dp),
+    level: Level? = null,
+    player: Player? = null,
+    seed: Int = 0,
 ) {
     Canvas(modifier.size(size)) {
-        drawItemStack(stack, this.size.width.coerceAtMost(this.size.height))
+        drawItemStack(
+            stack,
+            this.size.width.coerceAtMost(this.size.height),
+            level = level,
+            player = player,
+            seed = seed,
+        )
     }
 }
 

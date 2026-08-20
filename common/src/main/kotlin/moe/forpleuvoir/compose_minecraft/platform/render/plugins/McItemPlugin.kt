@@ -10,13 +10,18 @@ import androidx.compose.ui.unit.IntSize
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.item.TrackingItemStackRenderState
 import net.minecraft.resources.Identifier
+import net.minecraft.world.entity.player.Player
 import net.minecraft.world.item.ItemDisplayContext
 import net.minecraft.world.item.ItemStack
+import net.minecraft.world.level.Level
 
 /** 物品渲染数据:经 [ItemRenderState] 提交,渲染器 prepare 阶段统一 atlas 烘焙。 */
 data class ItemStackDrawData(
     val stack: ItemStack,
     val size: IntSize,
+    val level: Level? = null,
+    val player: Player? = null,
+    val seed: Int = 0,
 )
 
 /**
@@ -37,7 +42,7 @@ object McItemPlugin : MinecraftRenderPlugin {
         // 解析物品模型为渲染状态(GUI display context,与坐标/缩放无关)
         val state = TrackingItemStackRenderState()
         mc.itemModelResolver.updateForTopItem(
-            state, dd.stack, ItemDisplayContext.GUI, mc.level, mc.player, 0,
+            state, dd.stack, ItemDisplayContext.GUI, dd.level, dd.player, dd.seed,
         )
 
         // 调制色(着色器色彩调制器):取自 paint,无 paint 时 -1(白色不调制)

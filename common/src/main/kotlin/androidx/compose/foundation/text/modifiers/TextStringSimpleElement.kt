@@ -92,6 +92,8 @@ internal class TextStringSimpleElement(
         if (text != other.text) return false /* expensive to check, do after color */
         if (style != other.style) return false
         if (alpha != other.alpha) return false
+        if (segments != other.segments) return false
+        if (scale != other.scale) return false
 
         // these are equally unlikely to change
         if (fontFamilyResolver != other.fontFamilyResolver) return false
@@ -113,6 +115,8 @@ internal class TextStringSimpleElement(
         result = 31 * result + minLines
         result = 31 * result + (color?.hashCode() ?: 0)
         result = 31 * result + alpha.hashCode()
+        result = 31 * result + segments.hashCode()
+        result = 31 * result + scale.hashCode()
         return result
     }
 

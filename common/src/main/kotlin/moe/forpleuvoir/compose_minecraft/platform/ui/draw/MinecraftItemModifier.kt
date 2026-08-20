@@ -12,8 +12,10 @@ import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.unit.IntSize
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.ItemStackDrawData
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.McItemPlugin
+import net.minecraft.world.entity.player.Player
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.level.ItemLike
+import net.minecraft.world.level.Level
 import kotlin.math.roundToInt
 
 /**
@@ -25,10 +27,16 @@ import kotlin.math.roundToInt
 fun Modifier.minecraftItem(
     stack: ItemStack,
     color: Color = Color.White,
+    level: Level? = null,
+    player: Player? = null,
+    seed: Int = 0,
 ): Modifier = this.then(
     MinecraftItemElement(
         stack = stack,
         color = color,
+        level = level,
+        player = player,
+        seed = seed,
     )
 )
 
@@ -36,10 +44,16 @@ fun Modifier.minecraftItem(
 fun Modifier.minecraftItem(
     stack: ItemLike,
     color: Color = Color.White,
+    level: Level? = null,
+    player: Player? = null,
+    seed: Int = 0,
 ): Modifier = this.then(
     MinecraftItemElement(
         stack = ItemStack(stack),
         color = color,
+        level = level,
+        player = player,
+        seed = seed,
     )
 )
 
@@ -47,22 +61,37 @@ fun Modifier.minecraftItem(
 private class MinecraftItemElement(
     private val stack: ItemStack,
     private val color: Color,
+    private val level: Level?,
+    private val player: Player?,
+    private val seed: Int,
 ) : ModifierNodeElement<MinecraftItemNode>() {
 
-    override fun create(): MinecraftItemNode = MinecraftItemNode(stack = stack, color = color)
+    override fun create(): MinecraftItemNode =
+        MinecraftItemNode(stack = stack, color = color, level = level, player = player, seed = seed)
 
     override fun update(node: MinecraftItemNode) {
         node.stack = stack
         node.color = color
+        node.level = level
+        node.player = player
+        node.seed = seed
         node.invalidateDraw()
     }
 
     override fun equals(other: Any?): Boolean =
-        other is MinecraftItemElement && other.stack == stack && other.color == color
+        other is MinecraftItemElement &&
+            other.stack == stack &&
+            other.color == color &&
+            other.level == level &&
+            other.player == player &&
+            other.seed == seed
 
     override fun hashCode(): Int {
         var result = stack.hashCode()
         result = 31 * result + color.hashCode()
+        result = 31 * result + level.hashCode()
+        result = 31 * result + player.hashCode()
+        result = 31 * result + seed
         return result
     }
 }
@@ -70,6 +99,9 @@ private class MinecraftItemElement(
 private class MinecraftItemNode(
     var stack: ItemStack,
     var color: Color,
+    var level: Level?,
+    var player: Player?,
+    var seed: Int,
 ) : DrawModifierNode, Modifier.Node() {
 
     override fun ContentDrawScope.draw() {
@@ -93,7 +125,7 @@ private class MinecraftItemNode(
                 paint = paint.toPaintSnapshot(),
                 layer3D = null,
                 tag = McItemPlugin.TAG,
-                data = ItemStackDrawData(stack = stack, size = IntSize(w, h)),
+                data = ItemStackDrawData(stack = stack, size = IntSize(w, h), level = level, player = player, seed = seed),
             )
         )
 
