@@ -201,6 +201,12 @@ fun MinecraftDevSceneContent() {
                 subtitle = "单个 Box + graphicsLayer(alpha=0.5) + drawMinecraftTexture, 验证透明度",
                 onClick = { ComposeScreen.open { AlphaTestScene() } },
             )
+
+            DevMenuButton(
+                title = "原版 Tooltip 插件测试 (T.39)",
+                subtitle = "Compose 1:1 渲染原版视觉 tooltip:物品/文本/满空 bundle,popup 鼠标跟随,guiscale 开关",
+                onClick = { ComposeScreen.open { TooltipDevScene() } },
+            )
         }
     }
 }

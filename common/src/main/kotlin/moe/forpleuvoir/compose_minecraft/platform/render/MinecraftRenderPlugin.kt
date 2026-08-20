@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.Paint
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.McEntityPlugin
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.McItemPlugin
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.McTexturePlugin
+import moe.forpleuvoir.compose_minecraft.platform.render.plugins.McTooltipPlugin
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.resources.Identifier
@@ -69,6 +70,7 @@ object MinecraftRenderPlugins {
         register(McTexturePlugin)
         register(McItemPlugin)
         register(McEntityPlugin)
+        register(McTooltipPlugin)
     }
 
     fun register(plugin: MinecraftRenderPlugin) {
