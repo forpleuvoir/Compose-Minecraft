@@ -1,4 +1,5 @@
 package moe.forpleuvoir.compose_minecraft.platform.screen
+import moe.forpleuvoir.compose_minecraft.mc
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.InternalComposeUiApi
@@ -14,7 +15,7 @@ import moe.forpleuvoir.compose_minecraft.platform.textinput.ComposeInputBridge.s
 import moe.forpleuvoir.compose_minecraft.platform.textinput.ComposeInputBridge.toCompose
 import moe.forpleuvoir.compose_minecraft.platform.textinput.ComposeInputBridge.toPointerKeyboardModifiers
 import moe.forpleuvoir.compose_minecraft.platform.textinput.MinecraftTextInputService
-import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiRenderer
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposeGuiRenderer
 import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderPlugins
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
@@ -321,7 +322,7 @@ class ComposeScreen(
      */
     override fun onClose() {
         if (parent != null) {
-            Minecraft.getInstance().gui.setScreen(parent)
+            mc.gui.setScreen(parent)
         } else {
             super.onClose()
         }
@@ -364,7 +365,7 @@ class ComposeScreen(
          * (重新 open 会丢父屏组合状态,且叠加多层屏幕)。
          */
         fun closeCurrent(): Boolean {
-            val current = Minecraft.getInstance().gui.screen()
+            val current = mc.gui.screen()
             if (current is ComposeScreen) {
                 current.onClose()
                 return true
@@ -394,11 +395,11 @@ class ComposeScreen(
             density: Float = 1f,
             content: @Composable () -> Unit,
         ): ComposeScreen {
-            val resolvedParent = parent ?: Minecraft.getInstance().gui.screen()
+            val resolvedParent = parent ?: mc.gui.screen()
             // 父屏是 ComposeScreen:替换前先标记可复活(removed 保留场景)
             (resolvedParent as? ComposeScreen)?.reopenable = true
             val screen = ComposeScreen(resolvedParent, renderParentScreen, density, content)
-            Minecraft.getInstance().gui.setScreen(screen)
+            mc.gui.setScreen(screen)
             return screen
         }
     }

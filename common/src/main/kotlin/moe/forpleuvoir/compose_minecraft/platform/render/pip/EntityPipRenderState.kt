@@ -1,4 +1,4 @@
-package moe.forpleuvoir.compose_minecraft.platform.render
+package moe.forpleuvoir.compose_minecraft.platform.render.pip
 
 import net.minecraft.client.renderer.state.gui.pip.GuiEntityRenderState
 import org.joml.Matrix3x2f

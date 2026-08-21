@@ -6,15 +6,17 @@ import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.textures.FilterMode
 import moe.forpleuvoir.compose_minecraft.platform.render.CustomDrawContext
 import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderPlugin
+import moe.forpleuvoir.compose_minecraft.platform.render.ext.blitSprite
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.toArgb
+import moe.forpleuvoir.compose_minecraft.platform.render.ext.pushNineSliced
 import moe.forpleuvoir.compose_minecraft.platform.render.toMatrix3x2f
 import moe.forpleuvoir.compose_minecraft.platform.render.toScreenRectangle
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.render.TextureSetup
+import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.client.renderer.state.gui.BlitRenderState
 import net.minecraft.client.renderer.state.gui.TiledBlitRenderState
 import net.minecraft.resources.Identifier
-import kotlin.math.absoluteValue
 
 /**
  * 纹理子区域(像素坐标,相对纹理左上角)。[uStart]..[uEnd] 为水平范围、[vStart]..[vEnd] 为垂直范围,
@@ -78,6 +80,18 @@ data class TextureDrawData(
     val tileSize: IntSize? = null,
 )
 
+/**
+ * 原版精灵图绘制数据(R.1):经 [McTexturePlugin] 按原版 `GuiSpriteScaling`
+ * (stretch / tile / nine_slice)渲染一个 GUI atlas sprite,由下沉到
+ * [moe.forpleuvoir.compose_minecraft.platform.render.GuiCommandSink] 的
+ * sprite 缩放扩展方法处理。与 [TextureDrawData](原生纹理 + 手动 UV/corner)正交。
+ */
+data class SpriteDrawData(
+    val location: Identifier,
+    val size: IntSize,
+    val pipeline: RenderPipeline = RenderPipelines.GUI_TEXTURED,
+)
+
 /** 一次解析结果:纹理采样设置 + 实际尺寸(UV 归一化用) */
 private class ResolvedTexture(
     val textureSetup: TextureSetup,
@@ -87,10 +101,11 @@ private class ResolvedTexture(
 
 /**
  * 内置纹理插件:直接从 MC TextureManager 获取纹理,不走光栅化。
- * 支持三种模式:
- * - 普通: [BlitRenderState](自定义 UV 拉伸);
- * - 九宫格: corner 指定时拆 9 段(角固定、中心拉伸,支持负值外扩);
- * - tile: tileSize 指定时 [TiledBlitRenderState] 平铺。
+ * 支持两种正交输入(用 [data] 实际类型区分,共用同一 [TAG]):
+ * - [TextureDrawData]:原生纹理 + 可选九宫格 / tile。九宫格([pushNineSliced]
+ *   扩展,支持负值外扩)、tile([TiledBlitRenderState])、普通拉伸([BlitRenderState]);
+ * - [SpriteDrawData]:原版 GUI atlas sprite,按原版 `GuiSpriteScaling` 缩放(即
+ *   tooltip 背景 / bundle 进度条同一套原版 sprite 语义)。
  * 调制色:白色 + paint.alpha(与图片管线 blitImage 语义一致,不染色)。
  */
 object McTexturePlugin : MinecraftRenderPlugin {
@@ -98,9 +113,31 @@ object McTexturePlugin : MinecraftRenderPlugin {
     val TAG: Identifier = Identifier.fromNamespaceAndPath("compose_minecraft", "texture")
 
     override fun onDraw(tag: Identifier, data: Any?, context: CustomDrawContext): Boolean {
-        if (tag != TAG) return false
-        val td = data as? TextureDrawData ?: return false
+        return tag == TAG && when (data) {
+            is SpriteDrawData -> drawSprite(data, context)
+            is TextureDrawData -> drawTexture(data, context)
+            else -> false
+        }
+    }
 
+    // ── 原版精灵图分支(SpriteDrawData) ───────────────────────────────
+
+    private fun drawSprite(sd: SpriteDrawData, context: CustomDrawContext): Boolean {
+        val w = sd.size.width
+        val h = sd.size.height
+        if (w <= 0 || h <= 0) return false
+        context.sink.blitSprite(
+            sd.pipeline, sd.location, 0, 0, w, h,
+            tintColor(context),
+            context.matrix.toMatrix3x2f(),
+            context.scissor?.toScreenRectangle(),
+        )
+        return true
+    }
+
+    // ── 原生纹理分支(TextureDrawData) ────────────────────────────────
+
+    private fun drawTexture(td: TextureDrawData, context: CustomDrawContext): Boolean {
         // 一次解析:纹理采样设置 + 实际尺寸(取不到则无法渲染)
         val resolved = resolve(td) ?: return false
         val textureSetup = resolved.textureSetup
@@ -110,8 +147,7 @@ object McTexturePlugin : MinecraftRenderPlugin {
         val pose = context.matrix.toMatrix3x2f()
         // 色调色:取自 context.paint(MinecraftPaint,含 replayFrom 烘焙的 alphaMultiplier),
         // color 为着色器色彩调制器(默认白 = 纹理原色),alpha 为复合透明度
-        val paint = context.paint
-        val color = paint?.color?.toArgb(paint.alpha) ?: 0xFFFFFFFF.toInt()
+        val color = tintColor(context)
 
         val w = td.size.width
         val h = td.size.height
@@ -132,9 +168,17 @@ object McTexturePlugin : MinecraftRenderPlugin {
                     )
                 )
             }
-            // 九宫格模式
+            // 九宫格模式:下沉到 GuiCommandSink.pushNineSliced 扩展(负值外扩语义保留)
             td.corner.isSpecified -> {
-                pushNineSliced(td, pose, color, textureSetup, tw, th, context)
+                context.sink.pushNineSliced(
+                    td.pipeline,
+                    td.uv, td.corner,
+                    td.size,
+                    color, textureSetup,
+                    tw, th,
+                    pose,
+                    context.scissor?.toScreenRectangle(),
+                )
             }
             // 普通拉伸
             else                  -> {
@@ -152,101 +196,10 @@ object McTexturePlugin : MinecraftRenderPlugin {
         return true
     }
 
-    /**
-     * 九宫格 9 段绘制(参考 ibukigourd pushNineSlicedBlit):
-     * corner 正值向内收缩、负值向区域外扩(绝对值),中心区域只减正值宽度,UV 同步外扩。
-     */
-    private fun pushNineSliced(
-        td: TextureDrawData,
-        pose: org.joml.Matrix3x2f,
-        color: Int,
-        textureSetup: TextureSetup,
-        tw: Int,
-        th: Int,
-        context: CustomDrawContext,
-    ) {
-        val corner = td.corner
-        val u0 = td.uv.uStart
-        val v0 = td.uv.vStart
-        val u1 = td.uv.width
-        val v1 = td.uv.height
-        val x = 0
-        val y = 0
-        val width = td.size.width
-        val height = td.size.height
-
-        val cl = corner.left.absoluteValue
-        val cr = corner.right.absoluteValue
-        val ct = corner.top.absoluteValue
-        val cb = corner.bottom.absoluteValue
-
-        // 中心区域:只减正值(负值外扩,中心覆盖整个区域)
-        val cw = width - (corner.left.coerceAtLeast(0) + corner.right.coerceAtLeast(0))
-        val ch = height - (corner.top.coerceAtLeast(0) + corner.bottom.coerceAtLeast(0))
-
-        val leftX = if (corner.left >= 0) x else x - cl
-        val centerX = if (corner.left >= 0) x + cl else x
-        val rightX = if (corner.right >= 0) x + (width - corner.right) else x + width
-
-        val topY = if (corner.top >= 0) y else y - ct
-        val centerY = if (corner.top >= 0) y + ct else y
-        val bottomY = if (corner.bottom >= 0) y + (height - corner.bottom) else y + height
-
-        val leftU = if (corner.left >= 0) u0 else u0 - cl
-        val centerU = if (corner.left >= 0) u0 + cl else u0
-        val rightU = if (corner.right >= 0) u0 + (u1 - cr) else u0 + u1
-
-        val topV = if (corner.top >= 0) v0 else v0 - ct
-        val centerV = if (corner.top >= 0) v0 + ct else v0
-        val bottomV = if (corner.bottom >= 0) v0 + (v1 - cb) else v0 + v1
-
-        val leftUS = cl
-        val centerUS = u1 - (corner.left.coerceAtLeast(0) + corner.right.coerceAtLeast(0))
-        val rightUS = cr
-
-        val topVS = ct
-        val centerVS = v1 - (corner.top.coerceAtLeast(0) + corner.bottom.coerceAtLeast(0))
-        val bottomVS = cb
-
-        // 9 段:四个角原尺寸、四条边单向拉伸、中心双向拉伸
-        segment(pose, td.pipeline, leftX, topY, cl, ct, leftU, topV, leftUS, topVS, color, tw, th, textureSetup, context)
-        segment(pose, td.pipeline, centerX, topY, cw, ct, centerU, topV, centerUS, topVS, color, tw, th, textureSetup, context)
-        segment(pose, td.pipeline, rightX, topY, cr, ct, rightU, topV, rightUS, topVS, color, tw, th, textureSetup, context)
-
-        segment(pose, td.pipeline, leftX, centerY, cl, ch, leftU, centerV, leftUS, centerVS, color, tw, th, textureSetup, context)
-        segment(pose, td.pipeline, centerX, centerY, cw, ch, centerU, centerV, centerUS, centerVS, color, tw, th, textureSetup, context)
-        segment(pose, td.pipeline, rightX, centerY, cr, ch, rightU, centerV, rightUS, centerVS, color, tw, th, textureSetup, context)
-
-        segment(pose, td.pipeline, leftX, bottomY, cl, cb, leftU, bottomV, leftUS, bottomVS, color, tw, th, textureSetup, context)
-        segment(pose, td.pipeline, centerX, bottomY, cw, cb, centerU, bottomV, centerUS, bottomVS, color, tw, th, textureSetup, context)
-        segment(pose, td.pipeline, rightX, bottomY, cr, cb, rightU, bottomV, rightUS, bottomVS, color, tw, th, textureSetup, context)
-    }
-
-    /** 九宫格单段:像素 UV 归一化后提交 [BlitRenderState] */
-    private fun segment(
-        pose: org.joml.Matrix3x2f,
-        pipeline: RenderPipeline,
-        x: Int, y: Int, w: Int, h: Int,
-        u: Int, v: Int, uSize: Int, vSize: Int,
-        color: Int, tw: Int, th: Int,
-        textureSetup: TextureSetup,
-        context: CustomDrawContext,
-    ) {
-        if (w <= 0 || h <= 0 || color and 0xFF000000.toInt() == 0) return
-        context.sink.addElement(
-            BlitRenderState(
-                pipeline,
-                textureSetup,
-                pose,
-                x, y, x + w, y + h,
-                u.toFloat() / tw,
-                (u + uSize).toFloat() / tw,
-                v.toFloat() / th,
-                (v + vSize).toFloat() / th,
-                color,
-                context.scissor?.toScreenRectangle(),
-            )
-        )
+    /** 统一色调色:取自 context.paint(默认白色 + alpha,不染色)。 */
+    private fun tintColor(context: CustomDrawContext): Int {
+        val paint = context.paint
+        return paint?.color?.toArgb(paint.alpha) ?: 0xFFFFFFFF.toInt()
     }
 
     // ── UV 归一化(像素 → [0,1],按纹理实际尺寸) ─────────────────────────

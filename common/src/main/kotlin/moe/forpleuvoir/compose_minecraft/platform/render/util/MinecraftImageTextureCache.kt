@@ -1,4 +1,4 @@
-package moe.forpleuvoir.compose_minecraft.platform.render
+package moe.forpleuvoir.compose_minecraft.platform.render.util
 
 import com.mojang.blaze3d.GpuFormat
 import com.mojang.blaze3d.platform.NativeImage

@@ -18,8 +18,8 @@ import androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawVerticesCommand
 import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.VertexMode
-import moe.forpleuvoir.compose_minecraft.platform.render.GeometryTessellator
-import moe.forpleuvoir.compose_minecraft.platform.render.GeometryTessellator.Sink
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.GeometryTessellator
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.GeometryTessellator.Sink
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.RasterGradientSampler
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.toArgbInt
 import kotlin.math.max

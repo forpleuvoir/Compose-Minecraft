@@ -1,4 +1,5 @@
-package moe.forpleuvoir.compose_minecraft.platform.render
+package moe.forpleuvoir.compose_minecraft.platform.render.util
+import moe.forpleuvoir.compose_minecraft.mc
 
 import net.minecraft.client.Minecraft
 
@@ -19,7 +20,7 @@ object MinecraftGuiScale {
     /**
      * 当前窗口的实际 guiScale(每帧由原版计算好),至少 1(安全下限)。
      */
-    fun current(): Float = Minecraft.getInstance().window.guiScale.toFloat().coerceAtLeast(1f)
+    fun current(): Float = mc.window.guiScale.toFloat().coerceAtLeast(1f)
 
     /**
      * 复刻原版 [com.mojang.blaze3d.platform.Window.calculateScale]:

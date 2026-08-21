@@ -47,7 +47,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
-import moe.forpleuvoir.compose_minecraft.platform.render.GraphicsLayerRasterizer
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GraphicsLayerRasterizer
 
 /**
  * Draw the provided [GraphicsLayer] into the current [DrawScope]. The [GraphicsLayer] provided must

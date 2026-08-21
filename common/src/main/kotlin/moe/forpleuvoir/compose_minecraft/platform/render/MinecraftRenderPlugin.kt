@@ -1,4 +1,5 @@
 package moe.forpleuvoir.compose_minecraft.platform.render
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
 
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Paint

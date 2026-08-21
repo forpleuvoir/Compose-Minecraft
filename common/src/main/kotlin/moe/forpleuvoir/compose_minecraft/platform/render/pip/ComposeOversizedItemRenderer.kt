@@ -1,4 +1,6 @@
-package moe.forpleuvoir.compose_minecraft.platform.render
+package moe.forpleuvoir.compose_minecraft.platform.render.pip
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.premultipliedForPipeline
+import moe.forpleuvoir.compose_minecraft.mc
 
 import com.mojang.blaze3d.GpuFormat
 import com.mojang.blaze3d.ProjectionType
@@ -98,9 +100,9 @@ class ComposeOversizedItemRenderer(
         val itemStackRenderState = guiItemState.itemStackRenderState()
         val flat = !itemStackRenderState.usesBlockLight()
         if (flat) {
-            Minecraft.getInstance().gameRenderer.lighting().setupFor(Lighting.Entry.ITEMS_FLAT)
+            mc.gameRenderer.lighting().setupFor(Lighting.Entry.ITEMS_FLAT)
         } else {
-            Minecraft.getInstance().gameRenderer.lighting().setupFor(Lighting.Entry.ITEMS_3D)
+            mc.gameRenderer.lighting().setupFor(Lighting.Entry.ITEMS_3D)
         }
         itemStackRenderState.submit(poseStack, submitNodeStorage as SubmitNodeCollector, 15728880, OverlayTexture.NO_OVERLAY, 0)
         modelOnTextureIdentity = itemStackRenderState.modelIdentity

@@ -1,7 +1,7 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.plugins
 
 import moe.forpleuvoir.compose_minecraft.platform.render.CustomDrawContext
-import moe.forpleuvoir.compose_minecraft.platform.render.EntityPipRenderState
+import moe.forpleuvoir.compose_minecraft.platform.render.pip.EntityPipRenderState
 import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderPlugin
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.toArgb
 import moe.forpleuvoir.compose_minecraft.platform.render.toMatrix3x2f

@@ -60,7 +60,7 @@ import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastMaxOfOrDefault
 import androidx.compose.ui.util.trace
 import kotlinx.coroutines.*
-import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftGraphicsContext
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.MinecraftGraphicsContext
 import kotlin.coroutines.CoroutineContext
 import kotlin.math.max
 import kotlin.math.min

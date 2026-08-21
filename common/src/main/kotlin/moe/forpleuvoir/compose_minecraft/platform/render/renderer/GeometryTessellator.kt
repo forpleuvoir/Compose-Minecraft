@@ -1,6 +1,6 @@
 @file:Suppress("GrazieInspection", "SpellCheckingInspection")
 
-package moe.forpleuvoir.compose_minecraft.platform.render
+package moe.forpleuvoir.compose_minecraft.platform.render.renderer
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.MinecraftPath

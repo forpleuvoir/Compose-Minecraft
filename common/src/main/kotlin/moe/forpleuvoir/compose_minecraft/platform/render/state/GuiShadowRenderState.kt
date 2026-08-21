@@ -1,4 +1,5 @@
-package moe.forpleuvoir.compose_minecraft.platform.render
+package moe.forpleuvoir.compose_minecraft.platform.render.state
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftGuiTriangles
 
 import com.mojang.blaze3d.pipeline.RenderPipeline
 import com.mojang.blaze3d.vertex.VertexConsumer

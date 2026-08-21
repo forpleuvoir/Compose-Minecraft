@@ -1,4 +1,6 @@
-package moe.forpleuvoir.compose_minecraft.platform.render
+package moe.forpleuvoir.compose_minecraft.platform.render.renderer
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
+import moe.forpleuvoir.compose_minecraft.platform.render.state.GuiShadowRenderState
 
 import androidx.compose.ui.graphics.MinecraftPath
 import net.minecraft.client.gui.navigation.ScreenRectangle

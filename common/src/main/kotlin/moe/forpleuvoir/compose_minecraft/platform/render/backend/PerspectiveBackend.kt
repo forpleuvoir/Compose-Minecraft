@@ -1,5 +1,6 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.backend
 
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.GuiTriangleRenderState
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.MinecraftCanvas
@@ -16,11 +17,10 @@ import androidx.compose.ui.graphics.MinecraftCanvas.DrawRoundRectCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawVerticesCommand
 import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.VertexMode
-import moe.forpleuvoir.compose_minecraft.platform.render.BlendPipelines
-import moe.forpleuvoir.compose_minecraft.platform.render.GeometryTessellator
-import moe.forpleuvoir.compose_minecraft.platform.render.GuiCommandSink
-import moe.forpleuvoir.compose_minecraft.platform.render.GuiTriangleRenderState
-import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftGuiTriangles
+import moe.forpleuvoir.compose_minecraft.platform.render.util.BlendPipelines
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.GeometryTessellator
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftGuiTriangles
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.ColorEvaluator
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.toArgb
 import org.joml.Matrix3x2f

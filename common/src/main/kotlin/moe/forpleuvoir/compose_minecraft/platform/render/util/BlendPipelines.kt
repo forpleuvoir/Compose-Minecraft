@@ -1,4 +1,5 @@
-package moe.forpleuvoir.compose_minecraft.platform.render
+package moe.forpleuvoir.compose_minecraft.platform.render.util
+import moe.forpleuvoir.compose_minecraft.mc
 
 import com.mojang.blaze3d.PrimitiveTopology
 import com.mojang.blaze3d.pipeline.BlendFunction
@@ -170,7 +171,7 @@ internal object BlendPipelines {
      */
     fun ensureCompiled() {
         val device = RenderSystem.getDevice()
-        val resourceProvider = Minecraft.getInstance().resourceManager
+        val resourceProvider = mc.resourceManager
         val shaderSource = ShaderSource { id, type ->
             val location = type.idConverter().idToFile(id)
             try {

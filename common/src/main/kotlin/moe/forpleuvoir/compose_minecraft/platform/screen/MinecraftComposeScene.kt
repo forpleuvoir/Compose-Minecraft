@@ -1,4 +1,5 @@
 package moe.forpleuvoir.compose_minecraft.platform.screen
+import moe.forpleuvoir.compose_minecraft.mc
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -21,9 +22,9 @@ import androidx.compose.ui.unit.IntSize
 import com.mojang.blaze3d.platform.cursor.CursorType
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
-import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiRenderer
-import moe.forpleuvoir.compose_minecraft.platform.render.GuiCommandSink
-import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderContext
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposeGuiRenderer
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.MinecraftRenderContext
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.LocalVanillaDrawState
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.VanillaDrawState
 import moe.forpleuvoir.compose_minecraft.platform.ui.popup.LocalPopupHost
@@ -240,7 +241,7 @@ class MinecraftComposeScene(
      *    走原版 extractor(画在 Compose 之下,见 KDoc 限制)。
      */
     fun renderFrame() {
-        val windowState = Minecraft.getInstance().gameRenderer.gameRenderState().windowRenderState
+        val windowState = mc.gameRenderer.gameRenderState().windowRenderState
         sceneContainerSize = IntSize(windowState.width, windowState.height)
         resize(
             width = windowState.width,

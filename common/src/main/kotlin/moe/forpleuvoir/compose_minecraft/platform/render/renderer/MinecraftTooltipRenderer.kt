@@ -1,7 +1,11 @@
-package moe.forpleuvoir.compose_minecraft.platform.render
+package moe.forpleuvoir.compose_minecraft.platform.render.renderer
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
+import moe.forpleuvoir.compose_minecraft.platform.render.util.MinecraftGuiScale
+import moe.forpleuvoir.compose_minecraft.platform.render.ext.blitSprite
+import moe.forpleuvoir.compose_minecraft.platform.render.ext.blit
+import moe.forpleuvoir.compose_minecraft.platform.render.state.ItemRenderState
 
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.util.fastCoerceAtMost
 import com.mojang.blaze3d.pipeline.RenderPipeline
 import moe.forpleuvoir.compose_minecraft.platform.ui.tooltip.TooltipLine
 import net.minecraft.client.Minecraft
@@ -10,11 +14,8 @@ import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.client.gui.render.TextureSetup
 import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.client.renderer.item.TrackingItemStackRenderState
-import net.minecraft.client.renderer.state.gui.BlitRenderState
 import net.minecraft.client.renderer.state.gui.ColoredRectangleRenderState
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState
-import net.minecraft.client.renderer.state.gui.TiledBlitRenderState
-import net.minecraft.client.resources.metadata.gui.GuiSpriteScaling
 import net.minecraft.locale.Language
 import net.minecraft.network.chat.FormattedText
 import net.minecraft.resources.Identifier
@@ -29,6 +30,10 @@ import org.joml.Matrix3x2f
  * 1:1 tooltip 渲染桥(T.39):把原版 `GuiGraphicsExtractor` 中 tooltip 相关的绘制
  * 全部转译为 Compose 渲染管线的元素,经 [GuiCommandSink] 提交 —— **完全不走
  * [net.minecraft.client.gui.GuiGraphicsExtractor] / 原版 GuiRenderState**。
+ *
+ * 本类只保留 tooltip 专属能力(文本 / fill / 物品 / 背景 / 定位 / 行循环);
+ * **sprite 绘制(stretch / tile / nine_slice)与独立纹理 blit 已下沉为
+ * [GuiCommandSink] 扩展方法(见 [GuiCommandSinkExtensions] 所在文件),本类仅转发**。
  *
  * ## 坐标系
  * - [density] 为 null(默认):使用原版 guiScale([MinecraftGuiScale.current])作为缩放系数,
@@ -117,7 +122,7 @@ class MinecraftTooltipRenderer(
         )
     }
 
-    // ── sprite 绘制(stretch / tile / nine_slice) ──────────────────
+    // ── sprite 绘制(R.1:委托 GuiCommandSink 扩展,见 GuiCommandSinkExtensions) ──
 
     /**
      * 按 sprite 自身缩放模式绘制(location = GUI atlas sprite id),同原版
@@ -126,342 +131,7 @@ class MinecraftTooltipRenderer(
      * 拿不到 sprite(资源未就绪)时静默跳过。
      */
     fun blitSprite(pipeline: RenderPipeline, location: Identifier, x: Int, y: Int, width: Int, height: Int, color: Int) {
-        if (width == 0 || height == 0) return
-        val guiSprite = GuiSpriteResolver.resolve(location) ?: return
-        when (val scaling = guiSprite.scaling) {
-            is GuiSpriteScaling.Stretch   -> blitSprite(pipeline, guiSprite, x, y, width, height, color)
-            is GuiSpriteScaling.Tile      -> blitTiledSprite(
-                pipeline, guiSprite,
-                x,
-                y,
-                width,
-                height,
-                0,
-                0,
-                scaling.width(),
-                scaling.height(),
-                scaling.width(),
-                scaling.height(),
-                color
-            )
-
-            is GuiSpriteScaling.NineSlice -> blitNineSlicedSprite(pipeline, guiSprite, scaling, x, y, width, height, color)
-        }
-    }
-
-    /**
-     * 以画布坐标裁剪 sprite 子区域绘制(原版 blitSprite(spriteWidth, spriteHeight,
-     * textureX, textureY, x, y, width, height, color))。textureX/textureY 为 sprite
-     * 画布(尺寸 spriteWidth x spriteHeight)中的像素偏移,UV 经 getU/getV 归一化。
-     */
-    private fun blitSprite(
-        pipeline: RenderPipeline,
-        guiSprite: GuiSprite,
-        spriteWidth: Int,
-        spriteHeight: Int,
-        textureX: Int,
-        textureY: Int,
-        x: Int,
-        y: Int,
-        width: Int,
-        height: Int,
-        color: Int,
-    ) {
-        if (width != 0 && height != 0) {
-            val u0 = guiSprite.sprite.getU(textureX.toFloat() / spriteWidth)
-            val u1 = guiSprite.sprite.getU((textureX + width).toFloat() / spriteWidth)
-            val v0 = guiSprite.sprite.getV(textureY.toFloat() / spriteHeight)
-            val v1 = guiSprite.sprite.getV((textureY + height).toFloat() / spriteHeight)
-            innerBlit(pipeline, guiSprite, x, x + width, y, y + height, u0, u1, v0, v1, color)
-        }
-    }
-
-    /** 整 sprite 拉伸绘制(原版 blitSprite(TextureAtlasSprite) 语义)。 */
-    private fun blitSprite(pipeline: RenderPipeline, guiSprite: GuiSprite, x: Int, y: Int, width: Int, height: Int, color: Int) {
-        if (width != 0 && height != 0) {
-            innerBlit(pipeline, guiSprite, x, x + width, y, y + height, guiSprite.u0, guiSprite.u1, guiSprite.v0, guiSprite.v1, color)
-        }
-    }
-
-    /** 原版 blitNineSlicedSprite:九宫格拆 9 段,border 按宽高一半钳制。 */
-    private fun blitNineSlicedSprite(
-        pipeline: RenderPipeline,
-        guiSprite: GuiSprite,
-        nineSlice: GuiSpriteScaling.NineSlice,
-        x: Int,
-        y: Int,
-        width: Int,
-        height: Int,
-        color: Int,
-    ) {
-        val border = nineSlice.border()
-        val borderLeft = border.left().fastCoerceAtMost(width / 2)
-        val borderRight = border.right().fastCoerceAtMost(width / 2)
-        val borderTop = border.top().fastCoerceAtMost(height / 2)
-        val borderBottom = border.bottom().fastCoerceAtMost(height / 2)
-        if (width == nineSlice.width() && height == nineSlice.height()) {
-            blitSprite(pipeline, guiSprite, nineSlice.width(), nineSlice.height(), 0, 0, x, y, width, height, color)
-        } else if (height == nineSlice.height()) {
-            blitSprite(pipeline, guiSprite, nineSlice.width(), nineSlice.height(), 0, 0, x, y, borderLeft, height, color)
-            blitNineSliceInnerSegment(
-                pipeline, guiSprite, nineSlice,
-                x + borderLeft, y, width - borderRight - borderLeft, height,
-                borderLeft, 0, nineSlice.width() - borderRight - borderLeft, nineSlice.height(),
-                color,
-            )
-            blitSprite(
-                pipeline,
-                guiSprite,
-                nineSlice.width(),
-                nineSlice.height(),
-                nineSlice.width() - borderRight,
-                0,
-                x + width - borderRight,
-                y,
-                borderRight,
-                height,
-                color
-            )
-        } else if (width == nineSlice.width()) {
-            blitSprite(pipeline, guiSprite, nineSlice.width(), nineSlice.height(), 0, 0, x, y, width, borderTop, color)
-            blitNineSliceInnerSegment(
-                pipeline, guiSprite, nineSlice,
-                x, y + borderTop, width, height - borderBottom - borderTop,
-                0, borderTop, nineSlice.width(), nineSlice.height() - borderBottom - borderTop,
-                color,
-            )
-            blitSprite(
-                pipeline,
-                guiSprite,
-                nineSlice.width(),
-                nineSlice.height(),
-                0,
-                nineSlice.height() - borderBottom,
-                x,
-                y + height - borderBottom,
-                width,
-                borderBottom,
-                color
-            )
-        } else {
-            //左上角
-            blitSprite(pipeline, guiSprite, nineSlice.width(), nineSlice.height(), 0, 0, x, y, borderLeft, borderTop, color)
-            //顶部
-            blitNineSliceInnerSegment(
-                pipeline, guiSprite, nineSlice,
-                x + borderLeft, y, width - borderRight - borderLeft, borderTop,
-                borderLeft, 0, nineSlice.width() - borderRight - borderLeft, borderTop,
-                color,
-            )
-            //右上角
-            blitSprite(
-                pipeline,
-                guiSprite,
-                nineSlice.width(),
-                nineSlice.height(),
-                nineSlice.width() - borderRight,
-                0,
-                x + width - borderRight,
-                y,
-                borderRight,
-                borderTop,
-                color
-            )
-            //左下角
-            blitSprite(
-                pipeline,
-                guiSprite,
-                nineSlice.width(),
-                nineSlice.height(),
-                0,
-                nineSlice.height() - borderBottom,
-                x,
-                y + height - borderBottom,
-                borderLeft,
-                borderBottom,
-                color
-            )
-            //底部
-            blitNineSliceInnerSegment(
-                pipeline,
-                guiSprite,
-                nineSlice,
-                x + borderLeft,
-                y + height - borderBottom,
-                width - borderRight - borderLeft,
-                borderBottom,
-                borderLeft,
-                nineSlice.height() - borderBottom,
-                nineSlice.width() - borderRight - borderLeft,
-                borderBottom,
-                color
-            )
-            //右下角
-            blitSprite(
-                pipeline,
-                guiSprite,
-                nineSlice.width(),
-                nineSlice.height(),
-                nineSlice.width() - borderRight,
-                nineSlice.height() - borderBottom,
-                x + width - borderRight,
-                y + height - borderBottom,
-                borderRight,
-                borderBottom,
-                color
-            )
-            //左边
-            blitNineSliceInnerSegment(
-                pipeline,
-                guiSprite,
-                nineSlice,
-                x,
-                y + borderTop,
-                borderLeft,
-                height - borderBottom - borderTop,
-                0,
-                borderTop,
-                borderLeft,
-                nineSlice.height() - borderBottom - borderTop,
-                color
-            )
-            //中心
-            blitNineSliceInnerSegment(
-                pipeline,
-                guiSprite,
-                nineSlice,
-                x + borderLeft,
-                y + borderTop,
-                width - borderRight - borderLeft,
-                height - borderBottom - borderTop,
-                borderLeft,
-                borderTop,
-                nineSlice.width() - borderRight - borderLeft,
-                nineSlice.height() - borderBottom - borderTop,
-                color
-            )
-            //右边
-            blitNineSliceInnerSegment(
-                pipeline,
-                guiSprite,
-                nineSlice,
-                x + width - borderRight,
-                y + borderTop,
-                borderRight,
-                height - borderBottom - borderTop,
-                nineSlice.width() - borderRight,
-                borderTop,
-                borderRight,
-                nineSlice.height() - borderBottom - borderTop,
-                color
-            )
-        }
-    }
-
-    /**
-     * 原版 blitNineSliceInnerSegment:中间段 —— stretchInner 时拉伸;
-     * 否则以"画布中间块"为 tile 平铺(blitTiledSprite)。
-     */
-    private fun blitNineSliceInnerSegment(
-        pipeline: RenderPipeline,
-        guiSprite: GuiSprite,
-        nineSlice: GuiSpriteScaling.NineSlice,
-        x: Int,
-        y: Int,
-        width: Int,
-        height: Int,
-        textureX: Int,
-        textureY: Int,
-        textureWidth: Int,
-        textureHeight: Int,
-        color: Int,
-    ) {
-        if (width > 0 && height > 0) {
-            if (nineSlice.stretchInner()) {
-                innerBlit(
-                    pipeline, guiSprite,
-                    x, x + width, y, y + height,
-                    guiSprite.sprite.getU(textureX.toFloat() / nineSlice.width()),
-                    guiSprite.sprite.getU((textureX + textureWidth).toFloat() / nineSlice.width()),
-                    guiSprite.sprite.getV(textureY.toFloat() / nineSlice.height()),
-                    guiSprite.sprite.getV((textureY + textureHeight).toFloat() / nineSlice.height()),
-                    color,
-                )
-            } else {
-                blitTiledSprite(
-                    pipeline, guiSprite, x, y, width, height,
-                    textureX, textureY, textureWidth, textureHeight,
-                    nineSlice.width(), nineSlice.height(), color,
-                )
-            }
-        }
-    }
-
-    /** 原版 blitTiledSprite:以画布子区域(textureX..textureX+tileWidth)为 tile 平铺目标矩形。 */
-    private fun blitTiledSprite(
-        pipeline: RenderPipeline,
-        guiSprite: GuiSprite,
-        x: Int,
-        y: Int,
-        width: Int,
-        height: Int,
-        textureX: Int,
-        textureY: Int,
-        tileWidth: Int,
-        tileHeight: Int,
-        spriteWidth: Int,
-        spriteHeight: Int,
-        color: Int,
-    ) {
-        if (width <= 0 || height <= 0) return
-        if (tileWidth <= 0 || tileHeight <= 0) return
-        val sprite = guiSprite.sprite
-        sink.addElement(
-            TiledBlitRenderState(
-                pipeline,
-                guiSprite.textureSetup,
-                pose,
-                tileWidth,
-                tileHeight,
-                x,
-                y,
-                x + width,
-                y + height,
-                sprite.getU(textureX.toFloat() / spriteWidth),
-                sprite.getU((textureX + tileWidth).toFloat() / spriteWidth),
-                sprite.getV(textureY.toFloat() / spriteHeight),
-                sprite.getV((textureY + tileHeight).toFloat() / spriteHeight),
-                color,
-                scissor,
-            )
-        )
-    }
-
-    /** 原版 innerBlit:一张 UV 矩形提交 [BlitRenderState](默认 GUI_TEXTURED 管线)。 */
-    private fun innerBlit(
-        pipeline: RenderPipeline,
-        guiSprite: GuiSprite,
-        x0: Int,
-        x1: Int,
-        y0: Int,
-        y1: Int,
-        u0: Float,
-        u1: Float,
-        v0: Float,
-        v1: Float,
-        color: Int,
-    ) {
-        sink.addElement(
-            BlitRenderState(
-                pipeline,
-                guiSprite.textureSetup,
-                pose,
-                x0, y0, x1, y1,
-                u0, u1, v0, v1,
-                color,
-                scissor,
-            )
-        )
+        sink.blitSprite(pipeline, location, x, y, width, height, color, pose, scissor)
     }
 
     /**
@@ -484,21 +154,7 @@ class MinecraftTooltipRenderer(
         textureHeight: Int,
         color: Int = -1,
     ) {
-        val texture = mc.textureManager.getTexture(textureId)
-        sink.addElement(
-            BlitRenderState(
-                pipeline,
-                TextureSetup.singleTexture(texture.getTextureView(), texture.getSampler()),
-                pose,
-                x, x + width, y, y + height,
-                u / textureWidth,
-                (u + srcWidth) / textureWidth,
-                v / textureHeight,
-                (v + srcHeight) / textureHeight,
-                color,
-                scissor,
-            )
-        )
+        sink.blit(pipeline, textureId, x, y, u, v, width, height, srcWidth, srcHeight, textureWidth, textureHeight, color, pose, scissor)
     }
 
     /**
@@ -592,7 +248,7 @@ class MinecraftTooltipRenderer(
         /** 原版 DefaultTooltipPositioner 定位常量(可覆盖):鼠标偏移 + 边界校正。 */
         const val MOUSE_OFFSET_X = 20
         const val MOUSE_OFFSET_Y = -12
-        const val OVERFLOW_FLIP_BACK = 36
+        const val OVERFLOW_FLIP_BACK = 32
         const val EDGE_MIN = 4
         const val SCREEN_PADDING = 3
 

@@ -1,4 +1,4 @@
-package moe.forpleuvoir.compose_minecraft.platform.render
+package moe.forpleuvoir.compose_minecraft.platform.render.state
 
 import androidx.compose.ui.unit.IntSize
 import net.minecraft.client.gui.navigation.ScreenRectangle

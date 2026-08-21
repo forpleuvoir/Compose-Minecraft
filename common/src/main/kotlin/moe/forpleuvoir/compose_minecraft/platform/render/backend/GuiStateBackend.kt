@@ -1,9 +1,21 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.backend
+import moe.forpleuvoir.compose_minecraft.mc
 
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.MinecraftCanvas.*
-import moe.forpleuvoir.compose_minecraft.platform.render.*
+import moe.forpleuvoir.compose_minecraft.platform.render.CustomDrawContext
+import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderPlugins
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.MinecraftRenderContext
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.GeometryTessellator
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftGuiTriangles
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftShadowRenderer
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.GuiTriangleRenderState
+import moe.forpleuvoir.compose_minecraft.platform.render.util.BlendPipelines
+import moe.forpleuvoir.compose_minecraft.platform.render.util.MinecraftImageTextureCache
+import moe.forpleuvoir.compose_minecraft.platform.render.toMatrix3x2f
+import moe.forpleuvoir.compose_minecraft.platform.render.toScreenRectangle
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.ColorEvaluator
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.toArgb
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toComponent
@@ -330,7 +342,7 @@ internal class GuiStateBackend : GeometryBackend {
      *    因此先与窗口矩形相交,相交为空则整条命令跳过。
      */
     private fun scissorFor(command: DrawCommand): Rect? {
-        val windowState = Minecraft.getInstance().gameRenderer.gameRenderState().windowRenderState
+        val windowState = mc.gameRenderer.gameRenderState().windowRenderState
         // T.24:场景尺寸 = 窗口像素(1:1),不再除 guiScale
         val windowWidth = windowState.width.toFloat()
         val windowHeight = windowState.height.toFloat()
@@ -500,7 +512,7 @@ internal class GuiStateBackend : GeometryBackend {
      * - scissor:命令裁剪矩形(记录时已换算为屏幕空间,MC scissor 即屏幕坐标)。
      */
     private fun text(command: DrawTextCommand, scissor: Rect?): GuiTextRenderState {
-        val font = Minecraft.getInstance().font
+        val font = mc.font
         val alphaByte = (command.alpha * 255f).roundToInt().coerceIn(0, 255)
         val color = if (command.shader != null) {
             // 渐变文本:以文本位置中心采样渐变颜色

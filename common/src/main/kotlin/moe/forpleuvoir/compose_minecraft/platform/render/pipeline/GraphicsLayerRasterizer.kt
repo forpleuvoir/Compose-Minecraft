@@ -1,4 +1,4 @@
-package moe.forpleuvoir.compose_minecraft.platform.render
+package moe.forpleuvoir.compose_minecraft.platform.render.pipeline
 
 import androidx.compose.ui.graphics.MinecraftCanvas
 import moe.forpleuvoir.compose_minecraft.platform.render.backend.CommandDispatcher

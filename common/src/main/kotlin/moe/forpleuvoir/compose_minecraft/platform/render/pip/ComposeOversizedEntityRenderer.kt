@@ -1,4 +1,6 @@
-package moe.forpleuvoir.compose_minecraft.platform.render
+package moe.forpleuvoir.compose_minecraft.platform.render.pip
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.premultipliedForPipeline
+import moe.forpleuvoir.compose_minecraft.mc
 
 import com.mojang.blaze3d.GpuFormat
 import com.mojang.blaze3d.ProjectionType
@@ -94,7 +96,7 @@ class ComposeOversizedEntityRenderer(
      *  旋转 → 复原),使 rotation 绕模型中心而非脚底。 */
     private fun renderToTexture(renderState: GuiEntityRenderState, poseStack: PoseStack) {
         poseStack.scale(1f, -1f, -1f)
-        Minecraft.getInstance().gameRenderer.lighting().setupFor(Lighting.Entry.ENTITY_IN_UI)
+        mc.gameRenderer.lighting().setupFor(Lighting.Entry.ENTITY_IN_UI)
         val translation: Vector3fc = renderState.translation()
         poseStack.translate(translation.x(), translation.y(), translation.z())
         val h = renderState.renderState().boundingBoxHeight
@@ -105,7 +107,7 @@ class ComposeOversizedEntityRenderer(
         if (overriddenCameraAngle != null) {
             cameraRenderState.orientation = overriddenCameraAngle.conjugate(Quaternionf()).rotateY(Math.PI.toFloat())
         }
-        Minecraft.getInstance().entityRenderDispatcher.submit(
+        mc.entityRenderDispatcher.submit(
             renderState.renderState(),
             cameraRenderState,
             0.0,

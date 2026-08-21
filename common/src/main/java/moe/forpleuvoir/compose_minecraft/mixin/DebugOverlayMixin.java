@@ -1,6 +1,6 @@
 package moe.forpleuvoir.compose_minecraft.mixin;
 
-import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiRenderer;
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposeGuiRenderer;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.DebugScreenOverlay;
 import org.spongepowered.asm.mixin.Mixin;

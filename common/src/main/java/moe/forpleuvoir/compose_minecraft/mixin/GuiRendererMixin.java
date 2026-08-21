@@ -1,6 +1,6 @@
 package moe.forpleuvoir.compose_minecraft.mixin;
 
-import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiRenderer;
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposeGuiRenderer;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.gui.render.GuiRenderer;
 import org.spongepowered.asm.mixin.Mixin;

@@ -1,4 +1,5 @@
-package moe.forpleuvoir.compose_minecraft.platform.render
+package moe.forpleuvoir.compose_minecraft.platform.render.pipeline
+import moe.forpleuvoir.compose_minecraft.mc
 
 import com.mojang.blaze3d.ProjectionType
 import com.mojang.blaze3d.pipeline.RenderPipeline
@@ -22,6 +23,10 @@ import net.minecraft.client.renderer.state.gui.GuiTextRenderState
 import net.minecraft.client.renderer.state.gui.pip.OversizedItemRenderState
 import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState
 import org.joml.Matrix4f
+import moe.forpleuvoir.compose_minecraft.platform.render.state.ItemRenderState
+import moe.forpleuvoir.compose_minecraft.platform.render.pip.EntityPipRenderState
+import moe.forpleuvoir.compose_minecraft.platform.render.pip.ComposeOversizedItemRenderer
+import moe.forpleuvoir.compose_minecraft.platform.render.pip.ComposeOversizedEntityRenderer
 import java.util.*
 import kotlin.math.max
 import kotlin.math.min
@@ -228,8 +233,8 @@ class ComposeGuiRenderer : GuiCommandSink {
                         }
                     })
                 }
-                item.itemState != null -> prepareItem(item.itemState, Minecraft.getInstance())
-                item.entityState != null -> prepareEntity(item.entityState, Minecraft.getInstance())
+                item.itemState != null -> prepareItem(item.itemState, mc)
+                item.entityState != null -> prepareEntity(item.entityState, mc)
                 item.pipState != null -> { /* 其他 PIP 类型暂不处理 */ }
             }
         }
@@ -306,11 +311,11 @@ class ComposeGuiRenderer : GuiCommandSink {
     /** 绘制阶段:像素正交投影 + 绑定主渲染目标 + 逐 draw 提交(照抄原版 executeDrawRange/executeDraw)。 */
     private fun draw() {
         if (draws.isEmpty()) return
-        val windowState = Minecraft.getInstance().gameRenderer.gameRenderState().windowRenderState
+        val windowState = mc.gameRenderer.gameRenderState().windowRenderState
         // 1:1 像素投影(不除 guiScale)
         guiProjection.setupOrtho(1000.0f, 11000.0f, windowState.width.toFloat(), windowState.height.toFloat(), true)
         RenderSystem.setProjectionMatrix(guiProjectionMatrixBuffer.getBuffer(guiProjection), ProjectionType.ORTHOGRAPHIC)
-        val mainRenderTarget = Minecraft.getInstance().gameRenderer.mainRenderTarget()
+        val mainRenderTarget = mc.gameRenderer.mainRenderTarget()
         val dynamicTransforms = RenderSystem.getDynamicUniforms().writeTransform(Matrix4f().setTranslation(0.0f, 0.0f, -11000.0f))
         RenderSystem.getDevice()
             .createCommandEncoder()
@@ -374,7 +379,7 @@ class ComposeGuiRenderer : GuiCommandSink {
      * y 轴翻转:MC scissor 原点在左上,enableScissor 的 y 以纹理底部为原点。
      */
     private fun enableScissor(rectangle: ScreenRectangle, renderPass: RenderPass) {
-        val window = Minecraft.getInstance().gameRenderer.gameRenderState().windowRenderState
+        val window = mc.gameRenderer.gameRenderState().windowRenderState
         val left = max(0, min(rectangle.left(), window.width))
         val top = max(0, min(rectangle.top(), window.height))
         val right = max(0, min(rectangle.right(), window.width))

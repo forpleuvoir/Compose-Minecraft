@@ -1,4 +1,4 @@
-package moe.forpleuvoir.compose_minecraft.platform.render
+package moe.forpleuvoir.compose_minecraft.platform.render.state
 
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.render.TextureSetup
@@ -7,6 +7,7 @@ import net.minecraft.client.resources.metadata.gui.GuiMetadataSection
 import net.minecraft.client.resources.metadata.gui.GuiSpriteScaling
 import net.minecraft.data.AtlasIds
 import net.minecraft.resources.Identifier
+import kotlin.jvm.optionals.getOrElse
 
 /**
  * GUI atlas sprite 解析结果(T.39):sprite 本体 + 采样设置 + 缩放模式。
@@ -24,10 +25,10 @@ class GuiSprite(
     val atlasHeight: Int = 0,
 ) {
     /** 归一化 UV([0,1],来自 sprite 在 atlas 中的位置,无需按纹理尺寸除) */
-    val u0: Float get() = sprite.getU0()
-    val u1: Float get() = sprite.getU1()
-    val v0: Float get() = sprite.getV0()
-    val v1: Float get() = sprite.getV1()
+    val u0: Float get() = sprite.u0
+    val u1: Float get() = sprite.u1
+    val v0: Float get() = sprite.v0
+    val v1: Float get() = sprite.v1
 }
 
 /**
@@ -35,7 +36,7 @@ class GuiSprite(
  * [GuiSpriteScaling](stretch / tile / nine_slice,数据来自 sprite meta `gui.scaling`)。
  *
  * 与原版 `GuiGraphicsExtractor.blitSprite` 的解析链路一致,但只做只读解析,
- * 不接触原版 GuiRenderState —— 绘制由 1:1 渲染管线([MinecraftTooltipRenderer])提交。
+ * 不接触原版 GuiRenderState —— 绘制由 1:1 渲染管线([moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftTooltipRenderer])提交。
  */
 object GuiSpriteResolver {
 
@@ -50,7 +51,7 @@ object GuiSpriteResolver {
             val texture = mc.textureManager.getTexture(sprite.atlasLocation())
             val scaling = sprite.contents()
                 .getAdditionalMetadata(GuiMetadataSection.TYPE)
-                .orElse(GuiMetadataSection.DEFAULT)
+                .getOrElse { GuiMetadataSection.DEFAULT }
                 .scaling()
             GuiSprite(
                 sprite = sprite,
