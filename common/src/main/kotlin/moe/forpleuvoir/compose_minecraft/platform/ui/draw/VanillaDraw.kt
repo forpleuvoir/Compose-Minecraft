@@ -14,7 +14,7 @@ import androidx.compose.ui.node.requireLayoutCoordinates
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.IntOffset
 import com.mojang.blaze3d.pipeline.RenderPipeline
-import moe.forpleuvoir.compose_minecraft.platform.render.GuiCommandSink
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
 import net.minecraft.client.gui.Font
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.navigation.ScreenRectangle
