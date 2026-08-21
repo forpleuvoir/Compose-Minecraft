@@ -1,7 +1,8 @@
 package moe.forpleuvoir.compose_minecraft.platform.ui.tooltip
 
 import androidx.compose.ui.unit.IntSize
-import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftTooltipRenderer
+import moe.forpleuvoir.compose_minecraft.mc
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftTooltipRenderer
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.Font
 import net.minecraft.client.gui.screens.Screen
@@ -98,33 +99,36 @@ data class TooltipLines(
         }
         return IntSize(textWidth, tempHeight)
     }
-}
 
-/** 通用文本 tooltip:任意 [Component] 列表 → 文本行。 */
-fun tooltipLinesOf(font: Font, texts: List<Component>, style: Identifier? = null): TooltipLines =
-    TooltipLines(
-        font = font,
-        lines = texts.map { TextTooltipLine(it.getVisualOrderText()) },
-        style = style,
-    )
+    companion object {
 
-/**
- * 物品 tooltip:照原版 `Screen.getTooltipFromItem` 同款文本 + `getTooltipImage` +
- * `TOOLTIP_STYLE`;图片组件插到第 1 行(原版 components.isEmpty() ? 0 : 1 语义)。
- */
-fun itemTooltipLines(font: Font, itemStack: ItemStack): TooltipLines {
-    val mc = Minecraft.getInstance()
-    val texts = Screen.getTooltipFromItem(mc, itemStack)
-    val lines: MutableList<TooltipLine> = texts.map { TextTooltipLine(it.getVisualOrderText()) }.toMutableList()
-    val image = itemStack.getTooltipImage().orElse(null)
-    if (image != null) {
-        lines.add(if (lines.isEmpty()) 0 else 1, ImageTooltipLine(image))
+        /** 通用文本 tooltip:任意 [Component] 列表 → 文本行。 */
+        fun fromLines(texts: List<Component>, style: Identifier? = null, font: Font = mc.font): TooltipLines =
+            TooltipLines(
+                font = font,
+                lines = texts.map { TextTooltipLine(it.visualOrderText) },
+                style = style,
+            )
+
+        /**
+         * 物品 tooltip:照原版 `Screen.getTooltipFromItem` 同款文本 + `getTooltipImage` +
+         * `TOOLTIP_STYLE`;图片组件插到第 1 行(原版 components.isEmpty() ? 0 : 1 语义)。
+         */
+        fun fromItem(itemStack: ItemStack, font: Font = mc.font): TooltipLines {
+            val mc = Minecraft.getInstance()
+            val texts = Screen.getTooltipFromItem(mc, itemStack)
+            val lines: MutableList<TooltipLine> = texts.map { TextTooltipLine(it.visualOrderText) }.toMutableList()
+            val image = itemStack.tooltipImage.orElse(null)
+            if (image != null) {
+                lines.add(if (lines.isEmpty()) 0 else 1, ImageTooltipLine(image))
+            }
+            return TooltipLines(
+                font = font,
+                lines = lines,
+                style = itemStack.get(DataComponents.TOOLTIP_STYLE),
+            )
+        }
     }
-    return TooltipLines(
-        font = font,
-        lines = lines,
-        style = itemStack.get(DataComponents.TOOLTIP_STYLE),
-    )
 }
 
 /**
@@ -160,17 +164,17 @@ internal object TooltipImages {
     private val SLOT_BACKGROUND_SPRITE: Identifier = Identifier.withDefaultNamespace("container/bundle/slot_background")
 
     fun getWidth(component: TooltipComponent, font: Font): Int = when (component) {
-        is BundleContents -> GRID_WIDTH
-        is BundleTooltip -> GRID_WIDTH
+        is BundleContents       -> GRID_WIDTH
+        is BundleTooltip        -> GRID_WIDTH
         is ActivePlayersTooltip -> playersWidth(font, component.profiles())
-        else -> 0
+        else                    -> 0
     }
 
     fun getHeight(component: TooltipComponent, font: Font): Int = when (component) {
-        is BundleContents -> bundleHeight(font, component)
-        is BundleTooltip -> bundleHeight(font, component.contents())
+        is BundleContents       -> bundleHeight(font, component)
+        is BundleTooltip        -> bundleHeight(font, component.contents())
         is ActivePlayersTooltip -> component.profiles().size * ACTIVE_PLAYER_ROW_HEIGHT + ACTIVE_PLAYER_PADDING
-        else -> 0
+        else                    -> 0
     }
 
     fun render(
@@ -183,10 +187,10 @@ internal object TooltipImages {
         tooltipHeight: Int,
     ) {
         when (component) {
-            is BundleContents -> renderBundle(renderer, font, component, x, y, tooltipWidth, tooltipHeight)
-            is BundleTooltip -> renderBundle(renderer, font, component.contents(), x, y, tooltipWidth, tooltipHeight)
+            is BundleContents       -> renderBundle(renderer, font, component, x, y, tooltipWidth, tooltipHeight)
+            is BundleTooltip        -> renderBundle(renderer, font, component.contents(), x, y, tooltipWidth, tooltipHeight)
             is ActivePlayersTooltip -> renderActivePlayers(renderer, font, component.profiles(), x, y)
-            else -> Unit
+            else                    -> Unit
         }
     }
 
@@ -362,8 +366,8 @@ internal object TooltipImages {
 
     private fun getProgressBarFillText(weight: Fraction): Component? = when {
         weight.compareTo(Fraction.ZERO) == 0 -> BUNDLE_EMPTY_TEXT
-        weight.compareTo(Fraction.ONE) >= 0 -> BUNDLE_FULL_TEXT
-        else -> null
+        weight.compareTo(Fraction.ONE) >= 0  -> BUNDLE_FULL_TEXT
+        else                                 -> null
     }
 
     // ── ActivePlayers ──────────────────────────────────────────────

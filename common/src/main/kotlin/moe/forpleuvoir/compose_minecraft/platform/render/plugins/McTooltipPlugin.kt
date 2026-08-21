@@ -2,7 +2,7 @@ package moe.forpleuvoir.compose_minecraft.platform.render.plugins
 
 import moe.forpleuvoir.compose_minecraft.platform.render.CustomDrawContext
 import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderPlugin
-import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftTooltipRenderer
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftTooltipRenderer
 import moe.forpleuvoir.compose_minecraft.platform.render.toMatrix3x2f
 import moe.forpleuvoir.compose_minecraft.platform.render.toScreenRectangle
 import moe.forpleuvoir.compose_minecraft.platform.ui.tooltip.TooltipLines

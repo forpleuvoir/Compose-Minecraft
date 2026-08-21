@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -28,14 +29,13 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftGuiScale
+import moe.forpleuvoir.compose_minecraft.platform.render.util.MinecraftGuiScale
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import moe.forpleuvoir.compose_minecraft.platform.ui.tooltip.TooltipLines
 import moe.forpleuvoir.compose_minecraft.platform.ui.tooltip.TooltipPositionProvider
-import moe.forpleuvoir.compose_minecraft.platform.ui.tooltip.itemTooltipLines
-import moe.forpleuvoir.compose_minecraft.platform.ui.tooltip.rememberTooltip
-import moe.forpleuvoir.compose_minecraft.platform.ui.tooltip.tooltipLinesOf
+import moe.forpleuvoir.compose_minecraft.platform.ui.tooltip.TooltipPopup
+import moe.forpleuvoir.compose_minecraft.platform.ui.tooltip.minecraftTooltip
 import net.minecraft.client.Minecraft
 import net.minecraft.core.component.DataComponents
 import net.minecraft.network.chat.Component
@@ -67,28 +67,28 @@ fun TooltipDevScene() {
         val diamondX64 = remember { ItemStack(Items.DIAMOND, 64) }
         val fullBundle = remember {
             val stack = ItemStack(Items.BUNDLE)
-            val templates = (1..20).map { ItemStackTemplate(Items.DIAMOND) }
+            val templates = (1..20).map { ItemStackTemplate(Items.DIAMOND_SWORD) }
             stack.set(DataComponents.BUNDLE_CONTENTS, BundleContents(templates))
             stack
         }
         val emptyBundle = remember { ItemStack(Items.BUNDLE) }
         val textLines = remember(font) {
-            tooltipLinesOf(
-                font,
+            TooltipLines.fromLines(
                 listOf(
                     Component.literal("").withStyle(Style.EMPTY.withColor(Color(0xFFAAAAAA))),
                     Component.translatable("item.minecraft.diamond_sword"),
                     Component.literal("通用文本 tooltip 测试行"),
                 ),
+                font = font
             )
         }
 
         val slots = remember(font, sword, diamondX64, fullBundle, emptyBundle, textLines) {
             listOf(
-                SlotSpec("钻石剑", { itemTooltipLines(font, sword) }),
-                SlotSpec("钻石 ×64", { itemTooltipLines(font, diamondX64) }),
-                SlotSpec("满 bundle", { itemTooltipLines(font, fullBundle) }),
-                SlotSpec("空 bundle", { itemTooltipLines(font, emptyBundle) }),
+                SlotSpec("钻石剑", { TooltipLines.fromItem(sword, font) }),
+                SlotSpec("钻石 ×64", { TooltipLines.fromItem(diamondX64, font) }),
+                SlotSpec("满 bundle", { TooltipLines.fromItem(fullBundle, font) }),
+                SlotSpec("空 bundle", { TooltipLines.fromItem(emptyBundle, font) }),
                 SlotSpec("文本", { textLines }),
             )
         }
@@ -130,6 +130,22 @@ fun TooltipDevScene() {
                             },
                         )
                     }
+
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val isHovered by interactionSource.collectIsHoveredAsState()
+                    Box(
+                        modifier = Modifier
+                            .height(44.dp)
+                            .background(if (isHovered) Color(0xFF2E7D32) else Color(0xFF37474F))
+                            .hoverable(interactionSource)
+                            .minecraftTooltip(TooltipLines.fromItem(ItemStack(Items.MELON)), guiScaleEnabled),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        BasicText(
+                            "Modifier 测试",
+                            style = Style.EMPTY.withColor(Color.White).toTextStyle(),
+                        )
+                    }
                 }
                 BasicText(
                     "guiScale 开关: ${if (guiScaleEnabled) "开" else "关"}",
@@ -152,11 +168,10 @@ fun TooltipDevScene() {
             }
 
             if (activeLines != null) {
-                rememberTooltip(
+                TooltipPopup(
                     key = tooltipKey,
                     visible = true,
                     lines = activeLines,
-                    mouse = mousePosition,
                     guiScaleEnabled = guiScaleEnabled,
                     density = density,
                     positionProvider = TooltipPositionProvider(

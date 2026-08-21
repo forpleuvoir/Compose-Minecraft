@@ -137,16 +137,14 @@ fun PopupHostState.register(
 @Composable
 fun PopupHostOverlay() {
     val state = LocalPopupHost.current ?: return
-    for (entry in state.entries.values) {
-        key(entry.key) {
+    for ((key, positionProvider, onDismissRequest, properties, compositionLocalContext, content) in state.entries.values) {
+        key(key) {
             Popup(
-                popupPositionProvider = entry.positionProvider,
-                onDismissRequest = entry.onDismissRequest,
-                properties = entry.properties,
+                popupPositionProvider = positionProvider,
+                onDismissRequest = onDismissRequest,
+                properties = properties,
             ) {
-                CompositionLocalProvider(entry.compositionLocalContext) {
-                    entry.content()
-                }
+                CompositionLocalProvider(compositionLocalContext, content)
             }
         }
     }

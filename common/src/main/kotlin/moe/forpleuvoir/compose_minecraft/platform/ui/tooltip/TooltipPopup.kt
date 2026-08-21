@@ -1,10 +1,22 @@
 package moe.forpleuvoir.compose_minecraft.platform.ui.tooltip
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -13,8 +25,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
-import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftGuiScale
-import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftTooltipRenderer
+import moe.forpleuvoir.compose_minecraft.platform.render.util.MinecraftGuiScale
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftTooltipRenderer
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.drawMinecraftTooltip
 import moe.forpleuvoir.compose_minecraft.platform.ui.popup.LocalPopupHost
 import moe.forpleuvoir.compose_minecraft.platform.ui.popup.register
@@ -102,20 +114,18 @@ class TooltipPositionProvider(
  * @param key 弹层唯一键(业务生成,如 `remember { Any() }`)。
  * @param visible 是否显示;false 时不注册。
  * @param lines tooltip 数据([TooltipLines] 由 itemTooltipLines / tooltipLinesOf 构建)。
- * @param mouse 鼠标位置(窗口像素/场景坐标),驱动定位。
+ * @param positionProvider 定位策略。
  * @param guiScaleEnabled 是否启用原版 guiScale。
- * @param positionProvider 自定义定位(默认 [TooltipPositionProvider])。
  */
 @Composable
-fun rememberTooltip(
+fun TooltipPopup(
     key: Any,
     visible: Boolean,
     lines: TooltipLines,
-    mouse: Offset,
+    positionProvider: PopupPositionProvider,
     guiScaleEnabled: Boolean = false,
     /** 自定义 Compose 密度(覆盖 [LocalDensity.current.density])。null = 自动读取场景密度。 */
     density: Float? = null,
-    positionProvider: PopupPositionProvider? = null,
     properties: PopupProperties = PopupProperties(focusable = false),
 ) {
     val popupHost = LocalPopupHost.current
@@ -128,11 +138,6 @@ fun rememberTooltip(
         densityValue * MinecraftTooltipRenderer.DENSITY_TO_GUI_SCALE_MULTIPLIER
     }
     val size = lines.measure()
-    // positionProvider 的 guiScale 参数:null=1:1,非null=缩放系数(与原版 guiScale 语义一致)
-    val provider = positionProvider ?: TooltipPositionProvider(
-        mouse = { mouse },
-        guiScale = if (guiScaleEnabled) finalScale else null,
-    )
 
     // 背景外扩(PADDING + MARGIN)会画到内容区之外:Canvas 布局尺寸含外扩
     // (避免被 popup 图层 clip 裁掉),绘制时内容区整体偏移到外扩内侧。
@@ -140,7 +145,7 @@ fun rememberTooltip(
 
     popupHost.register(
         key = key,
-        positionProvider = provider,
+        positionProvider = positionProvider,
         onDismissRequest = null,
         properties = properties,
     ) {
@@ -152,4 +157,72 @@ fun rememberTooltip(
             drawMinecraftTooltip(lines, outer, outer, if (guiScaleEnabled) null else densityValue)
         }
     }
+}
+
+/**
+ * 为可交互元素附加原版视觉 tooltip 弹层。
+ *
+ * 内部使用 [TooltipPopup] 在鼠标悬停时显示 tooltip,无需手动管理 `visible` 与 `mouse` 状态。
+ *
+ * @param lines tooltip 数据([TooltipLines] 由 itemTooltipLines / tooltipLinesOf 构建)。
+ * @param guiScaleEnabled 是否启用原版 guiScale。
+ * @param density 自定义 Compose 密度(覆盖 [LocalDensity.current.density])。null = 自动读取场景密度。
+ * @param positionProvider 自定义定位(默认 null 时内部构造 [TooltipPositionProvider])。
+ * @param interactionSource 交互源。null 时内部自动创建,非 null 时复用(如与 [Modifier.clickable] 共用)。
+ */
+@Composable
+fun Modifier.minecraftTooltip(
+    lines: TooltipLines,
+    guiScaleEnabled: Boolean = false,
+    density: Float? = null,
+    positionProvider: PopupPositionProvider? = null,
+    properties: PopupProperties = PopupProperties(focusable = false),
+    interactionSource: MutableInteractionSource? = null,
+): Modifier = composed(
+    fullyQualifiedName = "moe.forpleuvoir.compose_minecraft.platform.ui.tooltip.minecraftTooltip",
+    key1 = lines,
+) {
+    val source = interactionSource ?: remember { MutableInteractionSource() }
+    val isHovered by source.collectIsHoveredAsState()
+    var mousePosition by remember { mutableStateOf(Offset.Zero) }
+    var layoutCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    fun windowMouse(): Offset = layoutCoordinates?.localToWindow(mousePosition) ?: mousePosition
+
+    val provider = positionProvider ?: TooltipPositionProvider(
+        mouse = { windowMouse() },
+    )
+
+    if (isHovered) {
+        TooltipPopup(
+            key = lines,
+            visible = true,
+            lines = lines,
+            positionProvider = provider,
+            guiScaleEnabled = guiScaleEnabled,
+            density = density,
+            properties = properties,
+        )
+    }
+
+    this
+        .then(
+            if (interactionSource == null) {
+                Modifier.hoverable(interactionSource = source, enabled = true)
+            } else Modifier
+        )
+        .then(
+            if (positionProvider == null) {
+                Modifier
+                    .onGloballyPositioned { layoutCoordinates = it }
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Main)
+                                mousePosition = event.changes.firstOrNull()?.position ?: Offset.Zero
+                            }
+                        }
+                    }
+            } else Modifier
+        )
 }
