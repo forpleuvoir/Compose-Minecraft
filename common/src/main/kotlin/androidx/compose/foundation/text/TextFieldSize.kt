@@ -15,6 +15,7 @@
  */
 package androidx.compose.foundation.text
 
+import moe.forpleuvoir.compose_minecraft.mc
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -36,7 +37,7 @@ private val MinWidthCharCount = 10 // 官方 min width 为 10 字符宽
 @OptIn(ExperimentalFoundationApi::class)
 internal fun Modifier.textFieldMinSize(style: Style) = composed {
     // 平台适配点:MC 度量恒定,无需响应字体解析状态/density 变化
-    val font = Minecraft.getInstance().font
+    val font = mc.font
     val lineHeightPx = font.lineHeight.toFloat()
     val charWidthPx = font.width(EmptyTextReplacement).toFloat() / MinWidthCharCount
 

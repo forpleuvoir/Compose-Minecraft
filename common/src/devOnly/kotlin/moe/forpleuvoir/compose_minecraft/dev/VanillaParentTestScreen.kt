@@ -10,10 +10,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.components.Button
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
@@ -86,5 +86,5 @@ fun VanillaParentComposeContent(onClose: () -> Unit) {
 
 /** dev 菜单入口:打开原版测试屏(替代当前 Compose 屏) */
 fun openVanillaParentTest() {
-    Minecraft.getInstance().gui.setScreen(VanillaParentTestScreen())
+    mc.gui.setScreen(VanillaParentTestScreen())
 }

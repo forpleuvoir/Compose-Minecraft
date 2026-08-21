@@ -1,4 +1,5 @@
 package moe.forpleuvoir.compose_minecraft.platform.ui.text
+import moe.forpleuvoir.compose_minecraft.mc
 
 import com.mojang.blaze3d.font.GlyphProvider
 import com.mojang.blaze3d.font.TrueTypeGlyphProvider
@@ -82,7 +83,7 @@ object MinecraftCustomFonts {
 
     private val fontManagerAccessor: FontManagerAccessor?
         get() = runCatching {
-            (Minecraft.getInstance() as MinecraftAccessor).fontManager() as FontManagerAccessor
+            (mc as MinecraftAccessor).fontManager() as FontManagerAccessor
         }.getOrNull()
 
     /** 系统字体目录:Windows(C:\Windows\Fonts)优先,其次常见 Unix/macOS 路径。 */
@@ -222,7 +223,7 @@ object MinecraftCustomFonts {
                     FreeTypeUtil.assertError(FreeType.FT_Select_Charmap(face, FreeType.FT_ENCODING_UNICODE), "Find unicode charmap")
                     provider = TrueTypeGlyphProvider(fontData, face, 9f, 4f, 0f, 0f, "")
                 }
-                val fontSet = FontSet(GlyphStitcher(Minecraft.getInstance().textureManager, identifier))
+                val fontSet = FontSet(GlyphStitcher(mc.textureManager, identifier))
                 // 缺字符回滚:自定义 provider 在前,默认字体 provider 链在后(缺字 → 默认字形,而非 missing 方块)
                 val defaultProviders: List<GlyphProvider.Conditional> = runCatching {
                     (accessor.fontSets()[Identifier.withDefaultNamespace("default")] as? FontSetAccessor)?.allProviders()

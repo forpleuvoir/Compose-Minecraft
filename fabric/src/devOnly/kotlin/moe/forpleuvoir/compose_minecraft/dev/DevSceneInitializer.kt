@@ -1,4 +1,5 @@
 package moe.forpleuvoir.compose_minecraft.dev
+import moe.forpleuvoir.compose_minecraft.mc
 
 import com.mojang.blaze3d.platform.InputConstants
 import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
@@ -47,7 +48,7 @@ class DevSceneInitializer : MinecraftInitializer {
         LOGGER.info("[dev] DevSceneInitializer loaded, waiting for Minecraft client...")
         thread(name = "Compose-Minecraft-DevScene", isDaemon = true) {
             while (true) {
-                val mc = runCatching { Minecraft.getInstance() }.getOrNull()
+                val mc = runCatching { mc }.getOrNull()
                 if (mc != null && mc.isGameLoadFinished && mc.gui.screen() is TitleScreen) {
                     LOGGER.info("[dev] Title screen reached, opening ComposeScreen")
                     // 只向主线程提交一次;绝不能在主线程任务里递归 execute——

@@ -16,12 +16,13 @@
 
 package androidx.compose.ui.text.intl
 
+import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.text.isMcLanguageRtl
 import moe.forpleuvoir.compose_minecraft.platform.text.mcLanguageCodeToLocale
 
 /**
  * 平台 Locale 适配点(Minecraft):语言跟随 MC 游戏设置
- * (`Minecraft.getInstance().options.languageCode`),不是 JVM 系统默认。
+ * (`mc.options.languageCode`),不是 JVM 系统默认。
  * 玩家在游戏内更改语言后,`LocaleList.current` 随之返回新语言。
  */
 internal fun createPlatformLocaleDelegate() = object : PlatformLocaleDelegate {

@@ -16,6 +16,7 @@
 
 package androidx.compose.ui.platform
 
+import moe.forpleuvoir.compose_minecraft.mc
 import net.minecraft.client.Minecraft
 
 /**
@@ -29,13 +30,13 @@ import net.minecraft.client.Minecraft
 internal object MinecraftClipboard {
     fun readText(): String? =
         runCatching {
-            Minecraft.getInstance().keyboardHandler.clipboard.ifEmpty { null }
+            mc.keyboardHandler.clipboard.ifEmpty { null }
         }.getOrNull()
 
     fun writeText(text: String) {
         // KeyboardHandler.setClipboard 仅写入非空文本(空串由 MC 侧忽略)
         if (text.isNotEmpty()) {
-            runCatching { Minecraft.getInstance().keyboardHandler.clipboard = text }
+            runCatching { mc.keyboardHandler.clipboard = text }
         }
     }
 }

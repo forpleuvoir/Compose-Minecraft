@@ -1,31 +1,21 @@
 package moe.forpleuvoir.compose_minecraft.dev
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.postVanillaDraw
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.vanillaDraw
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
-import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Style
 import kotlin.math.roundToInt
 
@@ -97,7 +87,7 @@ fun VanillaDrawDevScene() {
                         fill(r.left.roundToInt(), r.top.roundToInt(), r.right.roundToInt(), (r.top + 3).roundToInt(), 0xFFDDDDDD.toInt())
                         // 原版文字(行顶 y)
                         text(
-                            Minecraft.getInstance().font,
+                            mc.font,
                             "vanillaDraw pre 通道=${if (guiScaleEnabled) "guiScale" else "1:1"} guiOrigin=(${guiOrigin.x},${guiOrigin.y})",
                             (r.left + 8).roundToInt(),
                             (r.top + 12).roundToInt(),
@@ -135,7 +125,7 @@ fun VanillaDrawDevScene() {
                                 },
                             )
                             text(
-                                Minecraft.getInstance().font,
+                                mc.font,
                                 "block #$i  guiOrigin=(${guiOrigin.x},${guiOrigin.y}) 空间=${if (guiScaleEnabled) "GUI单位" else "像素"}",
                                 (r.left + 12).roundToInt(),
                                 (r.top + 20).roundToInt(),
@@ -167,7 +157,7 @@ fun VanillaDrawDevScene() {
                     fill(r.left.roundToInt(), r.top.roundToInt(), (r.left + 3).roundToInt(), r.bottom.roundToInt(), 0xFFFFFFFF.toInt())
                     fill(r.right.roundToInt() - 3, r.top.roundToInt(), r.right.roundToInt(), r.bottom.roundToInt(), 0xFFFFFFFF.toInt())
                     text(
-                        Minecraft.getInstance().font,
+                        mc.font,
                         if (guiScaleEnabled) "postVanillaDraw(guiScale 通道:画在 Compose 之下)" else
                             "postVanillaDraw(1:1):ON TOP of ALL Compose",
                         (r.left + 10).roundToInt(),
@@ -175,7 +165,7 @@ fun VanillaDrawDevScene() {
                         0xFFFFFFFF.toInt(),
                     )
                     text(
-                        Minecraft.getInstance().font,
+                        mc.font,
                         "guiOrigin=(${guiOrigin.x},${guiOrigin.y}) size=${size.width.toInt()}x${size.height.toInt()}",
                         (r.left + 10).roundToInt(),
                         (r.top + 60).roundToInt(),

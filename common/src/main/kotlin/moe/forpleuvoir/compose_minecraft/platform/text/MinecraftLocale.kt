@@ -5,18 +5,19 @@
 
 package moe.forpleuvoir.compose_minecraft.platform.text
 
+import moe.forpleuvoir.compose_minecraft.mc
 import net.minecraft.client.Minecraft
 import net.minecraft.locale.Language
 
 /**
  * MC 游戏语言代码 → [java.util.Locale]。
  *
- * MC 语言设置位于 `Minecraft.getInstance().options.languageCode`(如 "zh_cn"、"en_us"),
+ * MC 语言设置位于 `mc.options.languageCode`(如 "zh_cn"、"en_us"),
  * 玩家在游戏内更改语言后此处返回随之变化。Compose 的 Locale 链路
  * ([androidx.compose.ui.text.intl.LocaleList.current]) 以此为准,而不是 JVM 系统默认。
  */
 fun mcLanguageCodeToLocale(): java.util.Locale {
-    val code = Minecraft.getInstance().options.languageCode
+    val code = mc.options.languageCode
     val parts = code.split('_', limit = 2)
     val builder = java.util.Locale.Builder().setLanguage(parts[0])
     parts.getOrNull(1)?.takeIf { it.isNotEmpty() }?.let { builder.setRegion(it.uppercase()) }

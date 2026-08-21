@@ -4,11 +4,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -16,16 +12,11 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
-import kotlin.math.roundToInt
+import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.MinecraftItem
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.MinecraftTexture
@@ -33,11 +24,11 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.draw.drawItemStack
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.drawMinecraftTexture
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
-import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Style
 import net.minecraft.resources.Identifier
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
+import kotlin.math.roundToInt
 
 /**
  * MC 原生渲染测试 (T.37):
@@ -152,7 +143,7 @@ fun TextureDevScene() {
                         .background(Color(0xFF263238))
                         .border(1.dp, Color(0xFF4CAF50))
                         .drawWithContent {
-                            drawItemStack(Minecraft.getInstance().player?.mainHandItem ?: ItemStack(Items.DIAMOND))
+                            drawItemStack(mc.player?.mainHandItem ?: ItemStack(Items.DIAMOND))
                         }
                 )
                 Box(

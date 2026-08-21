@@ -2,13 +2,7 @@ package moe.forpleuvoir.compose_minecraft.dev
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
@@ -17,19 +11,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.decodeToImageBitmap
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
-import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Style
 import net.minecraft.resources.Identifier
 import java.io.IOException
@@ -489,7 +479,7 @@ private fun pixelBitmap(color: Int): ImageBitmap =
 /** 读取 MC 内置资源 PNG 并解码(验证 createImageBitmap 解码管线) */
 private fun loadResourceBitmap(): ImageBitmap? = try {
     val location = Identifier.parse("minecraft:textures/block/grass_block_side.png")
-    val resource = Minecraft.getInstance().resourceManager.getResourceOrThrow(location)
+    val resource = mc.resourceManager.getResourceOrThrow(location)
     resource.open().use { it.readBytes() }.decodeToImageBitmap()
 } catch (e: IOException) {
     null

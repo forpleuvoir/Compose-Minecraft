@@ -1,5 +1,6 @@
 package moe.forpleuvoir.compose_minecraft
 
+import net.minecraft.client.Minecraft
 import java.util.ServiceLoader
 
 /**
@@ -18,3 +19,5 @@ object MinecraftClientSetup {
         ServiceLoader.load(MinecraftInitializer::class.java).forEach { it.init() }
     }
 }
+
+inline val mc get() = Minecraft.getInstance()

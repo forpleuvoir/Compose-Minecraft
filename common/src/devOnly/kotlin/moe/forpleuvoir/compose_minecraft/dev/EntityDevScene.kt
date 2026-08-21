@@ -1,4 +1,5 @@
 package moe.forpleuvoir.compose_minecraft.dev
+import moe.forpleuvoir.compose_minecraft.mc
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -53,7 +54,7 @@ import kotlin.math.roundToInt
  */
 @Composable
 fun EntityDevScene() {
-    val mc = Minecraft.getInstance()
+    val mc = mc
     val player = mc.player
 
     // 场景内收集世界中前几个可渲染生物(玩家 + 附近活体),供测试展示

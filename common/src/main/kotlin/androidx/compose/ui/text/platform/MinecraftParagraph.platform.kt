@@ -15,6 +15,7 @@
  */
 package androidx.compose.ui.text.platform
 
+import moe.forpleuvoir.compose_minecraft.mc
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
@@ -85,7 +86,7 @@ internal class MinecraftTextLayout(
 ) {
 
     private val font: MinecraftFont
-        get() = Minecraft.getInstance().font
+        get() = mc.font
 
     val lineHeight: Float
         get() = font.lineHeight.toFloat()
@@ -312,7 +313,7 @@ internal class MinecraftParagraph(
         if (maxLines != DefaultMaxLines) minOf(layout.lines.size, maxLines) else layout.lines.size
 
     private val font: MinecraftFont
-        get() = Minecraft.getInstance().font
+        get() = mc.font
 
     override val width: Float get() = layout.width * scale
 

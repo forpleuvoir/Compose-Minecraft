@@ -2,22 +2,18 @@ package moe.forpleuvoir.compose_minecraft.dev
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.verticalScroll
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
-import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Style
 
 /**
@@ -161,7 +157,7 @@ fun MinecraftDevSceneContent() {
                                 onClose = { holder[0]?.onClose() },
                             )
                         },
-                        parent = Minecraft.getInstance().gui.screen(),
+                        parent = mc.gui.screen(),
                     )
                 },
             )

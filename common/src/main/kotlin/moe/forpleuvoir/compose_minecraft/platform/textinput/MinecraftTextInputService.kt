@@ -1,4 +1,5 @@
 package moe.forpleuvoir.compose_minecraft.platform.textinput
+import moe.forpleuvoir.compose_minecraft.mc
 
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.geometry.Rect
@@ -66,7 +67,7 @@ open class MinecraftTextInputService : PlatformTextInputService {
     /** 候选窗锚点(旧版 API 经 [notifyFocusedRect] 缓存;新版直接读 request.focusedRectInRoot) */
     private var focusedRect: Rect? = null
 
-    private val textInputManager get() = Minecraft.getInstance().textInputManager()
+    private val textInputManager get() = mc.textInputManager()
 
     /**
      * 是否处于 IME 组合态。
@@ -240,7 +241,7 @@ open class MinecraftTextInputService : PlatformTextInputService {
     @OptIn(ExperimentalComposeUiApi::class)
     private fun updateTextInputArea() {
         val rect = request?.focusedRectInRoot?.invoke() ?: focusedRect ?: return
-        val scale = Minecraft.getInstance().window.guiScale.toFloat().coerceAtLeast(1f)
+        val scale = mc.window.guiScale.toFloat().coerceAtLeast(1f)
         textInputManager.setTextInputArea(
             (rect.left / scale).roundToInt(),
             (rect.top / scale).roundToInt(),

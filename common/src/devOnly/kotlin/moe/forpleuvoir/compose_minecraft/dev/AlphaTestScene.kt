@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.draw
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.drawMinecraftTexture
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.minecraftItem
@@ -53,7 +54,7 @@ fun AlphaTestScene() {
         Box(
             Modifier
                 .size(100.dp)
-                .minecraftItem(Minecraft.getInstance().player?.mainHandItem?:ItemStack(Items.DIAMOND))
+                .minecraftItem(mc.player?.mainHandItem?:ItemStack(Items.DIAMOND))
         )
     }
 }
