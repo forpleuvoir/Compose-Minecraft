@@ -244,12 +244,16 @@ fun AnnotatedString.toStyleSegments(baseStyle: Style): List<StyleSegment> {
         val end = points[i + 1]
         if (end <= start) continue
         var segStyle = baseStyle
+        var fontSizeSp: Float? = null
         for (range in spanStyles) {
             if (range.start <= start && end <= range.end) {
                 segStyle = range.item.toMcStyle(baseStyle)
+                // 平台适配点(段级字号):携带 span 的 fontSize(仅 sp;em 平台不支持,忽略)
+                val fs = range.item.fontSize
+                if (fs != null && fs.isSp) fontSizeSp = fs.value
             }
         }
-        result.add(StyleSegment(segStyle, text.substring(start, end)))
+        result.add(StyleSegment(segStyle, text.substring(start, end), fontSizeSp))
     }
     return result
 }

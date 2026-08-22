@@ -84,8 +84,10 @@ Agent 的 IDE 工具集中以 `mcp__idea__*` 前缀暴露。**所有代码阅读
   字号(T.26,默认 18sp = 2x,光标/选区/命中坐标随 scale 换算);
   `BasicText(text: AnnotatedString)` 富文本段级混排(T.29,该重载已提升 public):
   spanStyles 经 `TextStyleMapper.toStyleSegments` 全覆盖切分 → `StyleSegment` 段样式
-  增量叠加 base MC Style(段级 color/bold/italic/decoration/PlatformSpanStyle 生效,
-  段级字号暂不支持);行内段 x 用 1x `prefixWidth`(渲染端 pose 会再缩放,传 ×scale
+  增量叠加 base MC Style(段级 color/bold/italic/decoration/PlatformSpanStyle 生效;
+  **段级字号已实现**:span fontSize(sp)→ 段内相对渲染系数折进布局增量,换行按缩放后
+  宽度判定,行盒高取行内最大段,绘制经局部 translate/scale 矩阵,命中测试走缩放前缀
+  宽度行走;em 不支持);行内段 x 用 1x `prefixWidth`(渲染端 pose 会再缩放,传 ×scale
   值会间隔翻倍);
   **默认字体/默认样式/默认字号 CompositionLocal**(T.30/T.32):`LocalDefaultFont`
   (默认 `MinecraftFonts.Default` = minecraft:default)、`LocalDefaultTextStyle`

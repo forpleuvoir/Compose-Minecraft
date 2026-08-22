@@ -382,6 +382,20 @@ fun TextDevScene() {
                 modifier = Modifier.width(240.dp),
                 style = TextStyle(color = Color(0xFFB0BEC5)),
             )
+
+            // ── ⑭ 段级字号(span fontSize)──
+            SectionLabel("⑭ 段级字号:span fontSize 驱动段内缩放,行高取最大段")
+            BasicText(
+                buildAnnotatedString {
+                    append("小 ")
+                    withStyle(SpanStyle(fontSize = 9.sp, color = Color(0xFF80CBC4))) { append("9sp") }
+                    append(" 中 ")
+                    withStyle(SpanStyle(fontSize = 36.sp, color = Color(0xFFFFB74D))) { append("36sp") }
+                    append(" 大;窄宽换行按缩放后宽度判定,行盒取最大段。")
+                },
+                modifier = Modifier.width(260.dp),
+                style = TextStyle(color = Color.White),
+            )
         }
     }
 }
