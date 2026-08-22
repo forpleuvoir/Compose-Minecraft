@@ -3,7 +3,6 @@ package moe.forpleuvoir.compose_minecraft.platform.ui.tooltip
 import androidx.compose.ui.unit.IntSize
 import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftTooltipRenderer
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.Font
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientActivePlayersTooltip.ActivePlayersTooltip
@@ -85,9 +84,10 @@ class ImageTooltipLine(val component: TooltipComponent) : TooltipLine {
  * 结果单位为 font 逻辑单位(1:1 模式下即窗口像素;guiScale 模式下即 GUI 单位)。
  */
 data class TooltipLines(
-    val font: Font,
     val lines: List<TooltipLine>,
     val style: Identifier? = null,
+    /** 字体,默认当前窗口原版字体([mc.font]) */
+    val font: Font = mc.font,
 ) {
     /** 内容区尺寸(不含背景外扩),照原版 tooltip() 计算。 */
     fun measure(): IntSize {
@@ -115,7 +115,6 @@ data class TooltipLines(
          * `TOOLTIP_STYLE`;图片组件插到第 1 行(原版 components.isEmpty() ? 0 : 1 语义)。
          */
         fun fromItem(itemStack: ItemStack, font: Font = mc.font): TooltipLines {
-            val mc = Minecraft.getInstance()
             val texts = Screen.getTooltipFromItem(mc, itemStack)
             val lines: MutableList<TooltipLine> = texts.map { TextTooltipLine(it.visualOrderText) }.toMutableList()
             val image = itemStack.tooltipImage.orElse(null)
@@ -223,7 +222,7 @@ internal object TooltipImages {
         tooltipHeight: Int,
     ) {
         val weight = contents.weight()
-        if (weight.isError()) return
+        if (weight.isError) return
         if (contents.isEmpty) {
             extractEmptyBundleTooltip(renderer, font, x, y, tooltipWidth, tooltipHeight)
         } else {
@@ -293,7 +292,7 @@ internal object TooltipImages {
         slotIndex: Int,
     ) {
         val itemVisualOrderIndex = shownItems.size - slotNumber
-        val hasHighlight = itemVisualOrderIndex == contents.getSelectedItemIndex()
+        val hasHighlight = itemVisualOrderIndex == contents.selectedItemIndex
         val item = shownItems[itemVisualOrderIndex].create()
         if (hasHighlight) {
             renderer.blitSprite(RenderPipelines.GUI_TEXTURED, SLOT_HIGHLIGHT_BACK_SPRITE, drawX, drawY, SLOT_CELL_SIZE, SLOT_CELL_SIZE, -1)
@@ -325,12 +324,12 @@ internal object TooltipImages {
         y: Int,
         tooltipWidth: Int,
     ) {
-        val selectedItem = contents.getSelectedItem() ?: return
+        val selectedItem = contents.selectedItem ?: return
         val itemStack = selectedItem.create()
         val name = itemStack.getStyledHoverName()
-        val textWidth = font.width(name.getVisualOrderText())
+        val textWidth = font.width(name.visualOrderText)
         val centerTooltip = x + tooltipWidth / 2 - 12
-        val subLines = listOf<TextTooltipLine>(TextTooltipLine(name.getVisualOrderText()))
+        val subLines = listOf(TextTooltipLine(name.visualOrderText))
         val subW = textWidth
         val subH = 10 - 2 // 单行 measure:tempHeight = -2 + 10
         val xo = centerTooltip - textWidth / 2
@@ -362,11 +361,11 @@ internal object TooltipImages {
         Mth.clamp(Mth.mulAndTruncate(weight, PROGRESSBAR_FILL_MAX), 0, PROGRESSBAR_FILL_MAX)
 
     private fun getProgressBarTexture(weight: Fraction): Identifier =
-        if (weight.compareTo(Fraction.ONE) >= 0) PROGRESSBAR_FULL_SPRITE else PROGRESSBAR_FILL_SPRITE
+        if (weight >= Fraction.ONE) PROGRESSBAR_FULL_SPRITE else PROGRESSBAR_FILL_SPRITE
 
     private fun getProgressBarFillText(weight: Fraction): Component? = when {
         weight.compareTo(Fraction.ZERO) == 0 -> BUNDLE_EMPTY_TEXT
-        weight.compareTo(Fraction.ONE) >= 0  -> BUNDLE_FULL_TEXT
+        weight >= Fraction.ONE               -> BUNDLE_FULL_TEXT
         else                                 -> null
     }
 
