@@ -44,7 +44,6 @@ import kotlin.math.ceil
 import kotlin.math.roundToInt
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.Font as MinecraftFont
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -312,6 +311,34 @@ internal class MinecraftParagraph(
     private val visibleLineCount: Int =
         if (maxLines != DefaultMaxLines) minOf(layout.lines.size, maxLines) else layout.lines.size
 
+    /** 平台适配点:Ellipsis 后缀用 MC 视觉惯例的三点(ASCII 字形集保证存在),不用 Unicode `…`。 */
+    private val ellipsisSuffix = "..."
+
+    /**
+     * Ellipsis 生效时最后一个可见行的**裁剪后**绘制文本(null = 无省略,按原行绘制):
+     * 仅当 [didExceedMaxLines] 且 [overflow] == [TextOverflow.Ellipsis] 时非空。
+     * 裁剪规则:从行尾收缩至 `前缀宽 + 省略号宽 <= 布局 maxWidth`(行本身已放得下则不收缩);
+     * 整行连省略号都放不下时裁为空串(paint 层只画省略号)。命中测试不感知省略号
+     *(点击省略号区域定位到原文本行尾),与官方 StaticLayout 近似。
+     */
+    private val ellipsizedLastLine: String? = run {
+        if (overflow != TextOverflow.Ellipsis || !didExceedMaxLines) return@run null
+        val lineIndex = visibleLineCount - 1
+        if (lineIndex < 0) return@run null
+        val line = layout.lines[lineIndex]
+        var drawText = intrinsics.text.substring(line.start, line.end)
+        if (drawText.endsWith('\n')) drawText = drawText.dropLast(1)
+        if (drawText.isEmpty()) return@run null
+        val ellipsisWidth = font.width(ellipsisSuffix).toFloat()
+        var end = drawText.length
+        while (end > 0 &&
+            layout.prefixWidth(line.start, line.start + end) + ellipsisWidth > layout.maxWidth
+        ) {
+            end--
+        }
+        drawText.substring(0, end)
+    }
+
     private val font: MinecraftFont
         get() = mc.font
 
@@ -565,10 +592,23 @@ internal class MinecraftParagraph(
                     if (line.end > start) {
                         var drawText = intrinsics.text.substring(start, line.end)
                         if (drawText.endsWith('\n')) drawText = drawText.dropLast(1)
+                        // 平台适配点:Ellipsis —— 最后一个可见行替换为省略版本
+                        val appendEllipsis = ellipsizedLastLine != null && i == visibleLineCount - 1
+                        if (appendEllipsis) drawText = ellipsizedLastLine
                         if (drawText.isNotEmpty()) {
                             mc.recordTextDraw(
                                 text = drawText,
                                 x = 0f,
+                                y = i * layout.lineHeight,
+                                style = intrinsics.style,
+                                alpha = effectiveAlpha,
+                                shader = shader,
+                            )
+                        }
+                        if (appendEllipsis) {
+                            mc.recordTextDraw(
+                                text = ellipsisSuffix,
+                                x = layout.prefixWidth(start, start + drawText.length),
                                 y = i * layout.lineHeight,
                                 style = intrinsics.style,
                                 alpha = effectiveAlpha,
@@ -621,6 +661,9 @@ internal class MinecraftParagraph(
                     // 行尾可能含 `\n`(computeLines 的 exclusive end 含换行符),绘制时去掉。
                     var drawText = intrinsics.text.substring(start, line.end)
                     if (drawText.endsWith('\n')) drawText = drawText.dropLast(1)
+                    // 平台适配点:Ellipsis —— 最后一个可见行替换为省略版本
+                    val appendEllipsis = ellipsizedLastLine != null && i == visibleLineCount - 1
+                    if (appendEllipsis) drawText = ellipsizedLastLine
                     if (drawText.isNotEmpty()) {
                         // 平台适配点(T.3):多段样式 —— 行内文本按段边界切分,每段用自己的样式;
                         // 无段(空列表)时退回单样式(旧行为)。
@@ -636,6 +679,15 @@ internal class MinecraftParagraph(
                         } else {
                             recordSegmentedTextDraw(mc, drawText, start, i, segments, style, effectiveAlpha)
                         }
+                    }
+                    if (appendEllipsis) {
+                        mc.recordTextDraw(
+                            text = ellipsisSuffix,
+                            x = layout.prefixWidth(start, start + drawText.length),
+                            y = i * layout.lineHeight,
+                            style = style,
+                            alpha = effectiveAlpha,
+                        )
                     }
                 }
             }

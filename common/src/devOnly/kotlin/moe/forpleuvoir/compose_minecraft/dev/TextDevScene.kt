@@ -24,6 +24,7 @@ import androidx.compose.ui.text.PlatformSpanStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFont
@@ -321,6 +322,27 @@ fun TextDevScene() {
                 BasicText("默认字体:alt(未指定字体)", style = TextStyle(fontSize = 36.sp))
             }
             BasicText("默认字体:default(恢复)", style = TextStyle(fontSize = 36.sp))
+
+            // ── ⑫ overflow(Ellipsis / Clip,T.41)──
+            SectionLabel("⑫ overflow:Ellipsis 应在末行尾追加 \"...\",Clip 仅截断")
+            BasicText(
+                "Ellipsis(maxLines=2):一行很长的文本第二行应当被裁剪并追加三点省略号,验证溢出语义",
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = TextStyle(color = Color(0xFF80CBC4)),
+            )
+            BasicText(
+                "Clip(maxLines=2):同样文本直接截断,无省略号",
+                maxLines = 2,
+                overflow = TextOverflow.Clip,
+                style = TextStyle(color = Color(0xFF78909C)),
+            )
+            BasicText(
+                "Ellipsis(maxLines=1):单行超宽也应出现省略号",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = TextStyle(color = Color(0xFFCE93D8)),
+            )
         }
     }
 }
