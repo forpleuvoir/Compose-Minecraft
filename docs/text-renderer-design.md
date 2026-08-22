@@ -1,0 +1,110 @@
+# 文本渲染器替换 —— 设计文档(TrueType 渲染管线)
+
+> 状态:**设计稿 v1,待拍板**
+> 目标:用自研 TrueType 文本渲染管线替换 Compose 文本的默认渲染路径(原版 MC 位图字体管线)。
+> 参考:[Modern UI](https://github.com/BloCamLimb/ModernUI-MC)(TrueType 引擎 + 图集管理 + 自定义管线的成熟先例)。
+
+---
+
+## 0. 决策记录(用户已拍板)
+
+| # | 决策 | 内容 |
+|---|---|---|
+| D1 | 字体源 | **内置开源字体**(思源黑体 / Noto Sans CJK 等候选),**具体字体开放设计**——加载器按配置取字体文件,后续再选定 |
+| D2 | 光栅化库 | **LWJGL stb_truetype**(`org.lwjgl.stb.STBTruetype`,MC 运行时自带,零新依赖) |
+| D3 | 替换范围 | **仅 Compose 文本渲染**;原版 GUI / 聊天 / F3 等不受影响 |
+| D4 | 失败回退 | 字体加载失败 / 图集不可用时,**回退原版渲染器**(`sink.addText` 共存) |
+
+## 1. 背景与动机
+
+1. MC 字形为 8×8 位图,字号靠矩阵放大 —— 非整数缩放模糊,段级字号的 1.125x 等缩放观感差;
+2. FreeType/TTF 自定义字体(MinecraftCustomFonts)仍被塞进 MC FontManager 管线,受 oversample 机制限制;
+3. 描边、渐变字等效果在原版管线上无法实现。
+
+## 2. 现状链路与替换边界
+
+```
+recordTextDraw(text,x,y,style,alpha) → DrawTextCommand
+  → CommandDispatcher → GeometryBackend.drawText      ← 【唯一拦截点】
+    → GuiStateBackend: sink.addText(GuiTextRenderState) ← 原版入口(回退路径保留)
+```
+
+- 排版/布局层(`MinecraftTextLayout`/`MinecraftParagraph`)**已是平台自有**,结构不变;
+- CPU 快照后端(`RasterBackend.drawText` 目前跳过文本)阶段 3 补齐。
+
+## 3. 目标架构
+
+新增包 `platform/render/text/`:
+
+```
+TrueTypeFont          # stb_truetype 封装:解析 TTF/TTC、字形度量、光栅化灰度位图
+FontFaceManager       # 字体加载与选择(按配置的字体文件列表;D1 开放设计)
+GlyphAtlas            # 纹理图集分页管理(R8 单通道),LRU 淘汰,UV 记录
+GlyphKey/GlyphCache   # (codepoint, sizePx, 合成样式) → 字形槽位
+GuiGlyphRenderState   # GuiElementRenderState 子类:文本 quad 批次 + 图集 TextureSetup
+gui_text RenderPipeline # 自定义管线:R8 图集采样 × 顶点色 tint(参照 T.14 gui_shadow 先例)
+```
+
+### 3.1 拦截与分流
+
+```kotlin
+// GuiStateBackend.drawText
+if (TextRenderConfig.enabled && TrueTypeFontManager.isReady) {
+    sink.addElement(GuiGlyphRenderState(...))   // 自有管线
+} else {
+    sink.addText(text(cmd, scissor))           // 回退原版(D4)
+}
+```
+
+- 未覆盖字形(如 emoji):逐 run 回退 `addText`(与原版渲染共存于同一帧);
+- 开关:`TextRenderConfig.enabled`(默认 false,验证稳定后再翻默认)。
+
+### 3.2 度量同源(**硬骨头**)
+
+字形与宽度必须同源,否则错位。改造点:
+
+- 引入度量来源抽象:`MetricsSource`(`charAdvance(cp)/ascent/descent/lineHeight`);
+- 原:`font.splitter.stringWidth`(MC 位图度量);
+- 新:`stbtt_GetCodepointHMetrics` × 当前字号;
+- `MinecraftTextLayout.cumFloatWidths` 的增量数组结构不变,数据源切换;行高/基线公式同步换 stb ascent/descent;
+- 段级字号 r 系数、占位符原子、Ellipsis 全部兼容(只换每字符增量的数值来源)。
+
+### 3.3 样式映射
+
+| Compose 语义 | 实现 |
+|---|---|
+| fontSize(段级) | 光栅化字号 = basePx × r(图集按 size 缓存;非整数 size 直接支持——矢量光栅化红利) |
+| bold | 有 Bold 字重字体则用之;否则 stb 合成加粗(embolden) |
+| italic | 倾斜矩阵(skew)叠加 |
+| color/alpha | 顶点色 tint(shader 相乘) |
+| MC Style obfuscated | 不支持,该 run 回退原版 |
+
+### 3.4 字体配置(D1 开放设计)
+
+```kotlin
+data class FontSource(val path: String, val weight: Int = 400, val italic: Boolean = false)
+object TextRenderConfig {
+    var enabled: Boolean = false
+    val fontSources: MutableList<FontSource>   // 资源路径或绝对文件路径,按优先级排序
+}
+```
+
+内置候选(最终选哪个由你定):思源黑体 SC(Noto Sans CJK SC)、霞鹜文楷、OPPO Sans 等;
+加载顺序 = 列表优先级,全部失败 → 回退原版(D4)。
+
+## 4. 阶段计划
+
+| 阶段 | 内容 | 验收 |
+|---|---|---|
+| **P1 最小闭环** | 单 Regular TTF;stb 解析 + 图集 + gui_text 管线;度量同源切换;flag 默认关 + 回退验证 | flag 开后 BasicText/TextField 文本清晰锐利;关后与现状一致 |
+| P2 样式完备 | bold/italic 合成、段级字号多尺寸光栅化、多字体族回退链 | ⑭ 混排场景各段正确缩放与基线对齐 |
+| P3 性能与收尾 | 批次合并、图集分页/LRU、RasterBackend CPU 路径、可选描边 | 静态场景零额外开销;动态文本流畅 |
+
+## 5. 风险与对策
+
+| 风险 | 对策 |
+|---|---|
+| stb 对部分 TTC/字重轴支持弱 | 字体选型时验证;必要时单字体拆分提供 |
+| CJK 图集内存增长 | 分页 + LRU;常用区(GB2312 一级)预热可选 |
+| 度量切换引发既有场景布局变化 | flag 关闭即完全回退;开启后以 dev 场景逐项对照 |
+| 与原生组件(tooltip 等)字体不一致 | 属预期(仅替换 Compose 文本);视觉统一可后续给 tooltip 也开开关 |
