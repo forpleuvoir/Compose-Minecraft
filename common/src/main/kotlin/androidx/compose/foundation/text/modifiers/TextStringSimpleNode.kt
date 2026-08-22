@@ -21,6 +21,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.internal.requirePreconditionNotNull
 import androidx.compose.foundation.text.DefaultMinLines
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
@@ -86,6 +87,8 @@ internal class TextStringSimpleNode(
     private var scale: Float = 1f,
     /** 平台适配点(T.28):文本透明度(TextStyle.alpha,默认 1f),绘制时合成进颜色。 */
     private var textAlpha: Float = 1f,
+    /** 平台适配点(T.TT):渐变画刷(TextStyle.brush 非 SolidColor),绘制走 brush 重载。 */
+    private var textBrush: Brush? = null,
 ) : Modifier.Node(), LayoutModifierNode, DrawModifierNode, SemanticsModifierNode {
     override val shouldAutoInvalidate: Boolean
         get() = false
@@ -179,7 +182,7 @@ internal class TextStringSimpleNode(
         return textSubstitution?.takeIf { it.isShowingSubstitution }?.layoutCache ?: layoutCache
     }
 
-    fun updateDraw(color: ColorProducer?, style: Style, alpha: Float = 1f): Boolean {
+    fun updateDraw(color: ColorProducer?, style: Style, alpha: Float = 1f, brush: Brush? = textBrush): Boolean {
         var changed = false
         if (color != this.overrideColor) {
             changed = true
@@ -189,6 +192,8 @@ internal class TextStringSimpleNode(
         changed = changed || style != this.style
         changed = changed || alpha != this.textAlpha
         textAlpha = alpha
+        changed = changed || brush != this.textBrush
+        this.textBrush = brush
         return changed
     }
 
@@ -518,7 +523,17 @@ internal class TextStringSimpleNode(
                     else drawStyle.color?.toColor() ?: Color.White
                 // 平台适配点(T.28):TextStyle.alpha 合成进绘制色(MinecraftParagraph.paint
                 // 经 recordTextDraw alpha 参数消费;MC TextColor 无 alpha 通道)
-                localParagraph.paint(canvas = canvas, color = color.copy(alpha = color.alpha * textAlpha))
+                // 平台适配点(T.TT):TextStyle.brush(非 SolidColor)→ 渐变逐字形取色绘制
+                val textBrush = textBrush
+                if (textBrush != null) {
+                    localParagraph.paint(
+                        canvas = canvas,
+                        brush = textBrush,
+                        alpha = color.alpha * textAlpha,
+                    )
+                } else {
+                    localParagraph.paint(canvas = canvas, color = color.copy(alpha = color.alpha * textAlpha))
+                }
             } finally {
                 if (willClip) {
                     canvas.restore()

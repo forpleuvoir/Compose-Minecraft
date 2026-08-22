@@ -215,6 +215,12 @@ fun MinecraftDevSceneContent() {
                 subtitle = "Compose 1:1 渲染原版视觉 tooltip:物品/文本/满空 bundle,popup 鼠标跟随,guiscale 开关",
                 onClick = { ComposeScreen.open { TooltipDevScene() } },
             )
+
+            DevMenuButton(
+                title = "TrueType 文本渲染对照 (T.TT)",
+                subtitle = "自研 stb_truetype 管线 vs 原版位图:开关切换、字号阶梯、换行与输入框度量同源",
+                onClick = { ComposeScreen.open { TrueTypeTextDevScene() } },
+            )
         }
     }
 }

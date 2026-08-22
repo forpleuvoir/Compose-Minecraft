@@ -101,7 +101,9 @@ class GraphicsLayer internal constructor() {
     private var layerOutline: Outline? = null
 
     /** 阴影光源方向(平台扩展 T.14):归一化向量,屏幕 y 向下,默认右上角 */
-    var shadowLightDirectionX: Float = 1f
+    // 默认光源在「左上」(方向 (-1,-1)),与原版 MC 文本阴影(+1,+1 右下投影)
+    // 保持同一光照约定 —— 平台所有阴影统一左上光源
+    var shadowLightDirectionX: Float = -1f
     var shadowLightDirectionY: Float = -1f
 
     /**

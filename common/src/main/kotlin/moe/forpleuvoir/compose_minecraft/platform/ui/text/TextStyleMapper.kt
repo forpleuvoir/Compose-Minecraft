@@ -16,7 +16,11 @@
 
 package moe.forpleuvoir.compose_minecraft.platform.ui.text
 
+import moe.forpleuvoir.compose_minecraft.mc
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.ParagraphStyle
@@ -60,12 +64,20 @@ data class PlatformTextData(
     val scale: Float,
     /** 文本透明度(spanStyle.alpha,默认 1f),与图层 alpha 相乘。 */
     val alpha: Float,
+    /** 平台适配点(T.TT):渐变画刷(spanStyle.brush,非 SolidColor),绘制端逐字形取色;null = 无。 */
+    val brush: Brush? = null,
     /** 平台无法表达、被文档化忽略的字段名。 */
     val ignored: List<String>,
 )
 
 /** 平台默认字号(sp):与 [androidx.compose.foundation.text.BasicText] 默认一致(18sp = 2x)。 */
-const val MC_DEFAULT_FONT_SIZE_SP: Float = 18f
+// 默认字号动态跟随原版行高(行高 ×2),兼容修改 Font.lineHeight 的模组
+val MC_DEFAULT_FONT_SIZE_SP: Float
+    get() = if (TextRenderConfig.enabled) {
+        TextRenderConfig.ttfDefaultFontSizeSp
+    } else {
+        mc.font.lineHeight * TextRenderConfig.defaultFontSizeLineMultiple
+    }
 
 /**
  * [TextStyle] → [PlatformTextData]。仅在组合期调用(density 来自 [androidx.compose.ui.platform.LocalDensity])。
@@ -97,7 +109,6 @@ fun TextStyle.toPlatformData(density: Density): PlatformTextData {
         // clickEvent/hoverEvent/insertion/font),已映射进 mcStyle;仅 blendRadius 忽略
         if (span.platformStyle?.blendRadius != null) add("platformSpanStyle.blendRadius")
         if (platformStyle != null) add("platformStyle")
-        if (span.brush != null) add("brush")
     }
 
     var mcStyle: Style = Style.EMPTY
@@ -144,6 +155,9 @@ fun TextStyle.toPlatformData(density: Density): PlatformTextData {
         // (TextForegroundStyle.Unspecified),须按 1f 处理,否则 NaN 直传渲染端
         // 致 alphaByte=0 全透明空白(T.28)
         alpha = if (span.alpha.isNaN()) 1f else span.alpha,
+        // 平台适配点(T.TT):渐变画刷透传(SolidColor 已并入 color,其余 Brush
+        // 由绘制端逐字形采样取色);null = 无
+        brush = span.brush?.takeIf { it !is SolidColor },
         ignored = ignored,
     )
 }

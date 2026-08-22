@@ -16,6 +16,9 @@
 
 package moe.forpleuvoir.compose_minecraft.platform.ui.text
 
+import moe.forpleuvoir.compose_minecraft.mc
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
+
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.TextUnit
@@ -48,7 +51,17 @@ val LocalDefaultFont = staticCompositionLocalOf<FontDescription> { MinecraftFont
  * [androidx.compose.runtime.CompositionLocalProvider] 覆盖(显式传 `fontSize`
  * 的样式优先于本 Local)。
  */
-val LocalDefaultFontSize = staticCompositionLocalOf<TextUnit> { 18.sp }
+// 默认字号按渲染后端区分(T.TT):
+// - 原版位图渲染器:原版行高 × 可配倍数(默认 ×2 = 18sp);
+// - TrueType 渲染器:固定 16sp(矢量字形墨迹占比高,同 sp 视觉更大)。
+// 部分模组会修改 Font.lineHeight,动态读取以兼容。
+val LocalDefaultFontSize = staticCompositionLocalOf<TextUnit> {
+    if (TextRenderConfig.enabled) {
+        TextRenderConfig.ttfDefaultFontSizeSp.sp
+    } else {
+        (mc.font.lineHeight * TextRenderConfig.defaultFontSizeLineMultiple).sp
+    }
+}
 
 /**
  * MC 资源字体清单(T.30):Minecraft 渲染体系可用的内置字体

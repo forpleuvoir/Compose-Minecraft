@@ -15,7 +15,6 @@
  */
 package androidx.compose.ui.text.platform
 
-import moe.forpleuvoir.compose_minecraft.mc
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
@@ -43,17 +42,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import kotlin.math.ceil
-import kotlin.math.roundToInt
+import moe.forpleuvoir.compose_minecraft.platform.render.text.MetricsSource
+import moe.forpleuvoir.compose_minecraft.platform.render.text.activeMetricsSource
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
-import net.minecraft.client.gui.Font as MinecraftFont
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Minecraft 平台文本后端(文本系统 MC 化,T.2 + T.5 + T.6)
 //
 // 平台适配点(与官方 Paragraph.skiko.kt 的差异):
 // - 样式类型为 MC [Style](能力字段 1:1),TextStyle 已完全移除;
-// - 度量统一用 MC [MinecraftFont]:行高 = Font.lineHeight(9),字号忽略;
+// - 度量统一用 MC Font(T.TT 起:度量来源可切换,原版 splitter / TrueType HMetrics);
 // - 光标/命中/词界位置用**前缀精确宽度** Font.width(前缀)(T.5,同 EditBox.getScreenX);
 // - 命中测试用 Font.plainSubstrByWidth(同 EditBox.findClickedPositionInText);
 // - 水平滚动恢复原版 ScrollState 模型(displayPos 截断已移除,T.6 修复);
@@ -102,12 +101,13 @@ data class StyleSegment(
 )
 
 /**
- * Minecraft Font 度量布局模型。
+ * Minecraft 字形度量布局模型(T.TT 起度量来源可切换)。
  *
- * 布局与渲染统一使用 Minecraft 字形度量:
- * - 行宽 = [MinecraftFont.width](该行文本)(GUI 像素,场景密度 1f 下即场景像素);
- * - 行高 = [MinecraftFont.lineHeight](9);
- * - 字号第一版忽略(统一 MC 原生 9px GUI 文本)。
+ * 布局与渲染统一使用同源字形度量:
+ * - 行宽 = 每字符 advance 累积(原版 `font.splitter` / TrueType stb HMetrics);
+ * - 行高 = [MetricsSource.lineHeight](原版 9 固定 / TrueType 字体真实行高);
+ * - 度量来源在构造时快照([activeMetricsSource]):开关开启且字体就绪 → TTF
+ *   度量,否则原版 —— flag 关闭时行为与历史版本逐字节一致。
  */
 internal class MinecraftTextLayout(
     val text: String,
@@ -121,20 +121,27 @@ internal class MinecraftTextLayout(
     /** 字符渲染相对系数(段级字号;越界 = 1) */
     private fun ratioAt(i: Int): Float = charScales.getOrElse(i) { 1f }
 
-    private val font: MinecraftFont
-        get() = mc.font
+    /**
+     * 度量来源快照(T.TT 原生排版):构造时查询一次 —— 同一布局的宽度/行高/基线
+     * 恒定;开关切换后新建的布局使用新度量(测试场景整树重组)。
+     */
+    internal val metrics: MetricsSource = activeMetricsSource()
 
     val lineHeight: Float
-        get() = font.lineHeight.toFloat()
+        get() = metrics.lineHeight
+
+    /** 行顶到基线距离(T.TT):布局侧基线公式统一从这里取,替代 0.8×行盒启发式 */
+    internal val baselineFromTop: Float
+        get() = metrics.baselineFromTop
 
     /**
-     * 累积字符浮点宽度(cumFloatWidths[i] = text[0,i) 的 StringSplitter.stringWidth 浮点值)。
+     * 累积字符浮点宽度(cumFloatWidths 数组第 i 项 = text 前 i 个字符的 advance 浮点和)。
      *
      * MC [Font.width] = `Mth.ceil(splitter.stringWidth(s))`,对每个子串单独 ceil。
      * 由于 stringWidth 是按码点累加的(StringSplitter.stringWidth 遍历每个 codepoint
      * 求和 widthProvider.getWidth,无字距/无上下文依赖),`stringWidth(s[a..b))` 精确等于
-     * `cumFloatWidths[b] - cumFloatWidths[a]`。因此 `font.width(s[a..b))` 精确等于
-     * `ceil(cumFloatWidths[b] - cumFloatWidths[a])`。
+     * `cumFloatWidths[b] - cumFloatWidths[a]`。TrueType 度量(stbtt HMetrics)同为
+     * 逐码点累加、无字距,前缀和语义不变。
      *
      * 性能(T.34):替代每次 `font.width(text.substring(start, end+1))` 的 O(n) 子串创建
      * + O(n) 宽度计算,降为 O(1) 数组查表。computeLines 从 O(n²) 降为 O(n)。
@@ -144,14 +151,16 @@ internal class MinecraftTextLayout(
         // 第一遍:每 char 的增量宽度(代理对占 2 char —— 宽度记首个 char、第二个为 0,
         // 前缀查询语义与旧实现「中间位置与终点同值」等价)
         val inc = FloatArray(n)
-        val splitter = font.splitter
         var i = 0
+        var prevCp = -1
         while (i < n) {
             val cp = text.codePointAt(i)
             val cc = Character.charCount(cp)
-            // 段级字号:字符增量 × 该段相对系数(r = 段字号缩放 / 基础缩放)
-            inc[i] = splitter.stringWidth(String(Character.toChars(cp))) * ratioAt(i)
+            // 段级字号:字符增量 × 该段相对系数(r = 段字号缩放 / 基础缩放);
+            // T.TT:字偶距并入增量(与绘制端 pen 推进同源,间距与系统渲染一致)
+            inc[i] = (metrics.charAdvance(cp) + metrics.codepointKern(prevCp, cp)) * ratioAt(i)
             if (cc == 2) inc[i + 1] = 0f
+            prevCp = cp
             i += cc
         }
         // 平台适配点(InlineContent):占位符原子 —— 内部增量清零(子区间宽 0,光标不落入),
@@ -176,7 +185,7 @@ internal class MinecraftTextLayout(
     }
 
     /**
-     * text[from, to) 的 MC 字形宽度(int 语义,与 [MinecraftFont.width] 一致 ——
+     * text[from, to) 的 MC 字形宽度(int 语义,与原版 `Font.width` 一致 ——
      * `ceil(stringWidth)`,返回 Float 等价于 `font.width(substring).toFloat()`)。
      */
     private fun substringWidth(from: Int, to: Int): Float {
@@ -464,7 +473,17 @@ internal class MinecraftParagraph(
         var drawText = intrinsics.text.substring(line.start, line.end)
         if (drawText.endsWith('\n')) drawText = drawText.dropLast(1)
         if (drawText.isEmpty()) return@run null
-        val ellipsisWidth = font.width(ellipsisSuffix).toFloat()
+        // 平台适配点(T.TT):省略号宽度与布局度量同源(原版 splitter / TrueType HMetrics)
+        val ellipsisWidth = ceil(layout.metrics.let { m ->
+            var w = 0f
+            var i = 0
+            while (i < ellipsisSuffix.length) {
+                val cp = ellipsisSuffix.codePointAt(i)
+                i += Character.charCount(cp)
+                w += m.charAdvance(cp)
+            }
+            w
+        })
         var end = drawText.length
         while (end > 0 &&
             layout.prefixWidth(line.start, line.start + end) + ellipsisWidth > layout.maxWidth
@@ -474,12 +493,9 @@ internal class MinecraftParagraph(
         drawText.substring(0, end)
     }
 
-    private val font: MinecraftFont
-        get() = mc.font
-
     override val width: Float get() = layout.width * scale
 
-    /** 平台适配点(段级字号):行盒高(布局空间)= 9 × 该行最大段系数 */
+    /** 平台适配点(段级字号):行盒高(布局空间)= 行高 × 该行最大段系数 */
     private fun lineBoxHeight(lineIndex: Int): Float =
         layout.lineHeight * lineAt(lineIndex).scaleFactor
 
@@ -496,10 +512,14 @@ internal class MinecraftParagraph(
 
     override val maxIntrinsicWidth: Float get() = intrinsics.maxIntrinsicWidth
 
-    override val firstBaseline: Float get() = lineBoxHeight(0) * 0.8f * scale
+    override val firstBaseline: Float
+        get() = layout.baselineFromTop * lineAt(0).scaleFactor * scale
 
     override val lastBaseline: Float
-        get() = (lineTop(visibleLineCount - 1) + lineBoxHeight(visibleLineCount - 1) * 0.8f) * scale
+        get() = (
+            lineTop(visibleLineCount - 1) +
+                layout.baselineFromTop * lineAt(visibleLineCount - 1).scaleFactor
+            ) * scale
 
     override val didExceedMaxLines: Boolean
         get() = maxLines != DefaultMaxLines && layout.lines.size > maxLines
@@ -525,9 +545,10 @@ internal class MinecraftParagraph(
             } else {
                 val lineStart = layout.lines[lineIndex].start
                 val x = layout.prefixWidth(lineStart, span.start)
-                // 平台适配点(段级字号):行顶按前序行盒高累计,对齐基准用该行盒高
+                // 平台适配点(段级字号):行顶按前序行盒高累计,对齐基准用该行真实基线
                 val box = lineBoxHeight(lineIndex)
-                val y = lineTop(lineIndex) + placeholderAlignY(span.height, span.verticalAlign, box)
+                val baseline = layout.baselineFromTop * lineAt(lineIndex).scaleFactor
+                val y = lineTop(lineIndex) + placeholderAlignY(span.height, span.verticalAlign, box, baseline)
                 Rect(
                     left = x * scale,
                     top = y * scale,
@@ -539,8 +560,12 @@ internal class MinecraftParagraph(
         return rects
     }
 
-    private fun placeholderAlignY(height: Float, align: PlaceholderVerticalAlign, boxHeight: Float): Float {
-        val baseline = boxHeight * 0.8f
+    private fun placeholderAlignY(
+        height: Float,
+        align: PlaceholderVerticalAlign,
+        boxHeight: Float,
+        baseline: Float,
+    ): Float {
         return when {
             align == PlaceholderVerticalAlign.AboveBaseline -> baseline - height
             align == PlaceholderVerticalAlign.Top || align == PlaceholderVerticalAlign.TextTop -> 0f
@@ -806,7 +831,12 @@ internal class MinecraftParagraph(
         blendMode: BlendMode,
     ) {
         if (brush is ShaderBrush) {
-            val size = androidx.compose.ui.geometry.Size(width, height)
+            // T.TT:必须用「未缩放」段落盒创建 —— 渲染端逐字形采样用的是命令局部坐标
+            // (未乘 scale);若用缩放后尺寸,t 会被压缩到 0..1/scale(实测:渐变恒为首色)
+            val size = androidx.compose.ui.geometry.Size(
+                layout.width,
+                lineTop(visibleLineCount),
+            )
             val shader = brush.createShader(size)
             val mc = canvas as? MinecraftCanvas
                 ?: throw UnsupportedOperationException(
@@ -983,10 +1013,11 @@ internal class MinecraftParagraph(
         shader: Shader? = null,
     ) {
         val rowEnd = rowStart + drawText.length
-        // 平台适配点(段级字号):基线对齐 —— 行基线(相对行顶)= 0.8×9×行最大系数;
-        // 段绘制原点 y = 行基线 − 0.8×9×段系数,使所有段共享同一基线。
-        // 此前直接从行顶起画是"顶部对齐"(实测 ⑭:小字吊在行顶、大字向下延伸)。
-        val baseline = layout.lineHeight * 0.8f
+        // 平台适配点(段级字号):基线对齐 —— 行基线(相对行顶)= 真实基线 × 行最大系数;
+        // 段绘制原点 y = 行基线 − 真实基线 × 段系数,使所有段共享同一基线。
+        // (T.TT:基线取自度量来源 [MetricsSource.baselineFromTop],替代 0.8×行盒启发式;
+        // 此前直接从行顶起画是"顶部对齐",实测 ⑭:小字吊在行顶、大字向下延伸。)
+        val baseline = layout.baselineFromTop
         val lineBaselineDelta = baseline * fallbackRatio
         var cursor = rowStart
         var segOffset = 0

@@ -23,6 +23,8 @@ import androidx.compose.ui.graphics.colorspace.ColorSpace
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
+import moe.forpleuvoir.compose_minecraft.platform.render.text.activeMetricsSource
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.toPaintSnapshot
 import net.minecraft.network.chat.Style
 import net.minecraft.resources.Identifier
@@ -787,6 +789,12 @@ internal class MinecraftCanvas internal constructor(
         val alpha: Float = 1f,
         /** 渐变着色器(平台适配点):非 null 时文本颜色由渐变采样决定,覆盖 style 色 */
         val shader: Shader? = null,
+        /**
+         * 渲染后端定向选择(T.TT,设计文档 §3.1.1):[TextRenderBackend.VANILLA]
+         * 强制原版渲染;[TextRenderBackend.DEFAULT] 跟随全局开关分流。
+         * 组合期由文本组件随 scale 一起捕获盖章(P2 接入 LocalTextRenderBackend)。
+         */
+        val backend: TextRenderBackend = TextRenderBackend.DEFAULT,
     ) : DrawCommand {
         override val paint: PaintSnapshot? = null
     }
@@ -860,6 +868,7 @@ internal class MinecraftCanvas internal constructor(
         style: Style,
         alpha: Float = 1f,
         shader: Shader? = null,
+        backend: TextRenderBackend = TextRenderBackend.DEFAULT,
     ) {
         drawCommands.add(
             DrawTextCommand(
@@ -871,6 +880,7 @@ internal class MinecraftCanvas internal constructor(
                 style = style,
                 alpha = alpha,
                 shader = shader,
+                backend = backend,
             )
         )
     }
@@ -1182,9 +1192,13 @@ internal class MinecraftCanvas internal constructor(
                 if (clip == null || !isTextLineOutsideY(currentMatrix, command, clip)) {
                     // 平台适配点:文本命令同样叠加图层级 alpha(经颜色 alpha 通道应用),
                     // 否则 graphicsLayer 的 alpha 对图层内文本不生效。
+                    // T.TT:shader(渐变画刷)必须透传 —— 滚动容器(verticalScroll 等)
+                    // 会走图层捕获→回放路径,丢失 shader 会导致渐变文本退化为纯色。
                     recordTextDraw(
                         command.text, command.x, command.y, command.style,
                         alpha = command.alpha * alphaMultiplier,
+                        shader = command.shader,
+                        backend = command.backend,
                     )
                 }
             } else if (command is DrawGradientRectCommand) {
@@ -1215,14 +1229,17 @@ internal class MinecraftCanvas internal constructor(
     }
 
     /**
-     * 平台适配点(T.36):判断文本命令的行(局部 y∈[command.y, command.y+[MC_TEXT_LINE_HEIGHT]])
+     * 平台适配点(T.36):判断文本命令的行(局部 y∈[command.y, command.y+行高])
      * 经 [m] 映射到目标画布空间后,是否完全在 [clip] 的 y 范围之外(垂直视口外)。
-     * MC 字体行高固定 9px(1x 基准);文本 scale 已含在命令矩阵,映射后自然放大。
+     * 行高随当前度量来源([activeMetricsSource]):原版 9px 固定 / TrueType 为
+     * 字体真实行高(T.TT);文本 scale 已含在命令矩阵,映射后自然放大。
      * 只按 y 剔除(垂直滚动主场景),x 方向交给渲染端 scissor(行宽未知且不误剔可见行)。
      */
     private fun isTextLineOutsideY(m: Matrix, command: DrawTextCommand, clip: Rect): Boolean {
+        // T.TT 语义一致模式:布局度量恒原版(9px),两种渲染器一致
+        val lineHeight = activeMetricsSource().lineHeight
         val top = m.map(Offset(command.x, command.y)).y
-        val bottom = m.map(Offset(command.x, command.y + MC_TEXT_LINE_HEIGHT)).y
+        val bottom = m.map(Offset(command.x, command.y + lineHeight)).y
         val minY = minOf(top, bottom)
         val maxY = maxOf(top, bottom)
         return maxY < clip.top || minY > clip.bottom
@@ -1757,9 +1774,6 @@ internal class DrawCustomCommand(
     val tag: Identifier,
     val data: Any?,
 ) : MinecraftCanvas.DrawCommand
-
-/** MC 字体行高固定 9px(1x 基准),供回放阶段文本视口剔除(T.36)使用。 */
-private const val MC_TEXT_LINE_HEIGHT = 9f
 
 /** 供 [MinecraftPath.segments] 使用的段类型常量 */
 private val Move = MinecraftPath.PathSegmentType.Move

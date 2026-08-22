@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.isUnspecified
 import androidx.compose.ui.unit.sp
+import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFont
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFontSize
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultTextStyle
@@ -165,6 +166,8 @@ fun BasicText(
     val mcStyle = platformData.mcStyle
     val scale = platformData.scale
     val textAlpha = platformData.alpha
+    // 平台适配点(T.TT):渐变画刷(TextStyle.brush 非 SolidColor),绘制走 brush 重载
+    val textBrush = platformData.brush
 
     BackgroundTextMeasurement(text = text, style = mcStyle, fontFamilyResolver = fontFamilyResolver)
 
@@ -200,6 +203,7 @@ fun BasicText(
                     color = color,
                     scale = scale,
                     alpha = textAlpha,
+                    brush = textBrush,
                 )
         }
     Layout(finalModifier, EmptyMeasurePolicy)
@@ -934,7 +938,8 @@ internal fun BackgroundTextMeasurement(
  * 自然的放大观感字号(16sp 是强行对齐 Compose 惯例,非本平台自然字号):
  * 9sp → 1x(行高 9px 原生)、18sp → 2x(行高 18px)、36sp → 4x(行高 36px)。
  */
-internal const val MC_TEXT_SCALE_BASE_PX = 9f
+// 基准行高动态跟随原版 Font.lineHeight(兼容修改行高的模组)
+internal val MC_TEXT_SCALE_BASE_PX: Float get() = mc.font.lineHeight.toFloat()
 
 /**
  * 平台适配点(T.19):TextUnit(sp) → 文本渲染缩放。

@@ -1,25 +1,24 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.backend
-import moe.forpleuvoir.compose_minecraft.mc
 
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.MinecraftCanvas.*
+import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.render.CustomDrawContext
 import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderPlugins
-import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
-import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.MinecraftRenderContext
-import moe.forpleuvoir.compose_minecraft.platform.render.renderer.GeometryTessellator
-import moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftGuiTriangles
-import moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftShadowRenderer
-import moe.forpleuvoir.compose_minecraft.platform.render.renderer.GuiTriangleRenderState
-import moe.forpleuvoir.compose_minecraft.platform.render.util.BlendPipelines
-import moe.forpleuvoir.compose_minecraft.platform.render.util.MinecraftImageTextureCache
-import moe.forpleuvoir.compose_minecraft.platform.render.toMatrix3x2f
-import moe.forpleuvoir.compose_minecraft.platform.render.toScreenRectangle
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.ColorEvaluator
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.toArgb
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.GeometryTessellator
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.GuiTriangleRenderState
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftGuiTriangles
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftShadowRenderer
+import moe.forpleuvoir.compose_minecraft.platform.render.text.*
+import moe.forpleuvoir.compose_minecraft.platform.render.toMatrix3x2f
+import moe.forpleuvoir.compose_minecraft.platform.render.toScreenRectangle
+import moe.forpleuvoir.compose_minecraft.platform.render.util.BlendPipelines
+import moe.forpleuvoir.compose_minecraft.platform.render.util.MinecraftImageTextureCache
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toComponent
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.render.TextureSetup
 import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.client.renderer.state.gui.BlitRenderState
@@ -236,7 +235,135 @@ internal class GuiStateBackend : GeometryBackend {
         val sink = sink ?: return
         val scissor = scissorFor(cmd)
         if (cmd.clip != null && scissor == null) return
-        sink.addText(text(cmd, scissor))
+        // T.TT 文本渲染分流(设计文档 §3.1,唯一拦截点):
+        // - VANILLA:定向回退原版(组合期 LocalTextRenderBackend 盖章,P2);
+        // - DEFAULT:全局开关开启且字体就绪 → 自研 TrueType 管线
+        //   (TrueTypeTextWriter 拒绝的 run —— 缺字/未支持样式/渐变 —— 逐 run 回退);
+        // - 其余(开关关闭 / 字体不可用)→ 原版 sink.addText(D4,与现状一致)。
+        val goingVanilla = cmd.backend == TextRenderBackend.VANILLA ||
+            !TextRenderConfig.enabled ||
+            !TrueTypeTextWriter.trySubmit(cmd, scissor?.toScreenRectangle(), sink)
+        // T.TT 诊断:TTF 模式下的回退 run 打印(行盒调试开关兼作回退诊断)
+        if (goingVanilla && TextRenderConfig.enabled && TextRenderConfig.debugTextBounds) {
+            println("[TT-FALLBACK] '${cmd.text.take(16)}' backend=${cmd.backend} hasShader=${cmd.shader != null}")
+        }
+        if (!goingVanilla) {
+            if (TextRenderConfig.debugTextBounds) drawDebugTextBounds(cmd, scissor, sink)
+            return
+        }
+        // T.TT:原版路径的渐变文本 —— GuiTextRenderState 一段只能一个颜色,
+        // 整段采样会退化成纯色(实测反馈);按字符拆分、逐字符采样渐变色,
+        // 视觉呈阶梯渐变,与原版位图渲染器兼容。
+        if (cmd.shader != null) {
+            splitGradientText(cmd, scissor, sink)
+        } else {
+            sink.addText(text(cmd, scissor))
+        }
+        if (TextRenderConfig.debugTextBounds) drawDebugTextBounds(cmd, scissor, sink)
+    }
+
+    /**
+     * 调试:绘制文本 run 的行盒轮廓 + 基线标记。坐标为命令局部空间,
+     * 经命令矩阵变换后与字形同步缩放 —— 两种渲染器画的是同一逻辑盒。
+     *
+     * 实现:白像素 quad 走 gui_text 浮点管线(非 ColoredRectangleRenderState ——
+     * 后者把局部坐标取整,1/scale 厚度的细线在大字号下会整条消失,实测反馈)。
+     * 厚度 = 精确 1 屏幕像素。
+     */
+    private fun drawDebugTextBounds(
+        cmd: DrawTextCommand,
+        scissor: Rect?,
+        sink: GuiCommandSink,
+    ) {
+        MinecraftGuiText.ensureCompiled()
+        val ms = max(0.05f, matrixScale(cmd.matrix))
+        val metrics = activeMetricsSource()
+        var width = 0f
+        var i = 0
+        while (i < cmd.text.length) {
+            val cp = cmd.text.codePointAt(i)
+            i += Character.charCount(cp)
+            width += metrics.charAdvance(cp)
+        }
+        val height = metrics.lineHeight
+        val baseline = cmd.y + metrics.baselineFromTop
+        // 1 屏幕像素的局部厚度
+        val t = 1f / ms
+        val (page, wu, wv) = GlyphAtlas.whiteTexelUV()
+        val scr = scissor?.toScreenRectangle()
+
+        fun quad(l: Float, tp: Float, r: Float, b: Float, argb: Int) {
+            sink.addElement(
+                GuiGlyphRenderState(
+                    pose = cmd.matrix.toMatrix3x2f(),
+                    scissor = scr,
+                    vertices = floatArrayOf(
+                        l, tp, wu, wv,
+                        r, tp, wu, wv,
+                        l, b, wu, wv,
+                        l, b, wu, wv,
+                        r, tp, wu, wv,
+                        r, b, wu, wv,
+                    ),
+                    colors = IntArray(6) { argb },
+                    pageIndex = page,
+                )
+            )
+        }
+
+        // 行盒四边(绿)
+        quad(cmd.x, cmd.y, cmd.x + width, cmd.y + t, DBG_BOUNDS_COLOR)
+        quad(cmd.x, cmd.y + height - t, cmd.x + width, cmd.y + height, DBG_BOUNDS_COLOR)
+        quad(cmd.x, cmd.y, cmd.x + t, cmd.y + height, DBG_BOUNDS_COLOR)
+        quad(cmd.x + width - t, cmd.y, cmd.x + width, cmd.y + height, DBG_BOUNDS_COLOR)
+        // 基线(红)
+        quad(cmd.x, baseline - t, cmd.x + width, baseline, DBG_BASELINE_COLOR)
+    }
+
+    /**
+     * 原版路径的渐变文本:按码点拆分为单字符 [GuiTextRenderState],每个字符
+     * 以其中心点采样一次渐变色。字符推进用原版 splitter(与原版字形宽度同源),
+     * 避免与原版字形错位。
+     */
+    private fun splitGradientText(
+        cmd: DrawTextCommand,
+        scissor: Rect?,
+        sink: GuiCommandSink,
+    ) {
+        val font = mc.font
+        val splitter = font.splitter
+        val pose = cmd.matrix.toMatrix3x2f()
+        var penX = 0f
+        var i = 0
+        val n = cmd.text.length
+        while (i < n) {
+            val cp = cmd.text.codePointAt(i)
+            val cc = Character.charCount(cp)
+            val chText = cmd.text.substring(i, i + cc)
+            val advance = splitter.stringWidth(chText)
+            // 采样点:字符中心(x)/ 当前行高中点(y);sampleGradient 已含命令 alpha
+            val color = ColorEvaluator.sampleGradient(
+                ColorEvaluator.gradientTAt(cmd.x + penX + advance / 2f, cmd.y + activeMetricsSource().lineHeight / 2f, cmd.shader!!),
+                cmd.shader,
+                cmd.alpha,
+            )
+            sink.addText(
+                GuiTextRenderState(
+                    font,
+                    Language.getInstance().getVisualOrder(cmd.style.toComponent(chText)),
+                    pose,
+                    (cmd.x + penX).roundToInt(),
+                    cmd.y.roundToInt(),
+                    color,
+                    0,
+                    false,
+                    false,
+                    scissor?.toScreenRectangle(),
+                )
+            )
+            penX += advance
+            i += cc
+        }
     }
 
     override fun drawGradientRect(cmd: DrawGradientRectCommand) {
@@ -725,6 +852,10 @@ internal class GuiStateBackend : GeometryBackend {
     private companion object {
         /** 顶点网格内部 coverage 大数(与 GeometryTessellator.OPAQUE 同值) */
         const val OPAQUE_COVERAGE = 1e4f
+
+        /** 调试框颜色:行盒轮廓(绿)/ 基线(红) */
+        val DBG_BOUNDS_COLOR = 0xFF00E676.toInt()
+        val DBG_BASELINE_COLOR = 0xFFFF5252.toInt()
     }
 }
 

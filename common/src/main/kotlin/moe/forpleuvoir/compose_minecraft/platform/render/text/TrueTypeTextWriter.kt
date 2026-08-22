@@ -1,0 +1,336 @@
+package moe.forpleuvoir.compose_minecraft.platform.render.text
+
+import androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand
+import moe.forpleuvoir.compose_minecraft.mc
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toComponent
+import net.minecraft.client.renderer.state.gui.GuiTextRenderState
+import net.minecraft.locale.Language
+import moe.forpleuvoir.compose_minecraft.platform.render.paint.ColorEvaluator
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
+import moe.forpleuvoir.compose_minecraft.platform.render.toMatrix3x2f
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontOriginal
+import net.minecraft.client.gui.navigation.ScreenRectangle
+import kotlin.math.max
+import kotlin.math.round
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
+
+/**
+ * TrueType 文本绘制执行器(T.TT):把一条 [DrawTextCommand] 光栅化并组装为
+ * [GuiGlyphRenderState] quad 批次提交给 [GuiCommandSink]。
+ *
+ * 原生排版(T.TT,用户拍板):字符推进与字形 bearing 全部使用字体自身度量
+ * (与布局层 `cumFloatWidths` 严格同源)—— 字符间距由字体设计保证,任何
+ * 字体文件都自然协调;代价是切换渲染器时文本宽度不同(测试场景整树重建)。
+ * - 光栅化字号 = baseSizePx × 姿态矩阵缩放(量化 0.25px)—— 位图像素与
+ *   屏幕像素 1:1,任意缩放下锐利(矢量光栅化红利);quad 以 1x 布局坐标
+ *   记录、由姿态矩阵统一变换。
+ *
+ * 原版渲染特性(对齐原版 `Font` / `BakedSheetGlyph` 的实现语义):
+ * - **混淆 §k**:同宽随机字形替换(空格除外,advance 不变 —— 与布局同源),
+ *   重掷间隔由 [TextRenderConfig.obfuscatedUpdateIntervalMs] 控制(默认 16ms),
+ *   按「字符序号 + 时间槽」确定性选样,同一槽位内稳定;
+ * - **粗体**:位图形态学膨胀合成(圆盘核 max 滤波,半径 ≈ 1/16 设备字号,
+ *   钳 1..2px)—— 真实的笔画加粗,单次绘制;非原版位图双绘制土办法;
+ * - **斜体**:四边形角点剪切,斜率 0.25、以基线为轴(顶部右倾、基线下左倾,
+ *   对齐原版 shearTop/shearBottom 的总斜率);
+ * - **下划线**:行盒底 1px 带(原版 `[y+8, y+9]`,按行高等比缩放);
+ * - **删除线**:行高中线 1px 带(原版中心 `y+4.5`,同上);
+ *   装饰线以图集白像素 quad 经顶点色 tint 实现,不随斜体剪切(与原版一致);
+ * - **渐变**:逐字形(及装饰线)按其中心点采样渐变取顶点色(原版回退路径
+ *   只取整段中心一点,此处保真度更高)。
+ *
+ * 回退策略(D4 / 设计文档 §3.1):
+ * - 字体未就绪 / 全局开关关闭(由调用方判定)→ 返回 false;
+ * - run 显式指定资源字体(fontOriginal 非 null,自研管线无对应字形源)→ false;
+ * - run 内缺字码点(emoji 等)→ 该字符由原版字形内联渲染(unifont 兜底),
+ *   其余字符保持 TTF —— 不再整 run 回退。
+ */
+internal object TrueTypeTextWriter {
+
+    /** 斜体剪切斜率:水平偏移 = 斜率 × (基线 − 角点 y),对齐原版 0.25 总斜率 */
+    private const val ITALIC_SHEAR = 0.25f
+
+    /**
+     * 尝试用自研管线绘制一条文本命令。返回 true 表示已提交;
+     * false 表示拒绝(调用方回退 `sink.addText` 原版渲染)。
+     */
+    fun trySubmit(
+        cmd: DrawTextCommand,
+        scissor: ScreenRectangle?,
+        sink: GuiCommandSink,
+    ): Boolean {
+        val font = TrueTypeFontManager.fontOrNull() ?: return false
+        // 原生排版:布局/推进度量 = 字体自身度量(与字形墨迹同源,间距由字体设计保证)
+        val metrics = TrueTypeFontManager.metricsOrNull() ?: return false
+        if (!supports(cmd)) {
+            return false
+        }
+        val style = cmd.style
+
+        // 基础色:与 GuiStateBackend.text 原版路径同一取色语义(样式色补 alpha);
+        // 渐变 run:按各 quad 中心点逐个采样(见 colorAt)
+        val shader = cmd.shader
+        val alphaByte = (cmd.alpha * 255f).roundToInt().coerceIn(0, 255)
+        val baseColor = style.color?.value?.or(0xFF000000.toInt()) ?: 0xFFFFFFFF.toInt()
+        val solidColor = (baseColor and 0x00FFFFFF) or (alphaByte shl 24)
+        fun colorAt(x: Float, y: Float): Int = shader?.let {
+            ColorEvaluator.sampleGradient(ColorEvaluator.gradientTAt(x, y, it), it, cmd.alpha)
+        } ?: solidColor
+
+        // 光栅化放大系数:姿态矩阵最大轴缩放(位图按屏幕实际像素密度生成)
+        val rasterScale = max(MIN_RASTER_SCALE, matrixScale(cmd.matrix))
+        val sizePx = GlyphCache.quantize(font.baseSizePx * rasterScale)
+        // 位图像素 → 1x 布局像素的折算除数(em 相对基准字号的比例)
+        val rasterDiv = sizePx / font.baseSizePx
+
+        val baselineY = cmd.y + metrics.baselineFromTop
+        var penX = cmd.x
+
+        // 混淆:确定性随机槽位 + 字符序号种子(同槽内稳定,跨槽重掷);
+        // 间隔可配(TextRenderConfig.obfuscatedUpdateIntervalMs,默认 16ms)
+        val obfuscated = style.isObfuscated
+        val obfuscateSlot = System.currentTimeMillis() /
+            TextRenderConfig.obfuscatedUpdateIntervalMs.coerceAtLeast(1L)
+
+        // 粗体/斜体:真粗体字重文件优先(字体家族),无字重文件退化膨胀合成;
+        // 斜体为 quad 剪切
+        val bold = style.isBold
+        val italic = style.isItalic
+        val boldFont = if (bold) TrueTypeFontManager.boldFontOrNull() else null
+
+        // 阴影(MC Style shadowColor):字形在偏移处先画一份阴影色再画主字形。
+        // 光源统一在「左上」(与原版 MC 文本阴影及 GraphicsLayer 默认光源一致):
+        // 偏移 = (+1,+1)×行高比例(右下投影)。
+        // alpha==0 的阴影色按不透明处理(0x000000 黑色阴影的常见写法);
+        // 渐变 run 的阴影取阴影原色,不做渐变采样。装饰线暂不带阴影。
+        val shadowRaw = style.shadowColor
+        val hasShadow = shadowRaw != null
+        val shadowOffset = if (hasShadow) max(1f, metrics.lineHeight / 9f) else 0f
+        val shadowArgb: Int = if (shadowRaw != null) {
+            val base = if ((shadowRaw ushr 24) == 0) shadowRaw or 0xFF000000.toInt() else shadowRaw
+            (((base ushr 24) * alphaByte / 255) shl 24) or (base and 0x00FFFFFF)
+        } else 0
+
+        // 按图集页分组组装 quad(一个 run 可能跨页)
+        val batches = HashMap<Int, QuadBatch>()
+        fun batch(page: Int) = batches.getOrPut(page) { QuadBatch() }
+
+        var charIndex = 0
+        var i = 0
+        var prevCp = -1
+        val n = cmd.text.length
+        // 缺字内联(T.TT):连续缺字字符累积为一段,交原版字形渲染(unifont 兜底),
+        // 其余字符保持 TTF —— 单个缺字不再拖垮整个 run
+        var vanillaStart = -1f
+        val vanillaText = StringBuilder()
+        fun flushVanilla() {
+            if (vanillaStart < 0) return
+            val seg = vanillaText.toString()
+            // 布局已按「缺字回退原版度量」为该段预留了精确宽度(混合度量源),
+            // 原版字形按自身宽度渲染恰好填满 —— 无需任何缩放适配
+            val segColor = colorAt(vanillaStart + (penX - vanillaStart) / 2f, cmd.y + metrics.lineHeight / 2f)
+            sink.addText(
+                GuiTextRenderState(
+                    mc.font,
+                    Language.getInstance().getVisualOrder(style.toComponent(seg)),
+                    cmd.matrix.toMatrix3x2f(),
+                    vanillaStart.roundToInt(),
+                    cmd.y.roundToInt(),
+                    segColor,
+                    0,
+                    false,
+                    false,
+                    scissor,
+                )
+            )
+            vanillaStart = -1f
+            vanillaText.clear()
+        }
+        while (i < n) {
+            val cp = cmd.text.codePointAt(i)
+            i += Character.charCount(cp)
+            charIndex++
+
+            // 混淆替换(空格除外,原版语义):advance 仍按原字符 —— 布局不抖
+            var drawCp = cp
+            if (obfuscated && cp != ' '.code) {
+                font.randomObfuscationCandidate(cp, charIndex * 1000003L + obfuscateSlot)
+                    ?.let { drawCp = it }
+            }
+
+            // 字形获取:真粗体字重优先(其缺字 → 退化常规体+膨胀合成);
+            // 常规体也缺字(emoji 等)→ 该字符交原版字形内联渲染(见 flushVanilla)
+            val glyph = if (boldFont != null) {
+                GlyphCache.getOrCreate(boldFont, drawCp, sizePx, false, sizePx / boldFont.baseSizePx)
+                    ?: GlyphCache.getOrCreate(font, drawCp, sizePx, true, rasterDiv)
+            } else {
+                GlyphCache.getOrCreate(font, drawCp, sizePx, bold, rasterDiv)
+            }
+            if (glyph == null) {
+                if (vanillaStart < 0) vanillaStart = penX
+                // 原版段渲染原始字符(混淆替换形可能同样缺字,无意义);
+                // 推进量 = 原版度量(混合源对缺字码点自动回退),预留即真实宽度
+                vanillaText.appendCodePoint(cp)
+                penX += metrics.charAdvance(cp)
+                continue
+            }
+            flushVanilla()
+
+            if (glyph.hasBitmap) {
+                // 原生排版:笔位 + 字体自带 bearing(stb xoff/yoff),间距由字体设计保证
+                val leftRaw = penX + glyph.bearingXLocal
+                val topRaw = baselineY + glyph.bearingTopLocal
+                // 屏幕像素对齐:只吸附原点(左/上),宽高保持精确值 ——
+                // 四边独立吸附会让每个字形宽度抖动 ±1px(实测:间距忽近忽远);
+                // 原点对齐 + 1:1 纹理映射下,仅尾列/行有轻微灰度过渡
+                val left = snap(leftRaw, rasterScale)
+                val top = snap(topRaw, rasterScale)
+                val right = left + glyph.widthLocal
+                val bottom = top + glyph.heightLocal
+                val color = colorAt(left + glyph.widthLocal * 0.5f, top + glyph.heightLocal * 0.5f)
+                val batch = batch(glyph.page)
+                // 阴影先画(主字形盖其上);光源左上 → 投影右下,斜体剪切同步
+                if (hasShadow) {
+                    batch.addGlyphQuad(
+                        snap(left + shadowOffset, rasterScale), snap(top + shadowOffset, rasterScale),
+                        snap(right + shadowOffset, rasterScale), snap(bottom + shadowOffset, rasterScale),
+                        baselineY, italic, glyph.u0, glyph.v0, glyph.u1, glyph.v1, shadowArgb,
+                    )
+                }
+                batch.addGlyphQuad(
+                    left, top, right, bottom,
+                    baselineY, italic, glyph.u0, glyph.v0, glyph.u1, glyph.v1, color,
+                )
+            }
+            // 推进笔位:advance + 字偶距(与布局前缀和严格一致)
+            penX += metrics.charAdvance(cp) + metrics.codepointKern(prevCp, cp)
+            prevCp = cp
+        }
+
+        flushVanilla()
+
+        // 装饰线(下划线/删除线):白像素 quad × 顶点色,几何对齐原版 Font
+        // (原版 1x:下划线 [y+8, y+9]、删除线中心 y+4.5,均 1px 高 —— 按行高等比缩放)
+        if (penX > cmd.x && (style.isUnderlined || style.isStrikethrough)) {
+            val (page, whiteU, whiteV) = GlyphAtlas.whiteTexelUV()
+            val decorBatch = batch(page)
+            val thickness = max(1f, metrics.lineHeight / 9f)
+            val decorColor = colorAt((cmd.x + penX) * 0.5f, baselineY)
+            if (style.isUnderlined) {
+                val top = cmd.y + metrics.lineHeight - thickness
+                decorBatch.addQuad(cmd.x, top, penX, top + thickness, whiteU, whiteV, whiteU, whiteV, decorColor)
+            }
+            if (style.isStrikethrough) {
+                val center = cmd.y + metrics.lineHeight * 0.5f
+                decorBatch.addQuad(
+                    cmd.x, center - thickness * 0.5f, penX, center + thickness * 0.5f,
+                    whiteU, whiteV, whiteU, whiteV, decorColor,
+                )
+            }
+        }
+
+        if (batches.isEmpty()) {
+            return true // 空白 run:无可见输出但已正确处理
+        }
+        MinecraftGuiText.ensureCompiled()
+        for ((page, batch) in batches) {
+            sink.addElement(
+                GuiGlyphRenderState(
+                    pose = cmd.matrix.toMatrix3x2f(),
+                    scissor = scissor,
+                    vertices = batch.vertices.toFloatArray(),
+                    colors = batch.colors.toIntArray(),
+                    pageIndex = page,
+                )
+            )
+        }
+        return true
+    }
+
+    /**
+     * 支持范围判定:颜色/alpha/装饰线(下划线/删除线)/混淆/渐变/粗体/斜体
+     * 均管线内实现(quad 级合成)。
+     *
+     * 字体判定:`FontDescription.DEFAULT`(minecraft:default)**由本管线接管**
+     * —— BasicText 会经 LocalDefaultFont 把 DEFAULT 填进所有样式(T.30 默认字体
+     * 填充),若据此回退则整个应用都不会走新渲染器(实测教训);仅显式指定的
+     * 其它资源字体 run 无对应字形源,才回退原版。
+     */
+    private fun supports(cmd: DrawTextCommand): Boolean {
+        val style = cmd.style
+        // 注意:MC Style.getFont() 在未设置时返回 FontDescription.DEFAULT(非 null),
+        // 判「是否显式指定字体」必须用平台的 fontOriginal 原始可空扩展
+        val font = style.fontOriginal ?: return true
+        return font == net.minecraft.network.chat.FontDescription.DEFAULT
+    }
+
+    /** 命令矩阵(列主序 4x4)2D 部分的最大轴缩放 */
+    private fun matrixScale(m: FloatArray): Float {
+        val scaleX = sqrt(m[0] * m[0] + m[1] * m[1])
+        val scaleY = sqrt(m[4] * m[4] + m[5] * m[5])
+        return max(scaleX, scaleY)
+    }
+
+    /** 位图最小光栅化系数:避免亚像素字号光栅化出糊图(极端缩小场景仍可读) */
+    private const val MIN_RASTER_SCALE = 0.25f
+
+
+
+    /**
+     * 屏幕像素对齐(T.TT 抗糊核心):把局部坐标吸附到「1/矩阵缩放」网格,
+     * 使变换后的四边形边界落在整数屏幕像素上 —— 消除浮点落点 + LINEAR
+     * 采样造成的半像素模糊(原版位图字体因全整数定位而天然硬朗)。
+     */
+    private fun snap(v: Float, grid: Float): Float = round(v * grid) / grid
+
+    /** 单页 quad 组装缓冲(每帧临时对象,P3 批次合并时优化复用) */
+    private class QuadBatch {
+        val vertices = ArrayList<Float>(64)
+        val colors = ArrayList<Int>(16)
+
+        /**
+         * 字形 quad:斜体时四角绕基线剪切(顶部右倾、底部左倾,斜率
+         * [ITALIC_SHEAR]),粗体的右移副本由调用方传入偏移后的矩形实现。
+         */
+        fun addGlyphQuad(
+            left: Float, top: Float, right: Float, bottom: Float,
+            baselineY: Float, italic: Boolean,
+            u0: Float, v0: Float, u1: Float, v1: Float,
+            color: Int,
+        ) {
+            val tlx = left + if (italic) ITALIC_SHEAR * (baselineY - top) else 0f
+            val trx = right + if (italic) ITALIC_SHEAR * (baselineY - top) else 0f
+            val blx = left + if (italic) ITALIC_SHEAR * (baselineY - bottom) else 0f
+            val brx = right + if (italic) ITALIC_SHEAR * (baselineY - bottom) else 0f
+            // 两三角形(TL,BL,BR)+(TL,BR,TR);cull 关闭,绕序不约束
+            vertices.apply {
+                add(tlx); add(top); add(u0); add(v0)
+                add(blx); add(bottom); add(u0); add(v1)
+                add(brx); add(bottom); add(u1); add(v1)
+                add(tlx); add(top); add(u0); add(v0)
+                add(brx); add(bottom); add(u1); add(v1)
+                add(trx); add(top); add(u1); add(v0)
+            }
+            repeat(6) { colors.add(color) }
+        }
+
+        /** 装饰线/普通矩形 quad(不剪切) */
+        fun addQuad(
+            left: Float, top: Float, right: Float, bottom: Float,
+            u0: Float, v0: Float, u1: Float, v1: Float,
+            color: Int,
+        ) {
+            // 两三角形(v0,v1,v2)+(v0,v2,v3);cull 关闭,绕序不约束
+            vertices.apply {
+                add(left); add(top); add(u0); add(v0)
+                add(right); add(top); add(u1); add(v0)
+                add(left); add(bottom); add(u0); add(v1)
+                add(left); add(bottom); add(u0); add(v1)
+                add(right); add(top); add(u1); add(v0)
+                add(right); add(bottom); add(u1); add(v1)
+            }
+            repeat(6) { colors.add(color) }
+        }
+    }
+}

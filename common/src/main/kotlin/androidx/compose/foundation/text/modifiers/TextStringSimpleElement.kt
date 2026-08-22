@@ -17,6 +17,7 @@
 package androidx.compose.foundation.text.modifiers
 
 import androidx.compose.foundation.text.DefaultMinLines
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.platform.InspectorInfo
@@ -47,6 +48,8 @@ internal class TextStringSimpleElement(
     private val scale: Float = 1f,
     /** 平台适配点(T.28):文本透明度(TextStyle.alpha,默认 1f),绘制时合成进颜色。 */
     private val alpha: Float = 1f,
+    /** 平台适配点(T.TT):渐变画刷(TextStyle.brush 非 SolidColor),绘制走 brush 重载。 */
+    private val brush: Brush? = null,
 ) : ModifierNodeElement<TextStringSimpleNode>() {
 
     override fun create(): TextStringSimpleNode =
@@ -62,11 +65,12 @@ internal class TextStringSimpleElement(
             segments,
             scale,
             alpha,
+            brush,
         )
 
     override fun update(node: TextStringSimpleNode) {
         node.doInvalidations(
-            drawChanged = node.updateDraw(color, style, alpha),
+            drawChanged = node.updateDraw(color, style, alpha, brush),
             textChanged = node.updateText(text = text),
             layoutChanged =
                 node.updateLayoutRelatedArgs(
@@ -92,6 +96,7 @@ internal class TextStringSimpleElement(
         if (text != other.text) return false /* expensive to check, do after color */
         if (style != other.style) return false
         if (alpha != other.alpha) return false
+        if (brush != other.brush) return false
         if (segments != other.segments) return false
         if (scale != other.scale) return false
 
@@ -117,6 +122,7 @@ internal class TextStringSimpleElement(
         result = 31 * result + alpha.hashCode()
         result = 31 * result + segments.hashCode()
         result = 31 * result + scale.hashCode()
+        result = 31 * result + brush.hashCode()
         return result
     }
 

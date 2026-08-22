@@ -1,6 +1,6 @@
 # 文本渲染器替换 —— 设计文档(TrueType 渲染管线)
 
-> 状态:**设计稿 v1,待拍板**
+> 状态:**P1 已实施(2026-08-23),默认关;P2/P3 待做**
 > 目标:用自研 TrueType 文本渲染管线替换 Compose 文本的默认渲染路径(原版 MC 位图字体管线)。
 > 参考:[Modern UI](https://github.com/BloCamLimb/ModernUI-MC)(成熟先例)。
 >
@@ -118,9 +118,9 @@ object TextRenderConfig {
 
 | 阶段 | 内容 | 验收 |
 |---|---|---|
-| **P1 最小闭环** | 单 Regular TTF;stb 解析 + 图集 + gui_text 管线;度量同源切换;flag 默认关 + 回退验证 | flag 开后 BasicText/TextField 文本清晰锐利;关后与现状一致 |
-| P2 样式完备 | bold/italic 合成、段级字号多尺寸光栅化、多字体族回退链 | ⑭ 混排场景各段正确缩放与基线对齐 |
-| P3 性能与收尾 | 批次合并、图集分页/LRU、RasterBackend CPU 路径、可选描边 | 静态场景零额外开销;动态文本流畅 |
+| **P1 最小闭环** ✅ 已实施 | 原生排版(字体自身 HMetrics/kern/em 归一);stb 解析 + R8 图集 + gui_text 管线;粗体(偏移并集/真粗体文件)、斜体、装饰线、混淆 §k、渐变逐字形、彩色阴影全部管线内实现;缺字字符内联原版字形(混排);flag 默认关 | ✅ dev 对照验收通过 |
+| P2 样式完备 | ⬜ `LocalTextRenderBackend` 组合期定向回退;⬜ 缺字回退链(多 FontSource 按码点兜底,当前仅粗体独立文件);⬜ 24sp 粗体清晰度微调(boldEmboldenRatio) | 混排场景各段正确缩放与基线对齐 |
+| P3 性能与收尾 | ⬜ 批次合并、图集分页/LRU(混淆长开会持续占用图集)、RasterBackend CPU 路径、可选描边 | 静态场景零额外开销;动态文本流畅 |
 
 ## 5. 风险与对策
 
