@@ -270,7 +270,9 @@ MC→Compose 键码映射表(`glfwKeyToComposeKey`),Compose `Key` 常量本身�
 
 1. **系统拖放(Drag & Drop)**:接 `EmptyDragAndDropManager`(MC 无原生拖拽,可探索内部拖拽手势
    `draggable`/`detectDragGestures` 已可用;系统级 OS 拖放需平台桥)。
-2. **`DropdownMenu`**:未移植(依赖 Popup + 焦点层级基建已齐,可仿官方实现补上)。
+2. **`DropdownMenu`**:**暂缓(用户决策)** —— 属于具体 UI 的风格化实现,与平台
+   「只提供基础能力、不做风格化」定位冲突;Popup/焦点层级基建已齐,业务需要时可
+   基于 Popup + Column 自行组合,或后续以无外观的 `DropdownMenuScope` 能力形式再评估。
 3. **BiDi / 排版方向**:固定 LTR,需要多方向文本时再评估。
 4. **明确不做**:软键盘(MC 桌面 IME 由系统输入法负责)、触摸/多指/触控笔(纯鼠标 GUI)、
    离屏合成家族(§11.2)、动画库动效(`dialog` 开合动画等,未经受控验证)。

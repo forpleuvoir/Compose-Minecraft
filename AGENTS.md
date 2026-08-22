@@ -301,7 +301,7 @@ build_project(rebuild=true)
   detectTapGestures onDoubleTap / 文本框双击选词,首次抬起后 40–300ms 内再次按下,
   指针事件携带真实墙钟时间戳;MC 原生 250ms doubleClick 标志仅透传 vanilla 子控件链),
   拖放未实现;
-- Popup/Dialog 已实现(T.33):场景内图层弹层(经 `ComposeSceneLayer`,非系统窗口),Popup 支持锚点定位/PositionProvider/clipping/焦点隔离/Escape 与 outside 点击关闭;Dialog 带 scrim 遮罩(默认黑 60%)、居中、模态焦点圈定与 dismissOnBackPress/dismissOnClickOutside;DropdownMenu 未移植;
+- Popup/Dialog 已实现(T.33):场景内图层弹层(经 `ComposeSceneLayer`,非系统窗口),Popup 支持锚点定位/PositionProvider/clipping/焦点隔离/Escape 与 outside 点击关闭;Dialog 带 scrim 遮罩(默认黑 60%)、居中、模态焦点圈定与 dismissOnBackPress/dismissOnClickOutside;DropdownMenu 暂缓(用户决策:具体 UI 风格化实现,平台不提供;业务可基于 Popup 自行组合);
 - 剪贴板已实现(I.2:`MinecraftClipboard` 经 MC `KeyboardHandler.getClipboard/setClipboard`
   访问系统剪贴板,MC 内部封装 GLFW,不引入 AWT;调用链保持在主线程);
 - 平台未配置 maven 发布,消费者直接依赖发布 JAR。
