@@ -25,7 +25,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
-import moe.forpleuvoir.compose_minecraft.platform.render.util.MinecraftGuiScale
 import moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftTooltipRenderer
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.drawMinecraftTooltip
 import moe.forpleuvoir.compose_minecraft.platform.ui.popup.LocalPopupHost
@@ -108,8 +107,10 @@ class TooltipPositionProvider(
  * 内容为绘制原版 tooltip 视觉的 [Canvas](经 [drawMinecraftTooltip],不走
  * GuiGraphicsExtractor);定位用 [TooltipPositionProvider](鼠标跟随,原版语义)。
  *
- * [guiScaleEnabled] 为真时按当前窗口原版 guiScale([MinecraftGuiScale.current])布局
- * 并整体放大(含 popup 内容尺寸与定位计算);为假(默认)则 1:1 像素。
+ * [guiScaleEnabled] 为真时按当前窗口原版 guiScale
+ * ([moe.forpleuvoir.compose_minecraft.platform.render.util.MinecraftGuiScale.current])布局
+ * 并整体放大(含 popup 内容尺寸与定位计算);为假(默认)则 1:1 像素,倍率取
+ * [LocalDensityToGuiScaleMultiplier]。
  *
  * @param key 弹层唯一键(业务生成,如 `remember { Any() }`)。
  * @param visible 是否显示;false 时不注册。
@@ -132,11 +133,13 @@ fun TooltipPopup(
     if (!visible || popupHost == null || lines.lines.isEmpty()) return
 
     val densityValue = density ?: LocalDensity.current.density
-    val finalScale: Float = if (guiScaleEnabled) {
-        MinecraftGuiScale.current()
-    } else {
-        densityValue * MinecraftTooltipRenderer.DENSITY_TO_GUI_SCALE_MULTIPLIER
-    }
+    // 密度模式倍率经 CompositionLocal 注入(可被子树覆盖);布局期与渲染期经
+    // resolveFinalScale 取同一公式,避免外框尺寸与内容缩放漂移。
+    val multiplier = LocalDensityToGuiScaleMultiplier.current
+    val finalScale: Float = MinecraftTooltipRenderer.resolveFinalScale(
+        if (guiScaleEnabled) null else densityValue,
+        multiplier,
+    )
     val size = lines.measure()
 
     // 背景外扩(PADDING + MARGIN)会画到内容区之外:Canvas 布局尺寸含外扩
@@ -154,7 +157,7 @@ fun TooltipPopup(
         val pixelH = ((size.height + MinecraftTooltipRenderer.TOTAL_OUTER_PADDING) * finalScale).roundToInt().coerceAtLeast(1)
         // dp 尺寸 = 像素尺寸 / density(Compose 场景密度)
         Canvas(Modifier.size((pixelW / densityValue).dp, (pixelH / densityValue).dp)) {
-            drawMinecraftTooltip(lines, outer, outer, if (guiScaleEnabled) null else densityValue)
+            drawMinecraftTooltip(lines, outer, outer, if (guiScaleEnabled) null else densityValue, multiplier)
         }
     }
 }

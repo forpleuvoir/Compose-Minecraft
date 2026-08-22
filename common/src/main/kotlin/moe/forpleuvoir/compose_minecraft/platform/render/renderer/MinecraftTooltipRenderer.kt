@@ -57,9 +57,15 @@ class MinecraftTooltipRenderer(
     private val scissor: ScreenRectangle? = null,
     /** 调用方(Compose 图层)变换,叠加在缩放之外(默认恒等) */
     basePose: Matrix3x2f = Matrix3x2f(),
+    /**
+     * 密度模式「密度 → guiScale」倍率(默认 [DENSITY_TO_GUI_SCALE_MULTIPLIER]);
+     * guiScale 模式(density == null)下忽略。组合期可经
+     * [moe.forpleuvoir.compose_minecraft.platform.ui.tooltip.LocalDensityToGuiScaleMultiplier] 覆盖。
+     */
+    densityToGuiScaleMultiplier: Float = DENSITY_TO_GUI_SCALE_MULTIPLIER,
 ) {
-    /** 最终缩放系数:null density → 原版 guiScale;非 null → density × DENSITY_TO_GUI_SCALE_MULTIPLIER */
-    val finalScale: Float = if (density != null) density * DENSITY_TO_GUI_SCALE_MULTIPLIER else MinecraftGuiScale.current()
+    /** 最终缩放系数:null density → 原版 guiScale;非 null → density × [densityToGuiScaleMultiplier](经 [resolveFinalScale]) */
+    val finalScale: Float = resolveFinalScale(density, densityToGuiScaleMultiplier)
 
     /** 提交 pose:先 basePose(图层变换)再 finalScale 缩放 */
     val pose: Matrix3x2f = if (finalScale != 1f) {
@@ -140,7 +146,7 @@ class MinecraftTooltipRenderer(
      * 同款 —— 玩家皮肤头像等 [Identifier] 直接纹理使用,UV 为像素偏移。
      */
     fun blit(
-        pipeline: com.mojang.blaze3d.pipeline.RenderPipeline,
+        pipeline: RenderPipeline,
         textureId: Identifier,
         x: Int,
         y: Int,
@@ -252,8 +258,20 @@ class MinecraftTooltipRenderer(
         const val EDGE_MIN = 4
         const val SCREEN_PADDING = 3
 
-        /** Compose 密度 → guiScale 倍率:密度模式下 finalScale = density × 此值 */
+        /** Compose 密度 → guiScale 倍率:密度模式下 finalScale = density × 此值(默认值,可经 LocalDensityToGuiScaleMultiplier 覆盖) */
         const val DENSITY_TO_GUI_SCALE_MULTIPLIER = 2.0f
+
+        /**
+         * 最终缩放系数唯一解析出处:[density] 非 null 时 = `density × [multiplier]`,
+         * 否则回退原版 guiScale([MinecraftGuiScale.current])。
+         *
+         * 布局期(popup 外框尺寸)与渲染期(pose 缩放)两处调用必须都经此函数,
+         * 避免公式/倍率漂移导致内容与外框错位。
+         */
+        fun resolveFinalScale(
+            density: Float?,
+            multiplier: Float = DENSITY_TO_GUI_SCALE_MULTIPLIER,
+        ): Float = if (density != null) density * multiplier else MinecraftGuiScale.current()
 
         private val BACKGROUND_SPRITE: Identifier = Identifier.withDefaultNamespace(BACKGROUND_SPRITE_PATH)
         private val FRAME_SPRITE: Identifier = Identifier.withDefaultNamespace(FRAME_SPRITE_PATH)

@@ -24,6 +24,8 @@ data class TooltipDrawData(
      * 见 [MinecraftTooltipRenderer]。
      */
     val density: Float? = null,
+    /** 密度模式「密度 → guiScale」倍率,见 [MinecraftTooltipRenderer.resolveFinalScale]。 */
+    val densityToGuiScaleMultiplier: Float = MinecraftTooltipRenderer.DENSITY_TO_GUI_SCALE_MULTIPLIER,
 )
 
 /**
@@ -49,6 +51,7 @@ object McTooltipPlugin : MinecraftRenderPlugin {
             density = td.density,
             scissor = context.scissor?.toScreenRectangle(),
             basePose = context.matrix.toMatrix3x2f(),
+            densityToGuiScaleMultiplier = td.densityToGuiScaleMultiplier,
         )
         renderer.renderTooltip(
             lines = td.lines.lines,

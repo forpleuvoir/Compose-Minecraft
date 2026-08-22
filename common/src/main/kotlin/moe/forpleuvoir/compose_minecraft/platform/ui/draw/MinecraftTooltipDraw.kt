@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.recordCustomDraw
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.McTooltipPlugin
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.TooltipDrawData
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftTooltipRenderer
 import moe.forpleuvoir.compose_minecraft.platform.ui.tooltip.TooltipLines
 
 /**
@@ -23,11 +24,16 @@ fun DrawScope.drawMinecraftTooltip(
     x: Int = 0,
     y: Int = 0,
     density: Float? = null,
+    /**
+     * 密度模式「密度 → guiScale」倍率,透传 [MinecraftTooltipRenderer]。
+     * 组合期经 LocalDensityToGuiScaleMultiplier 取值后传入(DrawScope 阶段读不到 CompositionLocal)。
+     */
+    densityToGuiScaleMultiplier: Float = MinecraftTooltipRenderer.DENSITY_TO_GUI_SCALE_MULTIPLIER,
 ) {
     drawIntoCanvas { canvas ->
         canvas.recordCustomDraw(
             McTooltipPlugin.TAG,
-            TooltipDrawData(lines, x, y, density),
+            TooltipDrawData(lines, x, y, density, densityToGuiScaleMultiplier),
             null,
             null,
         )
