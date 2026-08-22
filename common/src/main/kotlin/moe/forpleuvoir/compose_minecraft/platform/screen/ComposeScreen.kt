@@ -17,7 +17,6 @@ import moe.forpleuvoir.compose_minecraft.platform.textinput.ComposeInputBridge.t
 import moe.forpleuvoir.compose_minecraft.platform.textinput.MinecraftTextInputService
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposeGuiRenderer
 import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderPlugins
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.narration.NarrationElementOutput
 import net.minecraft.client.gui.screens.Screen
@@ -56,7 +55,10 @@ import net.minecraft.client.input.KeyEvent as MCKeyEvent
  *   (不 close),返回时 [added] 复活(场景与组合状态保留,滚动位置等不丢失);
  *   非可复活屏关闭即销毁场景。
  *
- * 尚未支持:双击、IME 候选窗(由系统输入法负责);Popup/Dialog 已实现(T.33,
+ * 双击:由 Compose 手势层自检(detectTapGestures onDoubleTap / 文本框双击选词,
+ * 首次抬起后 40–300ms 内再次按下;指针事件携带真实墙钟时间戳)。MC 原生
+ * `MouseHandler` 的 doubleClick 标志(250ms)仅透传给 vanilla 子控件链(super 调用),
+ * 不参与 Compose 手势判定。IME 候选窗由系统输入法负责;Popup/Dialog 已实现(T.33,
  * 场景内图层弹层:焦点隔离/scrim 遮罩/Escape 与 outside 点击关闭)。
  */
 class ComposeScreen(
@@ -202,6 +204,11 @@ class ComposeScreen(
     private val MinecraftComposeScene.imeService: MinecraftTextInputService?
         get() = platformContext.textInputService as? MinecraftTextInputService
 
+    /**
+     * MC 原生 doubleClick 标志(`MouseHandler` 按 250ms/down-to-down/同屏同键计算)不转发给
+     * Compose —— 双击由 Compose 手势检测器按事件时间戳自行判定(detectTapGestures /
+     * 文本框选词),该标志仅经 [super.mouseClicked] 透传给 vanilla 子控件链。
+     */
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
         val consumed = composeScene?.sendPointerEvent(
             eventType = PointerEventType.Press,

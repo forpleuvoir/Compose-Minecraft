@@ -205,6 +205,12 @@ fun MinecraftDevSceneContent() {
             )
 
             DevMenuButton(
+                title = "双击测试 (DoubleTap)",
+                subtitle = "detectTapGestures onTap/onDoubleTap 计数 + BasicTextField 双击选词",
+                onClick = { ComposeScreen.open { DoubleTapDevScene() } },
+            )
+
+            DevMenuButton(
                 title = "原版 Tooltip 插件测试 (T.39)",
                 subtitle = "Compose 1:1 渲染原版视觉 tooltip:物品/文本/满空 bundle,popup 鼠标跟随,guiscale 开关",
                 onClick = { ComposeScreen.open { TooltipDevScene() } },

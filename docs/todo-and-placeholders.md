@@ -20,7 +20,7 @@ Popup/Dialog 弹层、MC 复述)已可用并有开发场景验证。以下能力
 |---|---|---|
 | 图层能力 | 部分 | clip/scissor、translate/scale/rotate/alpha 已通;`saveLayer`、`clipPath`、`clipRect(Difference)`、复合 Path 操作不支持 |
 | 文本 | 部分 | 段级 **字号**(scale)暂不支持(布局统一 base scale);InlineContent / 占位符未实现;BiDi / 排版方向固定 LTR;渐变 Brush 不支持 |
-| 焦点/事件 | 部分 | 键盘/鼠标/滚轮/聚焦/IME/指针图标已通;双击、拖放、触摸 未实现或占位 |
+| 焦点/事件 | 部分 | 键盘/鼠标/滚轮/聚焦/IME/指针图标/**双击**已通;拖放、触摸 未实现或占位 |
 | 平台 API | 居多占位 | 文本工具栏、无障碍 screenReader 接口、窗口 inset、触感反馈、软键盘、URI 等,其中多数见 §11「可忽略」 |
 | 互操作视图 | 占位(可删) | 无原生视图嵌入,`InteropView` 以 `Any` 占位 —— **Android 原生 View 机制,完全不需要,见 §11.1** |
 
@@ -162,9 +162,15 @@ MC→Compose 键码映射表(`glfwKeyToComposeKey`),Compose `Key` 常量本身�
 
 ## 7. 输入 / 事件(`androidx.compose.ui.input.*`, `ComposeScreen`)
 
-鼠标/键盘/滚轮/IME/指针图标已通(见 AGENTS.md 已知限制)。以下未实现:
+鼠标/键盘/滚轮/IME/指针图标/**双击**已通(见 AGENTS.md 已知限制)。以下未实现:
 
-- ❌ **双击**:`ComposeScreen.mouseClicked` 传 `doubleClick=false` 路径未验证/未实现。
+- ✅ **双击**:由 Compose 手势层自检 —— 指针事件携带真实墙钟时间戳
+  (`ComposeScene.sendPointerEvent` 默认 `currentTimeMillis()`),移植版
+  `MinecraftDefaultViewConfiguration` 双击常量与桌面一致(300ms 超时 / 40ms 下限),
+  `detectTapGestures(onDoubleTap)` 与 `BasicTextField` 双击选词均可用
+  (dev 场景 `DoubleTapDevScene` 验证)。MC 原生 `MouseHandler` 的 doubleClick 标志
+  (250ms、down-to-down、上次点击已消费)仅经 `super.mouseClicked` 透传给 vanilla
+  子控件链,不参与 Compose 手势判定 —— 两套语义实际使用无感差异。
 - ❌ **触摸 / 多指 / 触控笔**:`PointerButton`/`PointerType` 只覆盖鼠标;
   `PointerEvent.platform.kt` 注释 `TODO(CMP-2184) support more buttons`。⚠️ 纯鼠标 GUI 场景通常用不到。
 - ❌ **系统拖放(Drag & Drop)**:`ComposeSceneDragAndDropNode` 存在,但
@@ -261,10 +267,9 @@ MC→Compose 键码映射表(`glfwKeyToComposeKey`),Compose `Key` 常量本身�
    (`MinecraftParagraph.placeholder…` 目前返回空)。
 2. **段级字号(scale)**:富文本段级字号暂不支持(布局统一 base scale),需扩展
    `recordSegmentedTextDraw` 为每段独立字号矩阵。
-3. **双击**:`mouseClicked` 的 doubleClick 语义与间隔判定(目前固定传 false)。
-4. **系统拖放(Drag & Drop)**:接 `EmptyDragAndDropManager`(MC 无原生拖拽,可探索内部拖拽手势
+3. **系统拖放(Drag & Drop)**:接 `EmptyDragAndDropManager`(MC 无原生拖拽,可探索内部拖拽手势
    `draggable`/`detectDragGestures` 已可用;系统级 OS 拖放需平台桥)。
-5. **`DropdownMenu`**:未移植(依赖 Popup + 焦点层级基建已齐,可仿官方实现补上)。
-6. **BiDi / 排版方向**:固定 LTR,需要多方向文本时再评估。
-7. **明确不做**:软键盘(MC 桌面 IME 由系统输入法负责)、触摸/多指/触控笔(纯鼠标 GUI)、
+4. **`DropdownMenu`**:未移植(依赖 Popup + 焦点层级基建已齐,可仿官方实现补上)。
+5. **BiDi / 排版方向**:固定 LTR,需要多方向文本时再评估。
+6. **明确不做**:软键盘(MC 桌面 IME 由系统输入法负责)、触摸/多指/触控笔(纯鼠标 GUI)、
    离屏合成家族(§11.2)、动画库动效(`dialog` 开合动画等,未经受控验证)。
