@@ -15,5 +15,9 @@
   "compose_minecraft.narration.role.image": "Image",
   "compose_minecraft.narration.role.dropdown_list": "Dropdown list",
   "compose_minecraft.narration.role.value_picker": "Value picker",
-  "compose_minecraft.narration.role.carousel": "Carousel"
+  "compose_minecraft.narration.role.carousel": "Carousel",
+  "compose_minecraft.text_context_menu.cut": "Cut",
+  "compose_minecraft.text_context_menu.copy": "Copy",
+  "compose_minecraft.text_context_menu.paste": "Paste",
+  "compose_minecraft.text_context_menu.select_all": "Select All"
 }

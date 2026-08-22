@@ -230,7 +230,7 @@ internal fun ContextMenuItem(
 // We cannot expose a @Composable in the context menu API because we don't want folks adding
 // arbitrary composables into a context menu. Instead, we expose this API which then maps to
 // context menu composables.
-internal class ContextMenuScope
+class ContextMenuScope
 internal constructor(
     private val itemUi:
         @Composable

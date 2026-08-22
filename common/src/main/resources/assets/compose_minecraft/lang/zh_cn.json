@@ -15,5 +15,9 @@
   "compose_minecraft.narration.role.image": "图片",
   "compose_minecraft.narration.role.dropdown_list": "下拉列表",
   "compose_minecraft.narration.role.value_picker": "数值选择器",
-  "compose_minecraft.narration.role.carousel": "轮播"
+  "compose_minecraft.narration.role.carousel": "轮播",
+  "compose_minecraft.text_context_menu.cut": "剪切",
+  "compose_minecraft.text_context_menu.copy": "复制",
+  "compose_minecraft.text_context_menu.paste": "粘贴",
+  "compose_minecraft.text_context_menu.select_all": "全选"
 }

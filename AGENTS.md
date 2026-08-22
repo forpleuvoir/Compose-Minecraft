@@ -302,6 +302,7 @@ build_project(rebuild=true)
   指针事件携带真实墙钟时间戳;MC 原生 250ms doubleClick 标志仅透传 vanilla 子控件链),
   拖放未实现;
 - Popup/Dialog 已实现(T.33):场景内图层弹层(经 `ComposeSceneLayer`,非系统窗口),Popup 支持锚点定位/PositionProvider/clipping/焦点隔离/Escape 与 outside 点击关闭;Dialog 带 scrim 遮罩(默认黑 60%)、居中、模态焦点圈定与 dismissOnBackPress/dismissOnClickOutside;DropdownMenu 暂缓(用户决策:具体 UI 风格化实现,平台不提供;业务可基于 Popup 自行组合);
+- **文本右键菜单已实现**:文本框内右键弹出 MC 风格下拉菜单(剪切/复制/粘贴/全选,条目随选区/剪贴板门控,标签经 `assets/compose_minecraft/lang` MC 本地化);基于官方 `foundation.contextmenu` 基建(右键手势/条目收集/Popup 均已移植),呈现层经 `ContextMenuRepresentation` 抽象 + `LocalContextMenuRepresentation`(默认即 MC 风格,**零注入开箱即用**,业务可 Provider 覆盖风格);
 - 剪贴板已实现(I.2:`MinecraftClipboard` 经 MC `KeyboardHandler.getClipboard/setClipboard`
   访问系统剪贴板,MC 内部封装 GLFW,不引入 AWT;调用链保持在主线程);
 - 平台未配置 maven 发布,消费者直接依赖发布 JAR。

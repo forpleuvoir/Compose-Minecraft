@@ -29,7 +29,7 @@ private const val UNSPECIFIED_OFFSET_ERROR_MESSAGE =
         "Use ContextMenuState.Status.Closed instead."
 
 /** Holds state related to the context menu. */
-internal class ContextMenuState internal constructor(initialStatus: Status = Status.Closed) {
+class ContextMenuState internal constructor(initialStatus: Status = Status.Closed) {
     var status by mutableStateOf(initialStatus)
 
     override fun toString(): String = "ContextMenuState(status=$status)"

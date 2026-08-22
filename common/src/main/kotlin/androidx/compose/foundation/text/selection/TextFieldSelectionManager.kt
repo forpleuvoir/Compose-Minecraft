@@ -65,6 +65,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.Clipboard
+import androidx.compose.ui.platform.MinecraftClipboard
 import androidx.compose.ui.platform.TextToolbar
 import androidx.compose.ui.platform.TextToolbarStatus
 import androidx.compose.ui.text.AnnotatedString
@@ -1434,6 +1435,7 @@ internal fun TextFieldSelectionManager.contextMenuBuilder(
  * Toolbar UX than the alternative.
  */
 internal suspend fun TextFieldSelectionManager.hasAvailableTextToPaste(): Boolean {
-    // Minecraft 平台第一版:不访问系统剪贴板,直接返回 false
-    return false
+    // 平台适配点:经 MinecraftClipboard 读取系统剪贴板文本(原为恒 false 占位,
+    // 会导致右键菜单"粘贴"条目永远禁用)
+    return !MinecraftClipboard.readText().isNullOrEmpty()
 }

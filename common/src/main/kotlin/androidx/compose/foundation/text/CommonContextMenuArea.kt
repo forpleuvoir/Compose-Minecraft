@@ -178,13 +178,11 @@ internal inline fun ContextMenuScope.TextItem(
     enabled: Boolean,
     crossinline operation: () -> Unit,
 ) {
-    // b/365619447 - instead of setting `enabled = enabled` in `item`,
-    //  just remove the item from the menu.
-    if (enabled) {
-        item(label = { label.resolvedString() }) {
-            operation()
-            state.close()
-        }
+    // 平台适配点(文本右键菜单):所有条目恒显示,不可用项置灰禁用
+    // (官方 desktop 默认移除不可用条目 —— b/365619447;MC 桌面惯例为禁用展示)
+    item(label = { label.resolvedString() }, enabled = enabled) {
+        operation()
+        state.close()
     }
 }
 

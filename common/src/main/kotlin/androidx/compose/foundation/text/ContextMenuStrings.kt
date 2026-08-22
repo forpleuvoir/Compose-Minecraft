@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import kotlin.jvm.JvmInline
+import net.minecraft.locale.Language
 
 @Immutable
 @JvmInline
@@ -32,21 +33,24 @@ internal value class ContextMenuStrings(val value: Int) {
     }
 }
 
+/**
+ * 平台适配点(MC 本地化):标签经 MC 语言表解析(assets/compose_minecraft/lang 下的
+ * en_us / zh_cn 资源),跟随玩家游戏内语言设置;缺失键回退为键名。
+ */
 @Composable
 @ReadOnlyComposable
-internal fun getString(string: ContextMenuStrings): String = when (string) {
-    ContextMenuStrings.Cut -> "Cut"
-    ContextMenuStrings.Copy -> "Copy"
-    ContextMenuStrings.Paste -> "Paste"
-    ContextMenuStrings.SelectAll -> "Select All"
-    else -> "Unknown"
-}
+internal fun getString(string: ContextMenuStrings): String = resolveString(string)
 
-/** Minecraft 平台第一版:固定英文文案,不加载多语言翻译表 */
-internal fun getLocalizedString(string: ContextMenuStrings): String = when (string) {
-    ContextMenuStrings.Cut -> "Cut"
-    ContextMenuStrings.Copy -> "Copy"
-    ContextMenuStrings.Paste -> "Paste"
-    ContextMenuStrings.SelectAll -> "Select All"
-    else -> "Unknown"
+internal fun getLocalizedString(string: ContextMenuStrings): String = resolveString(string)
+
+private fun resolveString(string: ContextMenuStrings): String {
+    val key = when (string) {
+        ContextMenuStrings.Cut -> "compose_minecraft.text_context_menu.cut"
+        ContextMenuStrings.Copy -> "compose_minecraft.text_context_menu.copy"
+        ContextMenuStrings.Paste -> "compose_minecraft.text_context_menu.paste"
+        ContextMenuStrings.SelectAll -> "compose_minecraft.text_context_menu.select_all"
+        else -> return "Unknown"
+    }
+    // MC 文本菜单仅在主线程组合,Language 主线程读取安全
+    return Language.getInstance().getOrDefault(key)
 }

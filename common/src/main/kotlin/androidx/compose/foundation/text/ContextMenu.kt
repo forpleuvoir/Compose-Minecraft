@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright 2021 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,9 @@ internal fun ContextMenuArea(
     manager: TextFieldSelectionManager,
     content: @Composable () -> Unit,
 ) {
-    content()
+    // 平台适配点(文本右键菜单):原为空壳占位(content() only),导致文本框右键
+    // 完全无响应 —— 恢复官方语义,委托到 CommonContextMenuArea(新旧双路径分发)
+    CommonContextMenuArea(manager = manager, content = content)
 }
 
 @Composable
@@ -35,10 +37,11 @@ internal fun ContextMenuArea(
     enabled: Boolean,
     content: @Composable () -> Unit,
 ) {
-    content()
+    // 平台适配点(文本右键菜单):同上 —— 委托到 CommonContextMenuArea
+    CommonContextMenuArea(selectionState = selectionState, enabled = enabled, content = content)
 }
 
 @Composable
 internal fun ContextMenuArea(manager: SelectionManager, content: @Composable () -> Unit) {
-    content()
+    CommonContextMenuArea(manager = manager, content = content)
 }

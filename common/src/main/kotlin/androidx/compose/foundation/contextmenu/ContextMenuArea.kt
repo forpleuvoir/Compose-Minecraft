@@ -17,6 +17,7 @@
 package androidx.compose.foundation.contextmenu
 
 import androidx.annotation.VisibleForTesting
+import androidx.compose.foundation.LocalContextMenuRepresentation
 import androidx.compose.foundation.contextmenu.ContextMenuState.Status
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
@@ -56,10 +57,11 @@ internal fun ContextMenuArea(
         }
     Box(finalModifier, propagateMinConstraints = true) {
         content()
-        ContextMenu(
+        // 平台适配点(文本右键菜单):呈现经 ContextMenuRepresentation 抽象 ——
+        // 默认实现弹出 MC 风格下拉面板,业务可经 LocalContextMenuRepresentation 覆盖
+        LocalContextMenuRepresentation.current.Representation(
             state = state,
-            onDismiss = onDismiss,
-            contextMenuBuilderBlock = contextMenuBuilderBlock,
+            items = contextMenuBuilderBlock,
         )
     }
 }

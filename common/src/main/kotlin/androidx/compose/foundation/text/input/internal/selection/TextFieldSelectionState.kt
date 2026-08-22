@@ -1927,10 +1927,21 @@ internal fun Modifier.addBasicTextFieldTextContextMenuComponents(
  * Therefore, this class provides the necessary abstraction between platforms to help access
  * [Clipboard] more effectively.
  */
-internal class ClipboardPasteState(clipboard: Clipboard) {
-    val hasText: Boolean = false
+internal class ClipboardPasteState(private val clipboard: Clipboard) {
+    /**
+     * 平台适配点:原为硬编码桩(hasText/hasClip 恒 false、update 为 Unit)——
+     * 导致右键菜单/工具栏的"粘贴"永远禁用。现经平台 [Clipboard](MinecraftClipboard)
+     * 实时读取系统剪贴板状态。
+     */
+    var hasText: Boolean = false
+        private set
 
-    val hasClip: Boolean = false
+    var hasClip: Boolean = false
+        private set
 
-    suspend fun update() = Unit
+    suspend fun update() {
+        val entry = clipboard.getClipEntry()
+        hasClip = entry != null
+        hasText = !entry?.text.isNullOrEmpty()
+    }
 }

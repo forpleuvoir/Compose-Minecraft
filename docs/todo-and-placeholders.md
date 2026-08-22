@@ -167,6 +167,13 @@ MC→Compose 键码映射表(`glfwKeyToComposeKey`),Compose `Key` 常量本身�
 
 ## 7. 输入 / 事件(`androidx.compose.ui.input.*`, `ComposeScreen`)
 
+## 7. 输入 / 事件(`androidx.compose.ui.input.*`, `ComposeScreen`)
+
+- ✅ **文本右键菜单**:官方 `foundation.contextmenu` 基建(右键手势/条目收集/Popup)移植完整,
+  呈现层经 `ContextMenuRepresentation` 抽象(默认 = MC 风格下拉面板,**零注入开箱即用**,
+  业务可经 `LocalContextMenuRepresentation` 覆盖风格);条目 = 剪切/复制/粘贴/全选
+  (随选区/剪贴板门控),标签经 `assets/compose_minecraft/lang` MC 本地化。
+
 鼠标/键盘/滚轮/IME/指针图标/**双击**已通(见 AGENTS.md 已知限制)。以下未实现:
 
 - ✅ **双击**:由 Compose 手势层自检 —— 指针事件携带真实墙钟时间戳
