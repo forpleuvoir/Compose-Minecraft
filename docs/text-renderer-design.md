@@ -2,7 +2,12 @@
 
 > 状态:**设计稿 v1,待拍板**
 > 目标:用自研 TrueType 文本渲染管线替换 Compose 文本的默认渲染路径(原版 MC 位图字体管线)。
-> 参考:[Modern UI](https://github.com/BloCamLimb/ModernUI-MC)(TrueType 引擎 + 图集管理 + 自定义管线的成熟先例)。
+> 参考:[Modern UI](https://github.com/BloCamLimb/ModernUI-MC)(成熟先例)。
+>
+> **授权边界**:Modern UI 为 LGPL-3.0,本项目为 Apache-2.0 —— **仅参考其公开文档与架构思路
+> (按需光栅化 + 图集 + 自定义管线是业界通用做法),禁止移植任何源码**。实现全部基于
+> LWJGL `STBTruetype` 绑定(stb 为公共领域/MIT 双许可,LWJGL 为 BSD)与自研代码。
+> 字体文件授权另行注意:内置字体候选需为可再分发许可(OFL 等),打包时附带对应字体许可证。
 
 ---
 
@@ -49,15 +54,34 @@ gui_text RenderPipeline # 自定义管线:R8 图集采样 × 顶点色 tint(参�
 
 ```kotlin
 // GuiStateBackend.drawText
-if (TextRenderConfig.enabled && TrueTypeFontManager.isReady) {
-    sink.addElement(GuiGlyphRenderState(...))   // 自有管线
-} else {
-    sink.addText(text(cmd, scissor))           // 回退原版(D4)
+when (cmd.backend) {
+    VANILLA            -> sink.addText(text(cmd, scissor))          // 原版
+    TRUE_TYPE          -> sink.addElement(GuiGlyphRenderState(...)) // 自有管线(字体不可用仍回退原版,D4)
+    DEFAULT / null     -> if (TextRenderConfig.enabled && TrueTypeFontManager.isReady)
+                          sink.addElement(...) else sink.addText(...)
 }
 ```
 
 - 未覆盖字形(如 emoji):逐 run 回退 `addText`(与原版渲染共存于同一帧);
-- 开关:`TextRenderConfig.enabled`(默认 false,验证稳定后再翻默认)。
+- 全局开关:`TextRenderConfig.enabled`(默认 false,验证稳定后再翻默认)。
+
+### 3.1.1 手动指定渲染器(LocalTextRenderBackend)
+
+新增组合期可覆盖的呈现后端选择:
+
+```kotlin
+enum class TextRenderBackend { DEFAULT, VANILLA, TRUE_TYPE }
+
+val LocalTextRenderBackend = staticCompositionLocalOf { TextRenderBackend.DEFAULT }
+```
+
+- **读取时机**:指针/绘制阶段读不到 CompositionLocal —— 由文本组件在**组合期**读取
+  (`BasicText`/`BasicTextField` 内随 scale 一起捕获),传递到绘制命令
+  (`DrawTextCommand.backend` 新字段,记录时盖章);
+- **解析优先级**:显式指定(`VANILLA`/`TRUE_TYPE`)> 全局开关(`TextRenderConfig.enabled`);
+  指定 TRUE_TYPE 但字体不可用 → 按 D4 回退原版;
+- **用途示例**:全局开启新渲染器后,个别业务子树 `LocalTextRenderBackend provides VANILLA`
+  定向回退;或全局未开时仅某块 UI 试用新渲染器。
 
 ### 3.2 度量同源(**硬骨头**)
 
