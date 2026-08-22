@@ -67,7 +67,7 @@ fun TooltipDevScene() {
         val diamondX64 = remember { ItemStack(Items.DIAMOND, 64) }
         val fullBundle = remember {
             val stack = ItemStack(Items.BUNDLE)
-            val templates = (1..20).map { ItemStackTemplate(Items.DIAMOND_SWORD) }
+            val templates = (1..20).map { ItemStackTemplate(Items.DIAMOND, 64) }
             stack.set(DataComponents.BUNDLE_CONTENTS, BundleContents(templates))
             stack
         }
