@@ -32,6 +32,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Paragraph
 import androidx.compose.ui.text.ParagraphIntrinsics
 import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -62,6 +63,20 @@ import net.minecraft.client.gui.Font as MinecraftFont
 internal class MinecraftTextLine(val start: Int, val end: Int, val width: Float)
 
 /**
+ * 平台适配点(InlineContent):占位符排版原子 —— [AnnotatedString.Range]<[Placeholder]>
+ * 的字符区间 + 布局空间(1x 预缩放)尺寸。
+ * 官方语义:占位符是**原子不可断**元素,替代文本不显示、不可放光标;
+ * Placeholder(sp) 经 density 转 px 后再除以 scale 进入布局空间(与 maxWidth 同规则)。
+ */
+internal data class PlaceholderSpan(
+    val start: Int,
+    val end: Int,
+    val width: Float,
+    val height: Float,
+    val verticalAlign: PlaceholderVerticalAlign,
+)
+
+/**
  * 平台适配点(T.3):MC [Component] 展平后的样式段 —— [text] 使用 [style] 绘制。
  * 由 `BasicText(component)` 经 `component.flatten()` 展平得到,
  * 每段 style 已是"Component 自身属性优先、缺失用 defaultStyle 补"的合并结果(MC applyTo 语义)。
@@ -82,6 +97,8 @@ data class StyleSegment(
 internal class MinecraftTextLayout(
     val text: String,
     val maxWidth: Float,
+    /** 平台适配点(InlineContent):占位符排版原子(按声明序;布局时按 start 排序)。 */
+    val placeholders: List<PlaceholderSpan> = emptyList(),
 ) {
 
     private val font: MinecraftFont
@@ -103,17 +120,36 @@ internal class MinecraftTextLayout(
      * + O(n) 宽度计算,降为 O(1) 数组查表。computeLines 从 O(n²) 降为 O(n)。
      */
     private val cumFloatWidths: FloatArray = run {
-        val arr = FloatArray(text.length + 1)
+        val n = text.length
+        // 第一遍:每 char 的增量宽度(代理对占 2 char —— 宽度记首个 char、第二个为 0,
+        // 前缀查询语义与旧实现「中间位置与终点同值」等价)
+        val inc = FloatArray(n)
         val splitter = font.splitter
-        var cum = 0f
         var i = 0
-        while (i < text.length) {
+        while (i < n) {
             val cp = text.codePointAt(i)
             val cc = Character.charCount(cp)
-            cum += splitter.stringWidth(String(Character.toChars(cp)))
-            // 填充本码点覆盖的所有 char 位置(代理对占 2 char,中间位置与终点同值)
-            for (j in i + 1..i + cc) arr[j] = cum
+            inc[i] = splitter.stringWidth(String(Character.toChars(cp)))
+            if (cc == 2) inc[i + 1] = 0f
             i += cc
+        }
+        // 平台适配点(InlineContent):占位符原子 —— 内部增量清零(子区间宽 0,光标不落入),
+        // 整段宽度记在段尾 char 的增量上。必须在「增量」阶段调整后再统一累积 ——
+        // 若只在累积结果上局部覆写各 span 区间,span 之后的全部位置仍携带替代文本的
+        // 旧宽度(实测 ⑬:tag rect.x 被 "[红块]" 字面宽度污染 +34px、断行整体错位)。
+        for (span in placeholders.sortedBy { it.start }) {
+            val s = span.start.coerceIn(0, n)
+            val e = span.end.coerceIn(s, n)
+            if (e <= s) continue
+            for (j in s until e) inc[j] = 0f
+            inc[e - 1] += span.width
+        }
+        // 第二遍:重建累积
+        val arr = FloatArray(n + 1)
+        var cum = 0f
+        for (j in 0 until n) {
+            cum += inc[j]
+            arr[j + 1] = cum
         }
         arr
     }
@@ -139,7 +175,7 @@ internal class MinecraftTextLayout(
     val height: Float
         get() = lines.size * lineHeight
 
-    /** 最宽单词宽度(MC 字形度量) */
+    /** 最宽单词宽度(MC 字形度量;占位符按原子计入) */
     val minIntrinsicWidth: Float = run {
         var maxW = 0f
         var cur = 0
@@ -151,6 +187,10 @@ internal class MinecraftTextLayout(
             val start = cur
             while (cur < text.length && text[cur] != ' ' && text[cur] != '\n') cur++
             maxW = maxOf(maxW, substringWidth(start, cur))
+        }
+        // 平台适配点(InlineContent):占位符是原子"单词",宽度直接参与最小固有宽
+        for (span in placeholders) {
+            maxW = maxOf(maxW, span.width)
         }
         maxW
     }
@@ -183,6 +223,17 @@ internal class MinecraftTextLayout(
         return ceil(cumFloatWidths[trimmedEnd] - cumFloatWidths[from])
     }
 
+    /** 占位符原子按 start 排序(computeLines 扫描用;数量小,线性查找足够)。 */
+    private val sortedSpans: List<PlaceholderSpan> = placeholders.sortedBy { it.start }
+
+    /** 起点恰为 [pos] 的占位符(无则 null)。 */
+    private fun spanStartingAt(pos: Int): PlaceholderSpan? =
+        sortedSpans.firstOrNull { it.start == pos }
+
+    /** 严格覆盖 [pos](start < pos < end,即内部位置)的占位符(无则 null)。 */
+    private fun spanCoveringInterior(pos: Int): PlaceholderSpan? =
+        sortedSpans.firstOrNull { it.start < pos && pos < it.end }
+
     private fun computeLines(): List<MinecraftTextLine> {
         val result = ArrayList<MinecraftTextLine>()
         if (text.isEmpty()) {
@@ -210,6 +261,13 @@ internal class MinecraftTextLayout(
                     // 不推进(end == start),外层 start 也原地踏步 -> 无限添加空行 -> OOM。
                     // 防御:单字符强制占一行并推进。
                     if (start < contentEnd) {
+                        // 平台适配点(InlineContent):占位符宽度超过行宽 → 独占一行(同款防御)
+                        val startSpan = spanStartingAt(start)
+                        if (startSpan != null && startSpan.width > maxWidth) {
+                            result.add(MinecraftTextLine(start, startSpan.end, startSpan.width))
+                            start = startSpan.end
+                            continue
+                        }
                         val chWidth = substringWidth(start, start + 1)
                         if (chWidth > maxWidth) {
                             result.add(
@@ -223,11 +281,27 @@ internal class MinecraftTextLayout(
                         }
                     }
                     // 性能(T.34):substringWidth 为 O(1) 数组查表,替代原 O(n) font.width(substring)
-                    while (end < contentEnd &&
-                        substringWidth(start, end + 1) <= maxWidth
-                    ) {
+                    while (end < contentEnd) {
+                        // 平台适配点(InlineContent):占位符是原子不可断单元 —— 整段一起判定换行
+                        val span = spanStartingAt(end)
+                        if (span != null) {
+                            val atomEnd = minOf(span.end, contentEnd)
+                            if (atomEnd != span.end) {
+                                // 防御:占位符区间跨行段(官方不会出现)—— 消费到行段尾,避免死循环
+                                end = atomEnd
+                                continue
+                            }
+                            if (substringWidth(start, atomEnd) <= maxWidth) {
+                                end = atomEnd
+                                continue
+                            }
+                            break // 放不下:本行在此结束,占位符整体去下一行
+                        }
+                        if (substringWidth(start, end + 1) > maxWidth) break
                         if (text[end] == ' ') lastSpace = end
                         end++
+                        // 防御:推进后落入占位符内部(异常截断等罕见情形),跳到段尾
+                        spanCoveringInterior(end)?.let { end = minOf(it.end, contentEnd) }
                     }
                     if (end == contentEnd) {
                         result.add(
@@ -267,7 +341,7 @@ internal class MinecraftParagraphIntrinsics(
     val text: String,
     internal val style: Style,
     private val annotations: List<AnnotatedString.Range<out AnnotatedString.Annotation>>,
-    private val placeholders: List<AnnotatedString.Range<Placeholder>>,
+    placeholders: List<AnnotatedString.Range<Placeholder>>,
     private val density: Density,
     private val fontFamilyResolver: FontFamily.Resolver,
     /** 平台适配点(T.3):MC Component 展平后的多段样式;空 = 单样式(旧行为)。 */
@@ -277,7 +351,21 @@ internal class MinecraftParagraphIntrinsics(
 ) : ParagraphIntrinsics {
     val textDirection: ResolvedTextDirection = ResolvedTextDirection.Ltr
 
-    private val layout = MinecraftTextLayout(text, Float.POSITIVE_INFINITY)
+    /**
+     * 平台适配点(InlineContent):占位符排版原子。
+     * Placeholder(sp) 经 [density] 转 px,再除以 [scale] 进入布局空间(与 maxWidth 同规则)。
+     */
+    internal val placeholderSpans: List<PlaceholderSpan> = placeholders.map { range ->
+        PlaceholderSpan(
+            start = range.start,
+            end = range.end,
+            width = with(density) { range.item.width.toPx() } / scale,
+            height = with(density) { range.item.height.toPx() } / scale,
+            verticalAlign = range.item.placeholderVerticalAlign,
+        )
+    }
+
+    private val layout = MinecraftTextLayout(text, Float.POSITIVE_INFINITY, placeholderSpans)
 
     override val minIntrinsicWidth: Float = layout.minIntrinsicWidth * scale
 
@@ -305,7 +393,7 @@ internal class MinecraftParagraph(
                 if (scale > 0f) constraints.maxWidth.toFloat() / scale
                 else Float.POSITIVE_INFINITY
             } else Float.POSITIVE_INFINITY
-        MinecraftTextLayout(intrinsics.text, maxWidth)
+        MinecraftTextLayout(intrinsics.text, maxWidth, intrinsics.placeholderSpans)
     }
 
     private val visibleLineCount: Int =
@@ -360,7 +448,77 @@ internal class MinecraftParagraph(
 
     override val lineCount: Int get() = visibleLineCount
 
-    override val placeholderRects: List<Rect?> get() = emptyList()
+    override val placeholderRects: List<Rect?> get() = buildPlaceholderRects()
+
+    /**
+     * 平台适配点(InlineContent):占位符矩形(段落本地坐标,已乘 [scale])。
+     * 顺序与占位符声明序一致;占位符是原子 → 恰好完整落在一行,被 maxLines 截掉的
+     * 占位符为 null(foundation 侧 null 跳过绘制)。垂直对齐按 [PlaceholderVerticalAlign]
+     * 映射到 MC 度量(行高 9、基线 0.8×行高;TextTop/TextCenter/TextBottom 与
+     * Top/Center/Bottom 等价 —— MC 字体无独立 ascent/descent 模型,文档化简化)。
+     */
+    private fun buildPlaceholderRects(): List<Rect?> {
+        val spans = intrinsics.placeholderSpans
+        if (spans.isEmpty()) return emptyList()
+        val rects = spans.map { span ->
+            val lineIndex = layout.lines.indexOfFirst { it.start <= span.start && span.end <= it.end }
+            if (lineIndex < 0 || lineIndex >= visibleLineCount) {
+                null
+            } else {
+                val x = layout.prefixWidth(layout.lines[lineIndex].start, span.start)
+                val y = placeholderAlignY(span.height, span.verticalAlign)
+                Rect(
+                    left = x * scale,
+                    top = y * scale,
+                    right = (x + span.width) * scale,
+                    bottom = (y + span.height) * scale,
+                )
+            }
+        }
+        return rects
+    }
+
+    private fun placeholderAlignY(height: Float, align: PlaceholderVerticalAlign): Float {
+        val lineHeight = layout.lineHeight
+        val baseline = lineHeight * 0.8f
+        return when {
+            align == PlaceholderVerticalAlign.AboveBaseline -> baseline - height
+            align == PlaceholderVerticalAlign.Top || align == PlaceholderVerticalAlign.TextTop -> 0f
+            align == PlaceholderVerticalAlign.Bottom || align == PlaceholderVerticalAlign.TextBottom ->
+                lineHeight - height
+            align == PlaceholderVerticalAlign.Center || align == PlaceholderVerticalAlign.TextCenter ->
+                (lineHeight - height) / 2f
+            else -> baseline - height // 兜底:同官方默认 AboveBaseline 语义
+        }
+    }
+
+    /**
+     * 行的可见绘制子区间(平台适配点 InlineContent):排除占位符内部 —— 替代文本不绘制、
+     * 空间已保留。返回绝对 char 区间列表([IntRange] 闭区间)。
+     * [contentEnd] 为不含行尾 `\n` 的内容终点;[drawLimit] 为 Ellipsis 收缩后的绘制终点,
+     * 若收缩点落在占位符内部则回退到占位符起点(占位符原子不截半)。
+     */
+    private fun visiblePieces(start: Int, contentEnd: Int, drawLimit: Int): List<IntRange> {
+        var limit = drawLimit.coerceAtMost(contentEnd)
+        // 收缩点落在占位符内部 → 回退到占位符起点(原子不截半)
+        intrinsics.placeholderSpans
+            .firstOrNull { it.start < limit && limit < it.end }
+            ?.let { limit = it.start }
+        if (limit <= start) return emptyList()
+        val ordered = intrinsics.placeholderSpans.sortedBy { it.start }
+        val pieces = ArrayList<IntRange>()
+        var cur = start
+        while (cur < limit) {
+            val nextSpan = ordered.firstOrNull { it.start >= cur && it.start < limit }
+            if (nextSpan == null) {
+                pieces.add(cur until limit)
+                break
+            }
+            if (nextSpan.start > cur) pieces.add(cur until nextSpan.start)
+            cur = nextSpan.end
+        }
+        return pieces
+    }
 
     private fun lineAt(index: Int): MinecraftTextLine {
         val i = index.coerceIn(0, layout.lines.size - 1)
@@ -590,15 +748,17 @@ internal class MinecraftParagraph(
                     val line = layout.lines[i]
                     val start = lineDrawStart(i, line)
                     if (line.end > start) {
-                        var drawText = intrinsics.text.substring(start, line.end)
-                        if (drawText.endsWith('\n')) drawText = drawText.dropLast(1)
+                        val contentEnd =
+                            if (intrinsics.text[line.end - 1] == '\n') line.end - 1 else line.end
                         // 平台适配点:Ellipsis —— 最后一个可见行替换为省略版本
                         val appendEllipsis = ellipsizedLastLine != null && i == visibleLineCount - 1
-                        if (appendEllipsis) drawText = ellipsizedLastLine
-                        if (drawText.isNotEmpty()) {
+                        val drawLimit =
+                            if (appendEllipsis) start + ellipsizedLastLine.length else contentEnd
+                        // 平台适配点(InlineContent):占位符内部不绘制(空间已保留)
+                        for (piece in visiblePieces(start, contentEnd, drawLimit)) {
                             mc.recordTextDraw(
-                                text = drawText,
-                                x = 0f,
+                                text = intrinsics.text.substring(piece.first, piece.last + 1),
+                                x = layout.prefixWidth(start, piece.first),
                                 y = i * layout.lineHeight,
                                 style = intrinsics.style,
                                 alpha = effectiveAlpha,
@@ -608,7 +768,7 @@ internal class MinecraftParagraph(
                         if (appendEllipsis) {
                             mc.recordTextDraw(
                                 text = ellipsisSuffix,
-                                x = layout.prefixWidth(start, start + drawText.length),
+                                x = layout.prefixWidth(start, start + ellipsizedLastLine.length),
                                 y = i * layout.lineHeight,
                                 style = intrinsics.style,
                                 alpha = effectiveAlpha,
@@ -659,31 +819,35 @@ internal class MinecraftParagraph(
                     // 平台适配点(T.6 修复):整行绘制 —— 原 displayPos/visibleWidth 水平截断已移除,
                     // 多行文本每行完整渲染(水平滚动交还原版 ScrollState 模型)。
                     // 行尾可能含 `\n`(computeLines 的 exclusive end 含换行符),绘制时去掉。
-                    var drawText = intrinsics.text.substring(start, line.end)
-                    if (drawText.endsWith('\n')) drawText = drawText.dropLast(1)
+                    val contentEnd = if (intrinsics.text[line.end - 1] == '\n') line.end - 1 else line.end
                     // 平台适配点:Ellipsis —— 最后一个可见行替换为省略版本
                     val appendEllipsis = ellipsizedLastLine != null && i == visibleLineCount - 1
-                    if (appendEllipsis) drawText = ellipsizedLastLine
-                    if (drawText.isNotEmpty()) {
-                        // 平台适配点(T.3):多段样式 —— 行内文本按段边界切分,每段用自己的样式;
-                        // 无段(空列表)时退回单样式(旧行为)。
+                    val drawLimit =
+                        if (appendEllipsis) start + ellipsizedLastLine.length else contentEnd
+                    // 平台适配点(InlineContent):占位符内部不绘制(空间已保留),按可见子区间分段绘制
+                    for (piece in visiblePieces(start, contentEnd, drawLimit)) {
+                        val pieceText = intrinsics.text.substring(piece.first, piece.last + 1)
+                        val pieceX = layout.prefixWidth(start, piece.first)
                         val segments = intrinsics.segments
                         if (segments.isEmpty()) {
                             mc.recordTextDraw(
-                                text = drawText,
-                                x = 0f,
+                                text = pieceText,
+                                x = pieceX,
                                 y = i * layout.lineHeight,
                                 style = style,
                                 alpha = effectiveAlpha,
                             )
                         } else {
-                            recordSegmentedTextDraw(mc, drawText, start, i, segments, style, effectiveAlpha)
+                            recordSegmentedTextDraw(
+                                mc, pieceText, piece.first, i, segments, style, effectiveAlpha,
+                                baseX = pieceX,
+                            )
                         }
                     }
                     if (appendEllipsis) {
                         mc.recordTextDraw(
                             text = ellipsisSuffix,
-                            x = layout.prefixWidth(start, start + drawText.length),
+                            x = layout.prefixWidth(start, start + ellipsizedLastLine.length),
                             y = i * layout.lineHeight,
                             style = style,
                             alpha = effectiveAlpha,
@@ -711,6 +875,12 @@ internal class MinecraftParagraph(
         segments: List<StyleSegment>,
         fallbackStyle: Style,
         alpha: Float,
+        /**
+         * 行内绘制起点 x(1x 布局单位)。整行绘制时为 0;InlineContent 分段(piece)绘制时
+         * = 该 piece 的行内偏移 —— 段内各子段的 x 在 [baseX] 上累积,否则所有 piece
+         * 都会叠在行首(实测 ⑬:piece 文本互相重叠)。
+         */
+        baseX: Float = 0f,
     ) {
         val rowEnd = rowStart + drawText.length
         var cursor = rowStart
@@ -728,7 +898,7 @@ internal class MinecraftParagraph(
                 // GuiTextRenderState 的 x/y 是 prepareText 文本空间坐标,字形顶点
                 // 再乘 pose(含字号 scale)缩放 —— 传 ×scale 值会被二次缩放,
                 // 同行多段间隔翻倍、尾段被推出屏幕。
-                val xPx = layout.prefixWidth(rowStart, clipStart)
+                val xPx = baseX + layout.prefixWidth(rowStart, clipStart)
                 mc.recordTextDraw(
                     text = intrinsics.text.substring(clipStart, clipEnd),
                     x = xPx,
@@ -741,7 +911,7 @@ internal class MinecraftParagraph(
         }
         // 段未覆盖到的尾部(理论上不应发生,防御性兜底)
         if (cursor < rowEnd) {
-            val xPx = layout.prefixWidth(rowStart, cursor)
+            val xPx = baseX + layout.prefixWidth(rowStart, cursor)
             mc.recordTextDraw(
                 text = intrinsics.text.substring(cursor, rowEnd),
                 x = xPx,

@@ -12,14 +12,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.PlatformSpanStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -57,7 +62,7 @@ fun TextDevScene() {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xFF121212))
+            .background(Color(0x88121212))
     ) {
         Column(
             Modifier
@@ -342,6 +347,40 @@ fun TextDevScene() {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = TextStyle(color = Color(0xFFCE93D8)),
+            )
+
+            // ── ⑬ InlineContent(T.41)──
+            SectionLabel("⑬ InlineContent:占位符原子排版 + 替代文本不显示")
+            val inlineContent = mapOf(
+                // Center 对齐:在行盒内垂直居中 —— 对 MC 字形观感最稳
+                // (AboveBaseline 底贴基线偏高、Bottom 底贴行盒偏沉)
+                "redBox" to InlineTextContent(
+                    Placeholder(12.sp, 12.sp, PlaceholderVerticalAlign.Center),
+                ) {
+                    Box(Modifier.fillMaxSize().background(Color(0xFFEF5350)))
+                },
+                "tag" to InlineTextContent(
+                    Placeholder(40.sp, 12.sp, PlaceholderVerticalAlign.Center),
+                ) {
+                    Box(
+                        Modifier.fillMaxSize().background(Color(0xFF26A69A)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        BasicText("TAG", style = TextStyle(color = Color.White, fontSize = 9.sp))
+                    }
+                },
+            )
+            BasicText(
+                buildAnnotatedString {
+                    append("前文ABC ")
+                    appendInlineContent("redBox", "[红块]")
+                    append(" 中 ")
+                    appendInlineContent("tag", "[标签]")
+                    append(" 后文。占位符应占位且不显示替代文本;窄宽下整体换行不截半。")
+                },
+                inlineContent = inlineContent,
+                modifier = Modifier.width(240.dp),
+                style = TextStyle(color = Color(0xFFB0BEC5)),
             )
         }
     }

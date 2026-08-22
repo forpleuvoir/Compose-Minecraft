@@ -19,7 +19,7 @@ Popup/Dialog 弹层、MC 复述)已可用并有开发场景验证。以下能力
 | 类别 | 状态 | 说明 |
 |---|---|---|
 | 图层能力 | 部分 | clip/scissor、translate/scale/rotate/alpha 已通;`saveLayer`、`clipPath`、`clipRect(Difference)`、复合 Path 操作不支持 |
-| 文本 | 部分 | 段级 **字号**(scale)暂不支持(布局统一 base scale);InlineContent / 占位符未实现;BiDi / 排版方向固定 LTR;渐变 Brush 不支持 |
+| 文本 | 部分 | 段级 **字号**(scale)暂不支持(布局统一 base scale);InlineContent / 占位符已实现;BiDi / 排版方向固定 LTR;渐变 Brush 不支持 |
 | 焦点/事件 | 部分 | 键盘/鼠标/滚轮/聚焦/IME/指针图标/**双击**已通;拖放、触摸 未实现或占位 |
 | 平台 API | 居多占位 | 文本工具栏、无障碍 screenReader 接口、窗口 inset、触感反馈、软键盘、URI 等,其中多数见 §11「可忽略」 |
 | 互操作视图 | 占位(可删) | 无原生视图嵌入,`InteropView` 以 `Any` 占位 —— **Android 原生 View 机制,完全不需要,见 §11.1** |
@@ -94,8 +94,11 @@ autoSize(T.20)、字号 Local(T.30/T.32)、自定义字体(T.32)均已实现。�
 - ❌ **段级字号(scale)**:富文本段级 color/bold/italic/decoration/PlatformSpanStyle 生效,
   但**段级字号暂不支持**(布局统一 base scale)。
 - ❌ **渐变 Brush**:`paint(Brush:…)` 只解析 `SolidColor`,否则回退白。
-- ❌ **Text 占位符**:`getPathForRange` 返回空 `Path`;`placeholderRects` 返回 `emptyList()` ——
-  InlineContent / Placeholder 排进文本不生效。
+- ✅ **InlineContent / 占位符**:占位符作为原子不可断单元参与排版(替代文本不显示、
+  不可断行、可整段换行),`placeholderRects` 按声明序返回逐行矩形(被 maxLines 截掉
+  的为 null),foundation 侧 inlineContent 绘制管线消费;`PlaceholderVerticalAlign`
+  映射到 MC 度量(行高 9、基线 0.8×行高,Text* 系列与几何系列等价 —— 文档化简化);
+  命中测试不落入占位符内部。dev 场景 TextDevScene ⑬ 验证。
 - ❌ `getRangeForRect` 返回整段 `TextRange(0, length)`(简化命中)。
 - ❌ `getWordBoundary` 用简化字符类判断(字母/数字/下划线),非 ICU 单词边界。
 
@@ -263,13 +266,12 @@ MC→Compose 键码映射表(`glfwKeyToComposeKey`),Compose `Key` 常量本身�
 
 ## 13. 后续路线建议(未实现项,按优先级)
 
-1. **InlineContent / 占位符**:需要先打通 `recordTextDraw` 之外的占位矩形绘制
-   (`MinecraftParagraph.placeholder…` 目前返回空)。
-2. **段级字号(scale)**:富文本段级字号暂不支持(布局统一 base scale),需扩展
-   `recordSegmentedTextDraw` 为每段独立字号矩阵。
-3. **系统拖放(Drag & Drop)**:接 `EmptyDragAndDropManager`(MC 无原生拖拽,可探索内部拖拽手势
+1. **段级字号(scale)**:富文本段级字号暂不支持(布局统一 base scale),需扩展
+   `recordSegmentedTextDraw` 为每段独立字号矩阵;布局/命中的分段度量可复用
+   InlineContent 的占位符原子宽度基建(§2.1)。
+2. **系统拖放(Drag & Drop)**:接 `EmptyDragAndDropManager`(MC 无原生拖拽,可探索内部拖拽手势
    `draggable`/`detectDragGestures` 已可用;系统级 OS 拖放需平台桥)。
-4. **`DropdownMenu`**:未移植(依赖 Popup + 焦点层级基建已齐,可仿官方实现补上)。
-5. **BiDi / 排版方向**:固定 LTR,需要多方向文本时再评估。
-6. **明确不做**:软键盘(MC 桌面 IME 由系统输入法负责)、触摸/多指/触控笔(纯鼠标 GUI)、
+3. **`DropdownMenu`**:未移植(依赖 Popup + 焦点层级基建已齐,可仿官方实现补上)。
+4. **BiDi / 排版方向**:固定 LTR,需要多方向文本时再评估。
+5. **明确不做**:软键盘(MC 桌面 IME 由系统输入法负责)、触摸/多指/触控笔(纯鼠标 GUI)、
    离屏合成家族(§11.2)、动画库动效(`dialog` 开合动画等,未经受控验证)。
