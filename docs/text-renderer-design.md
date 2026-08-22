@@ -55,10 +55,10 @@ gui_text RenderPipeline # 自定义管线:R8 图集采样 × 顶点色 tint(参�
 ```kotlin
 // GuiStateBackend.drawText
 when (cmd.backend) {
-    VANILLA            -> sink.addText(text(cmd, scissor))          // 原版
-    TRUE_TYPE          -> sink.addElement(GuiGlyphRenderState(...)) // 自有管线(字体不可用仍回退原版,D4)
-    DEFAULT / null     -> if (TextRenderConfig.enabled && TrueTypeFontManager.isReady)
-                          sink.addElement(...) else sink.addText(...)
+    VANILLA        -> sink.addText(text(cmd, scissor))   // 手动回退原版
+    DEFAULT / null -> if (TextRenderConfig.enabled && TrueTypeFontManager.isReady)
+                        sink.addElement(GuiGlyphRenderState(...))  // 自有管线
+                      else sink.addText(text(cmd, scissor))      // 全局关闭或字体不可用(D4)
 }
 ```
 
@@ -67,10 +67,10 @@ when (cmd.backend) {
 
 ### 3.1.1 手动指定渲染器(LocalTextRenderBackend)
 
-新增组合期可覆盖的呈现后端选择:
+组合期可覆盖的**定向回退**(仅用于把某个子树切回原版渲染;启用与否由全局开关统一管):
 
 ```kotlin
-enum class TextRenderBackend { DEFAULT, VANILLA, TRUE_TYPE }
+enum class TextRenderBackend { DEFAULT, VANILLA }
 
 val LocalTextRenderBackend = staticCompositionLocalOf { TextRenderBackend.DEFAULT }
 ```
@@ -78,10 +78,8 @@ val LocalTextRenderBackend = staticCompositionLocalOf { TextRenderBackend.DEFAUL
 - **读取时机**:指针/绘制阶段读不到 CompositionLocal —— 由文本组件在**组合期**读取
   (`BasicText`/`BasicTextField` 内随 scale 一起捕获),传递到绘制命令
   (`DrawTextCommand.backend` 新字段,记录时盖章);
-- **解析优先级**:显式指定(`VANILLA`/`TRUE_TYPE`)> 全局开关(`TextRenderConfig.enabled`);
-  指定 TRUE_TYPE 但字体不可用 → 按 D4 回退原版;
-- **用途示例**:全局开启新渲染器后,个别业务子树 `LocalTextRenderBackend provides VANILLA`
-  定向回退;或全局未开时仅某块 UI 试用新渲染器。
+- **解析**:仅 `VANILLA` 生效(强制原版);`DEFAULT` 跟随全局开关;无"强制启用"档——
+  启用是平台级决策,不暴露给子树(避免与全局开关职责重复)。
 
 ### 3.2 度量同源(**硬骨头**)
 
