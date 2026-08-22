@@ -187,6 +187,12 @@ fun MinecraftDevSceneContent() {
             )
 
             DevMenuButton(
+                title = "原版精灵图测试 (R.1)",
+                subtitle = "GUI atlas sprite: Composable/Modifier/DrawScope 三入口, 九宫格缩放与调制色",
+                onClick = { ComposeScreen.open { SpriteDevScene() } },
+            )
+
+            DevMenuButton(
                 title = "实体渲染测试 (MinecraftEntity)",
                 subtitle = "玩家/生物实体离屏 PIP 渲染: 旋转 rotationX/Y、色调色、alpha 透传",
                 onClick = { ComposeScreen.open { EntityDevScene() } },

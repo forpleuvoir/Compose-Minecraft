@@ -21,6 +21,7 @@ import moe.forpleuvoir.compose_minecraft.platform.render.plugins.McEntityPlugin
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.McItemPlugin
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.Corner
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.McTexturePlugin
+import moe.forpleuvoir.compose_minecraft.platform.render.plugins.SpriteDrawData
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.TextureDrawData
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.UVMapping
 import net.minecraft.client.renderer.RenderPipelines
@@ -55,6 +56,31 @@ fun DrawScope.drawMinecraftTexture(
                 uv = uv,
                 corner = corner,
                 tileSize = tileSize,
+            ),
+            buildPaint(color),
+            null
+        )
+    }
+}
+
+/**
+ * 在 [DrawScope] 中绘制一个 MC 原版 GUI atlas 精灵图:经 [McTexturePlugin] 的
+ * [SpriteDrawData] 分支按原版 `GuiSpriteScaling` 缩放(stretch / tile / nine_slice,
+ * 由 sprite 元数据决定)。[size] 默认取当前 [DrawScope] 尺寸;[color] 为调制色。
+ */
+fun DrawScope.drawMinecraftSprite(
+    location: Identifier,
+    size: Size = this.size,
+    color: Color = Color.White,
+    pipeline: RenderPipeline = RenderPipelines.GUI_TEXTURED,
+) {
+    drawIntoCanvas { canvas ->
+        canvas.recordCustomDraw(
+            McTexturePlugin.TAG,
+            SpriteDrawData(
+                location = location,
+                size = size.toIntSize(),
+                pipeline = pipeline,
             ),
             buildPaint(color),
             null
@@ -112,6 +138,21 @@ fun MinecraftTexture(
 ) {
     Canvas(modifier.size(size)) {
         drawMinecraftTexture(textureId, this.size)
+    }
+}
+
+/**
+ * MC 原版 GUI atlas 精灵图(原版 `GuiSpriteScaling` stretch / tile / nine_slice 缩放,
+ * 经 [McTexturePlugin])。
+ */
+@Composable
+fun MinecraftSprite(
+    location: Identifier,
+    modifier: Modifier = Modifier,
+    size: DpSize = DpSize(16.dp, 16.dp),
+) {
+    Canvas(modifier.size(size)) {
+        drawMinecraftSprite(location, this.size)
     }
 }
 
