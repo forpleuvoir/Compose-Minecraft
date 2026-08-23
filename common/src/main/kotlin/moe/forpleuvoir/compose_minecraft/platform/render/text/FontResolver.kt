@@ -38,6 +38,24 @@ enum class FontChannel {
 }
 
 /**
+ * 度量规格(P2-B5 泛化):**一切影响渲染宽度/行盒的样式属性的唯一载体**。
+ *
+ * 已知成员:
+ * - [emPx]:最终像素 em;
+ * - [bold]:原版位图渲染器每字符 +1 网格像素(getCharWidth 加宽);
+ *   矢量粗体(合成/真字重)不改变 advance。
+ *
+ * ⚠️ 演进规则:未来任何影响 advance/行盒的属性(现知特例:混淆 §k 在
+ * 位图通道按随机字形取宽、天然抖动属原版原生行为,stb 通道刻意锁定
+ * 原字符宽以稳布局)**必须**新增字段并同步全部实现 —— 本签名变更会
+ * 迫使每个 PlatformFont 显式表态,禁止再出现调用方零散补丁(A5)。
+ */
+data class MeasureSpec(
+    val emPx: Float,
+    val bold: Boolean = false,
+)
+
+/**
  * 逐码点度量(emPx 绝对值;架构法则 A5「度量恒等于渲染」):
  * - [advance]:TTF 读 hmtx(`stbtt_GetCodepointHMetrics`)、位图读 splitter
  *   widthProvider —— 比例字体逐字符各测各宽,kern 逐对独立,无任何平均近似;
@@ -92,7 +110,7 @@ interface PlatformFont {
      * 对粗体每字符多占 +1 网格像素 —— 位图字体的粗体度量必须反映之;
      * 矢量字体(合成/真粗体不改变 advance)忽略此参。
      */
-    fun metricsAt(emPx: Float, bold: Boolean = false): RunMetrics
+    fun metricsAt(spec: MeasureSpec): RunMetrics
 
     fun lineHeightAt(emPx: Float): Float
     fun baselineFromTopAt(emPx: Float): Float
@@ -107,10 +125,10 @@ data class GlyphOwner(val font: PlatformFont, val channel: FontChannel)
  */
 class ResolvedFont internal constructor(
     val font: PlatformFont,
-    val emPx: Float,
-    val bold: Boolean = false,
+    val spec: MeasureSpec,
 ) {
-    val metrics: RunMetrics = font.metricsAt(emPx, bold)
+    val emPx: Float get() = spec.emPx
+    val metrics: RunMetrics = font.metricsAt(spec)
     val lineHeightPx: Float = font.lineHeightAt(emPx)
     val baselineFromTopPx: Float = font.baselineFromTopAt(emPx)
 
@@ -183,26 +201,26 @@ object FontResolver {
      * 未知 id:ERROR(一次)后退回默认字体 —— 永不抛出,永不静默错量;
      * 默认字体未注册属启动期程序错误,直接失败(fail-loud)。
      */
-    fun resolve(id: FontDescription?, emPx: Float, bold: Boolean = false): ResolvedFont {
+    fun resolve(id: FontDescription?, spec: MeasureSpec): ResolvedFont {
         val font = id?.let { FontRegistry[it] }
         if (font == null) {
             // 显式指定了未知字体 id:ERROR(一次)后退回默认 —— 禁止静默错量
             if (id != null && warnedMissing.add(id)) {
                 FONT_LOGGER.error("[ComposeMinecraft] unknown font id {}, fallback to default", id)
             }
-            return resolveFont(defaultFont(), emPx, bold)
+            return resolveFont(defaultFont(), spec)
         }
-        return resolveFont(font, emPx, bold)
+        return resolveFont(font, spec)
     }
 
-    private fun resolveFont(font: PlatformFont, emPx: Float, bold: Boolean = false): ResolvedFont =
-        pool.computeIfAbsent(BindingKey(font, emPx, bold)) { ResolvedFont(font, emPx, bold) }
+    private fun resolveFont(font: PlatformFont, spec: MeasureSpec): ResolvedFont =
+        pool.computeIfAbsent(font to spec) { ResolvedFont(font, spec) }
 
-    fun resolveDefault(emPx: Float, bold: Boolean = false): ResolvedFont = resolve(null, emPx, bold)
+    fun resolveDefault(spec: MeasureSpec): ResolvedFont = resolve(null, spec)
 
-    /** 按 style 解析(null fontOriginal = 默认字体;粗体取自样式) */
-    fun resolve(style: Style, emPx: Float): ResolvedFont =
-        resolve(style.fontOriginal, emPx, style.boldRaw == true)
+    /** 按 style 解析(null fontOriginal = 默认字体;规格取自样式) */
+    fun resolve(style: Style, spec: MeasureSpec): ResolvedFont =
+        resolve(style.fontOriginal, spec.copy(bold = style.boldRaw == true))
 
     /**
      * P1 过渡入口:按字体的原生参考 em([PlatformFont.providerEmPx])解析 ——
@@ -213,19 +231,17 @@ object FontResolver {
     fun resolveNative(style: Style): ResolvedFont {
         val id = style.fontOriginal
         val font = id?.let { FontRegistry[it] }
-        if (font != null) return resolveFont(font, font.providerEmPx, style.boldRaw == true)
+        if (font != null) return resolveFont(font, MeasureSpec(font.providerEmPx, style.boldRaw == true))
         if (id != null && warnedMissing.add(id)) {
             FONT_LOGGER.error("[ComposeMinecraft] unknown font id {} (native path), fallback to default", id)
         }
         val def = defaultFont()
-        return resolveFont(def, def.providerEmPx, style.boldRaw == true)
+        return resolveFont(def, MeasureSpec(def.providerEmPx, style.boldRaw == true))
     }
 
     // ── 内部 ────────────────────────────────────────────────────────
 
-    private data class BindingKey(val font: PlatformFont, val emPx: Float, val bold: Boolean)
-
-    private val pool = java.util.concurrent.ConcurrentHashMap<BindingKey, ResolvedFont>()
+    private val pool = java.util.concurrent.ConcurrentHashMap<Pair<PlatformFont, MeasureSpec>, ResolvedFont>()
 
     init {
         BuiltinFonts.registerAll()
@@ -314,8 +330,8 @@ private class FusionPixelFont(
 
     override val fallbackId: FontDescription get() = FontDescription.DEFAULT
 
-    override fun metricsAt(emPx: Float, bold: Boolean): RunMetrics =
-        mixed?.at(emPx) ?: scaledVanilla(emPx)
+    override fun metricsAt(spec: MeasureSpec): RunMetrics =
+        mixed?.at(spec.emPx) ?: scaledVanilla(spec.emPx)
 
     override fun lineHeightAt(emPx: Float): Float =
         (fontRef?.lineHeightPx ?: VanillaRunMetrics.lineHeight) * (emPx / providerEmPx)
@@ -352,8 +368,11 @@ private class SystemChainFont : PlatformFont {
     /** 缺字回退 minecraft:default 位图(unifont 终端覆盖) */
     override val fallbackId: FontDescription get() = BuiltinFonts.vanillaDefault.id
 
-    override fun metricsAt(emPx: Float, bold: Boolean): RunMetrics {
-        // 混合源按目标 em 统一缩放(矢量粗体不改变 advance,忽略 bold)(链内 ×em/chainEm,原版回退 ×em/9)——
+    override fun metricsAt(spec: MeasureSpec): RunMetrics = metricsAtImpl(spec)
+
+    private fun metricsAtImpl(spec: MeasureSpec): RunMetrics {
+        val emPx = spec.emPx
+// 矢量粗体不改变 advance(忽略 bold);链内 ×em/chainEm、原版回退 ×em/9 ——
         // 回退段宽度与其位图渲染 pose 比严格一致(I2)
         return TrueTypeFontManager.metricsOrNull()?.at(emPx)
             ?: scaledVanilla(emPx)
@@ -363,8 +382,8 @@ private class SystemChainFont : PlatformFont {
         if (emPx == VanillaRunMetrics.lineHeight) VanillaRunMetrics
         else ScaledRunMetrics(VanillaRunMetrics, emPx / VanillaRunMetrics.lineHeight)
 
-    override fun lineHeightAt(emPx: Float): Float = metricsAt(emPx).lineHeight
-    override fun baselineFromTopAt(emPx: Float): Float = metricsAt(emPx).baselineFromTop
+    override fun lineHeightAt(emPx: Float): Float = metricsAt(MeasureSpec(emPx)).lineHeight
+    override fun baselineFromTopAt(emPx: Float): Float = metricsAt(MeasureSpec(emPx)).baselineFromTop
 }
 
 /** 原版资源字体(alt/unifont 等):位图通道,fallbackId=null 即链终局 */
@@ -381,8 +400,9 @@ private class VanillaBitmapFont(
 
     override val fallbackId: FontDescription? = null
 
-    override fun metricsAt(emPx: Float, bold: Boolean): RunMetrics {
-        val base: RunMetrics = if (!bold) VanillaRunMetrics else object : RunMetrics {
+    override fun metricsAt(spec: MeasureSpec): RunMetrics {
+        val emPx = spec.emPx
+        val base: RunMetrics = if (!spec.bold) VanillaRunMetrics else object : RunMetrics {
             // 原版渲染器粗体每字符 +1 网格像素(getCharWidth 加宽),度量必须同宽
             override fun advance(codepoint: Int): Float = VanillaRunMetrics.advance(codepoint) + 1f
             override val lineHeight: Float get() = VanillaRunMetrics.lineHeight
@@ -392,8 +412,8 @@ private class VanillaBitmapFont(
         else ScaledRunMetrics(base, emPx / providerEmPx)
     }
 
-    override fun lineHeightAt(emPx: Float): Float = metricsAt(emPx).lineHeight
-    override fun baselineFromTopAt(emPx: Float): Float = metricsAt(emPx).baselineFromTop
+    override fun lineHeightAt(emPx: Float): Float = metricsAt(MeasureSpec(emPx)).lineHeight
+    override fun baselineFromTopAt(emPx: Float): Float = metricsAt(MeasureSpec(emPx)).baselineFromTop
 }
 
 /** 原版位图度量(@9 网格原生 em;单例) */

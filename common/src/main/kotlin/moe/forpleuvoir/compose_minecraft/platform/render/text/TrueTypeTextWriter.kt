@@ -125,7 +125,10 @@ internal object TrueTypeTextWriter {
         // P3 基线补偿:原版把字形基线硬编码在 行顶+7(GlyphBitmap.getTop),
         // 像素/系统字体布局基线更高 —— 回退段提交 y 需补差值,否则上移
         // 位图终端绑定(unifont,网格 9):回退段 pose 比与其布局宽度缩放严格一致
-        val bitmapTerminal = FontResolver.resolve(BuiltinFonts.uniFontTerminal.id, binding.emPx, cmd.style.isBold)
+        val bitmapTerminal = FontResolver.resolve(
+            BuiltinFonts.uniFontTerminal.id,
+            moe.forpleuvoir.compose_minecraft.platform.render.text.MeasureSpec(binding.emPx, cmd.style.isBold),
+        )
         fun flushVanilla() {
             if (vanillaStart < 0) return
             val seg = vanillaText.toString()
