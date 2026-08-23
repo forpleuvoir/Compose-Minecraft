@@ -282,6 +282,27 @@ internal class GuiStateBackend : GeometryBackend {
         allowStb: Boolean,
     ) {
         val scr = scissor?.toScreenRectangle()
+        // [TT-B] 探针(临时):对比「布局预留宽」vs「mc.font 自身对同串的计宽」,
+        // 定位粗体超行盒的真实差值公式;定位后移除。
+        if (TextRenderConfig.debugTextBounds && cmd.style.isBold) {
+            var resv = 0f
+            var j = 0
+            var pv = -1
+            while (j < cmd.text.length) {
+                val c = cmd.text.codePointAt(j)
+                resv += primary.metrics.advance(c) + primary.metrics.kern(pv, c)
+                pv = c; j += Character.charCount(c)
+            }
+            val comp = net.minecraft.network.chat.Component.literal(cmd.text)
+                .setStyle(cmd.style)
+            val vw = mc.font.width(comp)
+            println(
+                "[TT-B] '" + cmd.text.take(8) + "' em=" + primary.emPx +
+                    " provEm=" + primary.font.providerEmPx +
+                    " resv=" + resv + " vanillaGrid=" + vw +
+                    " vanillaScaled=" + vw * (primary.emPx / primary.font.providerEmPx)
+            )
+        }
         var i = 0
         val n = cmd.text.length
         var segStart = 0
