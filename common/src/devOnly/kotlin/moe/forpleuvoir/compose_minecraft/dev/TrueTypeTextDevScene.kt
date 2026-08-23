@@ -53,6 +53,16 @@ fun TrueTypeTextDevScene() {
         if (TextRenderConfig.fontSources.none { it.path == devFont }) {
             TextRenderConfig.fontSources += FontSource(devFont)
         }
+        // 回退链成员:黑体 + Segoe UI Symbol(符号字体,覆盖 msyh/simhei
+        // 都缺失的 ⑪⑫ 等 —— 三级链演示:雅黑 → 黑体 → Segoe UI Symbol)
+        val devFallback = "C:\\Windows\\Fonts\\simhei.ttf"
+        if (TextRenderConfig.fontSources.none { it.path == devFallback }) {
+            TextRenderConfig.fontSources += FontSource(devFallback)
+        }
+        val devSymbol = "C:\\Windows\\Fonts\\seguisym.ttf"
+        if (TextRenderConfig.fontSources.none { it.path == devSymbol }) {
+            TextRenderConfig.fontSources += FontSource(devSymbol)
+        }
         // 字体家族:粗体字重文件(微软雅黑 Bold);首位为失效源,演示加载自动跳过
         val devBold = "C:\\Windows\\Fonts\\msyhbd.ttc"
         val devBoldMissing = "C:\\Windows\\Fonts\\__not_exist_bold__.ttf"
@@ -275,7 +285,7 @@ fun TrueTypeTextDevScene() {
                             .merge(TextStyle(fontSize = 24.sp)),
                     )
 
-                    SectionLabelTt("⑪ 字体家族(缺字字符自动内联原版字形)(粗体独立字重文件 msyhbd;失效源自动跳过)")
+                    SectionLabelTt("⑪ 字体家族(缺字沿回退链:雅黑→黑体→Segoe UI Symbol)(粗体独立字重文件 msyhbd;失效源自动跳过)")
                     BasicText(
                         "真粗体 Real Bold 0123",
                         style = Style.EMPTY.withBold(true).toTextStyle()

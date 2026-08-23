@@ -60,7 +60,9 @@ internal object TrueTypeTextWriter {
         scissor: ScreenRectangle?,
         sink: GuiCommandSink,
     ): Boolean {
-        val font = TrueTypeFontManager.fontOrNull() ?: return false
+        // 常规回退链(首 = 主字体,供布局度量与混淆池);粗体 run 先走粗体链
+        val regularChain = TrueTypeFontManager.regularChain()
+        if (regularChain.isEmpty()) return false
         // 原生排版:布局/推进度量 = 字体自身度量(与字形墨迹同源,间距由字体设计保证)
         val metrics = TrueTypeFontManager.metricsOrNull() ?: return false
         if (!supports(cmd)) {
@@ -80,9 +82,8 @@ internal object TrueTypeTextWriter {
 
         // 光栅化放大系数:姿态矩阵最大轴缩放(位图按屏幕实际像素密度生成)
         val rasterScale = max(MIN_RASTER_SCALE, matrixScale(cmd.matrix))
-        val sizePx = GlyphCache.quantize(font.baseSizePx * rasterScale)
-        // 位图像素 → 1x 布局像素的折算除数(em 相对基准字号的比例)
-        val rasterDiv = sizePx / font.baseSizePx
+        val sizePx = GlyphCache.quantize(regularChain.first().baseSizePx * rasterScale)
+        // 各链成员按自身 baseSizePx 折算(upm 一致时比例相同)
 
         val baselineY = cmd.y + metrics.baselineFromTop
         var penX = cmd.x
@@ -97,7 +98,7 @@ internal object TrueTypeTextWriter {
         // 斜体为 quad 剪切
         val bold = style.isBold
         val italic = style.isItalic
-        val boldFont = if (bold) TrueTypeFontManager.boldFontOrNull() else null
+        val boldChainFonts = if (bold) TrueTypeFontManager.boldChain() else emptyList()
 
         // 阴影(MC Style shadowColor):字形在偏移处先画一份阴影色再画主字形。
         // 光源统一在「左上」(与原版 MC 文本阴影及 GraphicsLayer 默认光源一致):
@@ -155,27 +156,34 @@ internal object TrueTypeTextWriter {
             // 混淆替换(空格除外,原版语义):advance 仍按原字符 —— 布局不抖
             var drawCp = cp
             if (obfuscated && cp != ' '.code) {
-                font.randomObfuscationCandidate(cp, charIndex * 1000003L + obfuscateSlot)
+                regularChain.first().randomObfuscationCandidate(cp, charIndex * 1000003L + obfuscateSlot)
                     ?.let { drawCp = it }
             }
 
-            // 字形获取:真粗体字重优先(其缺字 → 退化常规体+膨胀合成);
-            // 常规体也缺字(emoji 等)→ 该字符交原版字形内联渲染(见 flushVanilla)
-            val glyph = if (boldFont != null) {
-                GlyphCache.getOrCreate(boldFont, drawCp, sizePx, false, sizePx / boldFont.baseSizePx)
-                    ?: GlyphCache.getOrCreate(font, drawCp, sizePx, true, rasterDiv)
-            } else {
-                GlyphCache.getOrCreate(font, drawCp, sizePx, bold, rasterDiv)
-            }
-            if (glyph == null) {
+            // 字形获取(缺字回退链):粗体 run 先沿粗体链、再沿常规链;
+            // 全链缺字 → 该字符交原版字形内联渲染(见 flushVanilla)。
+            // 膨胀合成仅用于落在常规链上的粗体字形;真粗体链字形不膨胀
+            val renderFont = boldChainFonts.firstOrNull { it.hasGlyph(drawCp) }
+                ?: regularChain.firstOrNull { it.hasGlyph(drawCp) }
+            if (renderFont == null) {
                 if (vanillaStart < 0) vanillaStart = penX
-                // 原版段渲染原始字符(混淆替换形可能同样缺字,无意义);
-                // 推进量 = 原版度量(混合源对缺字码点自动回退),预留即真实宽度
                 vanillaText.appendCodePoint(cp)
                 penX += metrics.charAdvance(cp)
                 continue
             }
             flushVanilla()
+            val syntheticBold = bold && renderFont !in boldChainFonts
+            val glyph = GlyphCache.getOrCreate(
+                renderFont, drawCp, sizePx, syntheticBold,
+                sizePx / renderFont.baseSizePx,
+            )
+            if (glyph == null) {
+                // 极端情况(字形超图集页):该字符交原版字形内联渲染
+                if (vanillaStart < 0) vanillaStart = penX
+                vanillaText.appendCodePoint(cp)
+                penX += metrics.charAdvance(cp)
+                continue
+            }
 
             if (glyph.hasBitmap) {
                 // 原生排版:笔位 + 字体自带 bearing(stb xoff/yoff),间距由字体设计保证

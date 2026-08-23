@@ -74,31 +74,36 @@ internal object VanillaMetricsSource : MetricsSource {
  * advance 结果缓存(每码点一次查询)。
  */
 internal class TrueTypeMetricsSource(
-    private val font: TrueTypeFont,
+    /** 有序回退链:首字体为排版基准(行高/基线),全部成员按码点供字形与 advance */
+    private val chain: List<TrueTypeFont>,
     private val vanillaFallback: MetricsSource,
 ) : MetricsSource {
 
     private val advanceCache = java.util.concurrent.ConcurrentHashMap<Int, Float>()
-
     private val kernCache = java.util.concurrent.ConcurrentHashMap<Long, Float>()
+
+    /** 链上首个含该码点字形的字体(主字体优先) */
+    private fun ownerFont(codepoint: Int): TrueTypeFont? =
+        chain.firstOrNull { it.hasGlyph(codepoint) }
 
     override fun charAdvance(codepoint: Int): Float =
         advanceCache.computeIfAbsent(codepoint) {
-            if (font.hasGlyph(it)) font.codepointAdvance(it)
-            else vanillaFallback.charAdvance(it)
+            ownerFont(it)?.codepointAdvance(it) ?: vanillaFallback.charAdvance(it)
         }
 
-    /** 字体 kern 表(stbtt_GetCodepointKernAdvance),带配对缓存 */
+    /** 字偶距:由提供 [next] 字形的字体计算(优先同时含前后字的成员) */
     override fun codepointKern(prev: Int, next: Int): Float =
         kernCache.computeIfAbsent((prev.toLong() shl 32) or next.toLong()) {
-            font.codepointKernAdvance(prev, next)
+            val owner = chain.firstOrNull { it.hasGlyph(next) } ?: return@computeIfAbsent 0f
+            if (prev >= 0 && !owner.hasGlyph(prev)) return@computeIfAbsent 0f
+            owner.codepointKernAdvance(prev, next)
         }
 
     override val lineHeight: Float
-        get() = font.lineHeightPx
+        get() = chain.firstOrNull()?.lineHeightPx ?: vanillaFallback.lineHeight
 
     override val baselineFromTop: Float
-        get() = font.ascentPx
+        get() = chain.firstOrNull()?.ascentPx ?: vanillaFallback.baselineFromTop
 }
 
 /**
