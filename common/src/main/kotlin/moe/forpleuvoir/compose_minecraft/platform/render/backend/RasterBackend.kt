@@ -18,12 +18,20 @@ import androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawVerticesCommand
 import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.VertexMode
+import moe.forpleuvoir.compose_minecraft.platform.render.paint.ColorEvaluator
 import moe.forpleuvoir.compose_minecraft.platform.render.renderer.GeometryTessellator
 import moe.forpleuvoir.compose_minecraft.platform.render.renderer.GeometryTessellator.Sink
+import moe.forpleuvoir.compose_minecraft.platform.render.text.GlyphCache
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TrueTypeFontManager
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TrueTypeTextWriter
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.RasterGradientSampler
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.toArgbInt
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /**
  * CPU 光栅化后端(P2,自 `GraphicsLayerRasterizer` 原样搬移,2025-08)。
@@ -39,8 +47,10 @@ import kotlin.math.min
  * - 渐变矩形用两个三角形 + 顶点色重心插值。
  *
  * 不支持(静默跳过,快照中缺失,调用方自行注意):
- * - [DrawTextCommand]:MC 字体渲染在 GPU 贴图侧,CPU 端无字体现成方案;
- * - [DrawShadowCommand]:阴影是 GPU 距离场渲染,快照不含阴影。
+ * - [DrawShadowCommand]:阴影是 GPU 距离场渲染,快照不含阴影;
+ * - 文本的部分能力:P3③ 已实现 TTF 字形/装饰线/渐变/混淆/粗体/斜体的 CPU
+ *   光栅化([drawText]),但缺字字符无原版字形可兜底(跳过墨迹保留推进)、
+ *   阴影与 GUI 端一致未绘制、[TextRenderBackend.VANILLA] 定向 run 跳过。
  */
 internal class RasterBackend(
     private val out: IntArray,
@@ -160,7 +170,227 @@ internal class RasterBackend(
         }
     }
 
-    override fun drawText(cmd: DrawTextCommand) = Unit // 不支持,跳过
+    /**
+     * P3③ CPU 文本路径:直接 stb 光栅化字形并逆映射混入像素缓冲。
+     *
+     * - **不经 [GlyphCache]/图集**:二者绑定 GPU 纹理上传(渲染线程约束),
+     *   而 `toImageBitmap` 快照可能不在渲染线程回放 —— 此处每次直接
+     *   `TrueTypeFont.rasterize`(MemoryStack 栈内存,线程安全);
+     * - 排版/样式语义与 GUI 端([TrueTypeTextWriter])严格同源:advance+kern、
+     *   混淆确定性种子、粗体膨胀合成、斜体剪切、装饰线几何与颜色采样点一致;
+     * - 差异(文档化):缺字字符无原版字形可兜底 → 跳过墨迹保留推进;
+     *   阴影与 GUI 端一致未绘制;[TextRenderBackend.VANILLA] 定向 run 跳过。
+     */
+    override fun drawText(cmd: DrawTextCommand) {
+        if (cmd.backend == TextRenderBackend.VANILLA || !TextRenderConfig.enabled) return
+        val chain = TrueTypeFontManager.regularChain()
+        if (chain.isEmpty()) return
+        val metrics = TrueTypeFontManager.metricsOrNull() ?: return
+        if (!TrueTypeTextWriter.supports(cmd)) return
+
+        val style = cmd.style
+        // 取色语义与 TrueTypeTextWriter 一致:样式色补 alpha,渐变按采样点逐字形取色
+        val alphaByte = (cmd.alpha * 255f).roundToInt().coerceIn(0, 255)
+        val baseColor = style.color?.value?.or(0xFF000000.toInt()) ?: 0xFFFFFFFF.toInt()
+        val solidColor = (baseColor and 0x00FFFFFF) or (alphaByte shl 24)
+        fun colorAt(x: Float, y: Float): Int = cmd.shader?.let {
+            ColorEvaluator.sampleGradient(ColorEvaluator.gradientTAt(x, y, it), it, cmd.alpha)
+        } ?: solidColor
+
+        // 光栅化字号 = baseSizePx × 姿态矩阵缩放(量化 0.25px),与 GUI 端同式
+        val rasterScale = max(TrueTypeTextWriter.MIN_RASTER_SCALE, matrixScale(cmd.matrix))
+        val sizePx = GlyphCache.quantize(chain[0].baseSizePx * rasterScale)
+
+        val baselineY = cmd.y + metrics.baselineFromTop
+        var penX = cmd.x
+
+        // 混淆:确定性随机槽位 + 字符序号种子(与 GUI 端同一公式,快照观感一致)
+        val obfuscated = style.isObfuscated
+        val obfuscateSlot = System.currentTimeMillis() /
+            TextRenderConfig.obfuscatedUpdateIntervalMs.coerceAtLeast(1L)
+
+        val bold = style.isBold
+        val italic = style.isItalic
+        val boldChainFonts = if (bold) TrueTypeFontManager.boldChain() else emptyList()
+
+        var charIndex = 0
+        var i = 0
+        val n = cmd.text.length
+        var prevCp = -1
+        while (i < n) {
+            val cp = cmd.text.codePointAt(i)
+            i += Character.charCount(cp)
+            charIndex++
+
+            var drawCp = cp
+            if (obfuscated && cp != ' '.code) {
+                chain.first().randomObfuscationCandidate(cp, charIndex * 1000003L + obfuscateSlot)
+                    ?.let { drawCp = it }
+            }
+
+            val renderFont = boldChainFonts.firstOrNull { it.hasGlyph(drawCp) }
+                ?: chain.firstOrNull { it.hasGlyph(drawCp) }
+            if (renderFont == null) {
+                // 缺字:CPU 快照无原版字形可兜底 → 跳过墨迹、保留推进
+                penX += metrics.charAdvance(cp)
+                prevCp = cp
+                continue
+            }
+            val syntheticBold = bold && renderFont !in boldChainFonts
+            val embolden =
+                if (syntheticBold) (sizePx * TextRenderConfig.boldEmboldenRatio).coerceIn(0.5f, 2f) else 0f
+            val glyph = renderFont.rasterize(drawCp, sizePx, embolden)
+
+            if (glyph != null && glyph.width > 0 && glyph.height > 0) {
+                // 位图像素 → 1x 局部坐标(GUI 端 rasterDiv 同源公式)
+                val rasterDiv = sizePx / renderFont.baseSizePx
+                val wLocal = glyph.width / rasterDiv
+                val hLocal = glyph.height / rasterDiv
+                val leftRaw = penX + glyph.bearingX / rasterDiv
+                val topRaw = baselineY + glyph.bearingTop / rasterDiv
+                val left = TrueTypeTextWriter.snap(leftRaw, rasterScale)
+                val top = TrueTypeTextWriter.snap(topRaw, rasterScale)
+                val right = left + wLocal
+                val bottom = top + hLocal
+                val color = colorAt(left + wLocal * 0.5f, top + hLocal * 0.5f)
+                // 斜体剪切(TrueTypeTextWriter.addGlyphQuad 同公式:水平偏移 ∝ 基线距)
+                val shearTop = if (italic) TrueTypeTextWriter.ITALIC_SHEAR * (baselineY - top) else 0f
+                val shearBottom = if (italic) TrueTypeTextWriter.ITALIC_SHEAR * (baselineY - bottom) else 0f
+                blitGlyphQuad(
+                    out, width, height, cmd.matrix, cmd.clip,
+                    tlx = left + shearTop, tly = top,
+                    trx = right + shearTop, tryY = top,
+                    blx = left + shearBottom, bly = bottom,
+                    brx = right + shearBottom, bry = bottom,
+                    bytes = glyph.bytes, bw = glyph.width, bh = glyph.height,
+                    rgb = color and 0x00FFFFFF, alphaByte = alphaByte,
+                )
+            }
+            penX += metrics.charAdvance(cp) + metrics.codepointKern(prevCp, cp)
+            prevCp = cp
+        }
+
+        // 装饰线(下划线/删除线):几何/颜色采样点对齐 TrueTypeTextWriter
+        if (penX > cmd.x && (style.isUnderlined || style.isStrikethrough)) {
+            val thickness = max(1f, metrics.lineHeight / 9f)
+            val decorColor = colorAt((cmd.x + penX) * 0.5f, baselineY)
+            if (style.isUnderlined) {
+                fillDecorRect(
+                    out, width, height, cmd.matrix, cmd.clip,
+                    cmd.x, cmd.y + metrics.lineHeight - thickness,
+                    penX, cmd.y + metrics.lineHeight,
+                    decorColor,
+                )
+            }
+            if (style.isStrikethrough) {
+                val center = cmd.y + metrics.lineHeight * 0.5f
+                fillDecorRect(
+                    out, width, height, cmd.matrix, cmd.clip,
+                    cmd.x, center - thickness * 0.5f,
+                    penX, center + thickness * 0.5f,
+                    decorColor,
+                )
+            }
+        }
+    }
+
+    /**
+     * 字形位图逆映射混入:四角(已含斜体剪切,为平行四边形)经命令矩阵变换到
+     * 图层空间,包围盒内像素中心逆解 (u,v),双线性采样 coverage × alpha 后
+     * SrcOver 混合。矩阵列主序语义与 [fillShapeTriangles] 一致。
+     */
+    private fun blitGlyphQuad(
+        out: IntArray, width: Int, height: Int,
+        matrix: FloatArray, clip: Rect?,
+        tlx: Float, tly: Float, trx: Float, tryY: Float,
+        blx: Float, bly: Float, brx: Float, bry: Float,
+        bytes: ByteArray, bw: Int, bh: Int,
+        rgb: Int, alphaByte: Int,
+    ) {
+        fun tx(x: Float, y: Float): Float = x * matrix[0] + y * matrix[4] + matrix[12]
+        fun ty(x: Float, y: Float): Float = x * matrix[1] + y * matrix[5] + matrix[13]
+        val ax = tx(tlx, tly); val ay = ty(tlx, tly)
+        val bx = tx(trx, tryY); val by = ty(trx, tryY)
+        val dx = tx(blx, bly); val dy = ty(blx, bly)
+        // BR 仅参与包围盒(平行四边形由 U/V 两边张成)
+        val cx = tx(brx, bry); val cy = ty(brx, bry)
+
+        val exU = bx - ax; val eyU = by - ay
+        val exV = dx - ax; val eyV = dy - ay
+        val det = exU * eyV - eyU * exV
+        if (det == 0f) return
+        val invDet = 1f / det
+        val invUx = eyV * invDet; val invUy = -exV * invDet
+        val invVx = -eyU * invDet; val invVy = exU * invDet
+
+        val minX = max(0, min(ax, min(bx, min(cx, dx))).toInt())
+        val maxX = min(width - 1, max(ax, max(bx, max(cx, dx))).toInt())
+        val minY = max(0, min(ay, min(by, min(cy, dy))).toInt())
+        val maxY = min(height - 1, max(ay, max(by, max(cy, dy))).toInt())
+        if (minX > maxX || minY > maxY) return
+
+        for (py in minY..maxY) {
+            val y = py + 0.5f
+            var idx = py * width + minX
+            for (px in minX..maxX) {
+                val x = px + 0.5f
+                if (clip != null && (x < clip.left || x > clip.right || y < clip.top || y > clip.bottom)) {
+                    idx++
+                    continue
+                }
+                val rx = x - ax; val ry = y - ay
+                val u = rx * invUx + ry * invUy
+                val v = rx * invVx + ry * invVy
+                if (u < 0f || v < 0f || u > 1f || v > 1f) {
+                    idx++
+                    continue
+                }
+                val cov = coverageAt(bytes, bw, bh, u, v)
+                val a = (cov * alphaByte + 0.5f).toInt().coerceIn(0, 255)
+                if (a > 0) {
+                    out[idx] = blend(out[idx], (a shl 24) or rgb)
+                }
+                idx++
+            }
+        }
+    }
+
+    /** coverage 双线性采样(u,v ∈ 0..1 → 位图纹素中心空间) */
+    private fun coverageAt(bytes: ByteArray, w: Int, h: Int, u: Float, v: Float): Float {
+        val x = (u * w - 0.5f).coerceIn(0f, (w - 1).toFloat())
+        val y = (v * h - 0.5f).coerceIn(0f, (h - 1).toFloat())
+        val x0 = x.toInt(); val y0 = y.toInt()
+        val x1 = min(x0 + 1, w - 1); val y1 = min(y0 + 1, h - 1)
+        val fx = x - x0; val fy = y - y0
+        val c00 = bytes[y0 * w + x0].toInt() and 0xFF
+        val c10 = bytes[y0 * w + x1].toInt() and 0xFF
+        val c01 = bytes[y1 * w + x0].toInt() and 0xFF
+        val c11 = bytes[y1 * w + x1].toInt() and 0xFF
+        val top = c00 + (c10 - c00) * fx
+        val bottom = c01 + (c11 - c01) * fx
+        return (top + (bottom - top) * fy) / 255f
+    }
+
+    /** 装饰线矩形:两三角形经命令矩阵变换填充(复用实心三角形管线;coverage=1 实心) */
+    private fun fillDecorRect(
+        out: IntArray, width: Int, height: Int,
+        matrix: FloatArray, clip: Rect?,
+        l: Float, t: Float, r: Float, b: Float,
+        argb: Int,
+    ) {
+        val data = floatArrayOf(
+            l, t, 1f, r, t, 1f, r, b, 1f,
+            l, t, 1f, r, b, 1f, l, b, 1f,
+        )
+        fillShapeTriangles(out, width, height, matrix, clip, data, 6, argb, 1f)
+    }
+
+    /** 命令矩阵(列主序 4x4)2D 部分的最大轴缩放(与 GUI 端同式) */
+    private fun matrixScale(m: FloatArray): Float {
+        val scaleX = sqrt(m[0] * m[0] + m[1] * m[1])
+        val scaleY = sqrt(m[4] * m[4] + m[5] * m[5])
+        return max(scaleX, scaleY)
+    }
 
     override fun drawGradientRect(cmd: DrawGradientRectCommand) {
         fillGradient(out, width, height, cmd)

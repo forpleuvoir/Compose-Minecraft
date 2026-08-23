@@ -11,8 +11,9 @@ import org.lwjgl.system.MemoryUtil
  * 字形纹理图集(T.TT,设计文档 §3):R8 单通道分页管理。
  *
  * - 页尺寸 1024×1024,`GpuFormat.R8_UNORM`(coverage 单通道,显存 1/4 of RGBA);
- * - 打包:shelf(货架)算法 —— x 向追加、行满换行、页满翻页;写一次不删
- *   (LRU 淘汰属 P3);
+ * - 打包:shelf(货架)算法 —— x 向追加、行满换行、页满翻页;P3① 页粒度 LRU:
+ *   水位超限时整页「退役」([retirePage],本帧不再分配、帧末 [flushRetiredPages]
+ *   重置游标原地复用,不销毁纹理 —— 延迟到帧末保证本帧已提交元素的 UV 引用安全);
  * - 上传:`CommandEncoder.writeToTexture(ByteBuffer, …, destX, destY, w, h)`
  *   局部字节上传,只传字形矩形;
  * - 采样:clamp-to-edge + LINEAR(灰度线性插值 = 放大/缩小的边缘 AA;
@@ -51,6 +52,14 @@ internal object GlyphAtlas {
         var cursorY = 0
         var rowHeight = 0
 
+        /**
+         * P3① 页退役标记:true = 已被 LRU 淘汰,等待帧末重置游标复用。
+         * 标记期间 [allocate] 跳过本页 —— 淘汰发生在渲染帧的收集阶段时,
+         * 本帧早前已提交元素仍引用页内旧槽位 UV,必须保证其内容在本帧
+         * draw 结束前不被覆盖(延迟重置语义,见 [flushRetiredPages])。
+         */
+        var pendingReset = false
+
         init {
             // 整页清零:padding 区域恒为 0,LINEAR 渗色不会带进相邻字形
             val zeros = MemoryUtil.memCalloc(PAGE_SIZE * PAGE_SIZE)
@@ -81,11 +90,13 @@ internal object GlyphAtlas {
 
     /**
      * 分配一个 w×h 像素槽位(页满自动翻页;单字形超页尺寸返回 null ——
-     * 调用方按缺字处理回退原版)。
+     * 调用方按缺字处理回退原版)。已退役([isRetired])的页跳过,待帧末
+     * 重置游标后重新参与分配。
      */
     fun allocate(w: Int, h: Int): Slot? {
         if (w <= 0 || h <= 0) return null
         for ((index, page) in pages.withIndex()) {
+            if (page.pendingReset) continue
             page.tryAllocate(w, h)?.let { (x, y) ->
                 return Slot(index, x, y, w, h)
             }
@@ -151,6 +162,54 @@ internal object GlyphAtlas {
         upload(slot, byteArrayOf(0xFF.toByte()))
         return Triple(slot.page, (slot.x + 0.5f) / PAGE_SIZE, (slot.y + 0.5f) / PAGE_SIZE)
             .also { whiteTexel = it }
+    }
+
+    // ── P3① 页粒度 LRU:退役 / 复用 ────────────────────────────────────────
+
+    /**
+     * 整页退役:标记 [Page.pendingReset],本帧剩余时间不再分配;帧末
+     * [flushRetiredPages] 重置游标后原地复用(纹理不销毁、不重传 —— 被覆盖的
+     * 旧槽位 UV 已随 cache 条目失效,不会再被引用)。若白像素槽位在本页,
+     * 同步作废其缓存(下次 [whiteTexelUV] 重新分配)。
+     */
+    fun retirePage(page: Int) {
+        if (page < 0 || page >= pages.size) return
+        val p = pages[page]
+        if (p.pendingReset) return
+        p.pendingReset = true
+        if (whiteTexel?.first == page) whiteTexel = null
+    }
+
+    /** 全部页退役([GlyphCache.reset] 字体重载时调用,修复旧页显存滞留) */
+    fun retireAllPages() {
+        for (i in pages.indices) retirePage(i)
+    }
+
+    /**
+     * 帧末调用:重置全部已退役页的打包游标,使其重新参与分配。
+     * 仅元数据操作(无 GPU 写入);必须在整帧 draw 完成之后调用 —— 此前本帧
+     * 已提交元素仍持有页内旧槽位 UV,提前重置会导致下一帧收集阶段覆盖这些
+     * 槽位内容,造成一帧花屏。渲染线程调用。
+     */
+    fun flushRetiredPages() {
+        for (p in pages) {
+            if (!p.pendingReset) continue
+            p.pendingReset = false
+            p.cursorX = 0
+            p.cursorY = 0
+            p.rowHeight = 0
+        }
+    }
+
+    /** 页是否处于待复用的退役状态(诊断/淘汰选页用) */
+    fun isRetired(page: Int): Boolean =
+        page in pages.indices && pages[page].pendingReset
+
+    /** 活跃(未退役)页数 —— LRU 水位的比较基准 */
+    fun activePageCount(): Int {
+        var n = 0
+        for (p in pages) if (!p.pendingReset) n++
+        return n
     }
 
     /** 已用页数(诊断用) */

@@ -99,4 +99,13 @@ object TextRenderConfig {
      * 笔画总宽 +2px,清晰加粗;调大更粗、调小更细。
      */
     var boldEmboldenRatio: Float by mutableStateOf(1f / 32f)
+
+    /**
+     * 字形图集活跃页水位(P3① 页粒度 LRU):超过即在本帧渲染前把「最久未使用」
+     * 的页整页退役(cache 条目同步失效),帧末重置该页打包游标供后续复用 ——
+     * §k 混淆等持续产生新字形的长驻场景显存不再无界增长。
+     * 单页 = 1024×1024 R8 = 1 MB;默认 8 页(8 MB)。工作集真超水位时按 LRU
+     * 换页(被淘汰字形下次使用重新光栅化),调大可减少换页抖动。
+     */
+    var atlasMaxPages: Int by mutableStateOf(8)
 }

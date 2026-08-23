@@ -11,7 +11,9 @@ import kotlin.math.roundToInt
  *   quad 放进命令局部坐标系,由姿态矩阵统一变换到屏幕 —— 高分辨率位图
  *   经 UV 映射到同尺寸 quad,纹理像素与物理像素 1:1(矢量光栅化红利);
  * - 负缓存:缺字码点记录进 [misses],避免每帧重复 FindGlyphIndex;
- * - LRU 淘汰属 P3(P1 写一次不删,页满翻页)。
+ * - P3① 页粒度 LRU:条目带帧号时间戳([CachedGlyph.lastUseFrame]),活跃页数
+ *   超 [TextRenderConfig.atlasMaxPages] 水位时在帧首把「最久未使用」的整页
+ *   退役(条目失效、页游标延迟到帧末重置复用)—— §k 混淆等长驻场景显存有界。
  */
 internal object GlyphCache {
 
@@ -38,6 +40,10 @@ internal object GlyphCache {
     ) {
         /** 空白字符(有 advance 无轮廓,如空格):只推进笔位不生成 quad */
         val hasBitmap: Boolean = widthLocal > 0f
+
+        /** P3① LRU 时间戳:最后一次命中/创建的渲染帧号([onFrameStart] 递增) */
+        var lastUseFrame: Int = 0
+            internal set
     }
 
     // 键打包进单个 Long(零分配查询):字体槽位 | 量化字号 | 粗体 | 码点
@@ -60,6 +66,9 @@ internal object GlyphCache {
     /** 缺字负缓存(按字体实例区分,支持常规/粗体双字重) */
     private val misses = HashMap<Int, HashSet<Int>>()
 
+    /** P3① 渲染帧号时钟:每帧渲染入口递增,作为 LRU 时间戳 */
+    private var frame = 0
+
     fun quantize(sizePx: Float): Float = (sizePx / SIZE_QUANTUM).roundToInt() * SIZE_QUANTUM
 
     /**
@@ -80,7 +89,10 @@ internal object GlyphCache {
         if (codepoint in missSet) return null
         val q = quantize(sizePx)
         val key = packKey(slot, codepoint, q, bold)
-        cache[key]?.let { return it }
+        cache[key]?.let {
+            it.lastUseFrame = frame // P3① LRU 命中续期
+            return it
+        }
 
         // 膨胀强度:连续值(设备字号 × 可配比例),软边衰减保留灰度过渡
         val embolden = if (bold) {
@@ -117,13 +129,66 @@ internal object GlyphCache {
                 bearingTopLocal = glyph.bearingTop / rasterDiv,
             )
         }
+        cached.lastUseFrame = frame
         cache[key] = cached
         return cached
     }
 
-    /** 清空(字体重载时调用;图集页不复用,靠翻页兜底) */
+    /**
+     * 帧首调用(每渲染帧一次,ComposeGuiRenderer.render 入口):
+     * 递增 LRU 时钟 + 活跃页水位检查 —— 超出 [TextRenderConfig.atlasMaxPages]
+     * 时反复淘汰「最冷」活跃页(页热度 = 页内条目最近使用帧号的最大值,
+     * 空页视为最冷)直至回到水位内。淘汰 = 条目失效 + 页退役标记;
+     * 页游标由 [GlyphAtlas.flushRetiredPages] 在帧末重置复用。
+     * 渲染线程调用。
+     */
+    fun onFrameStart() {
+        frame++
+        trimToWatermark()
+    }
+
+    private fun trimToWatermark() {
+        val maxActivePages = TextRenderConfig.atlasMaxPages.coerceAtLeast(1)
+        // 每轮退役一页,循环次数有上界(活跃页数单调递减)
+        while (GlyphAtlas.activePageCount() > maxActivePages) {
+            val victim = coldestActivePage() ?: break
+            removeEntriesOfPage(victim)
+            GlyphAtlas.retirePage(victim)
+        }
+    }
+
+    /** 最冷活跃页:页内条目 lastUseFrame 最大值最小者;无条目页视为最冷 */
+    private fun coldestActivePage(): Int? {
+        val heat = HashMap<Int, Int>()
+        for (g in cache.values) {
+            if (g.page < 0) continue // 空白字符占位(不在任何页)
+            val cur = heat.getOrDefault(g.page, Int.MIN_VALUE)
+            if (g.lastUseFrame > cur) heat[g.page] = g.lastUseFrame
+        }
+        var best = -1
+        var bestHeat = Int.MAX_VALUE
+        for (i in 0 until GlyphAtlas.pageCount()) {
+            if (GlyphAtlas.isRetired(i)) continue
+            val h = heat[i] ?: Int.MIN_VALUE
+            if (h < bestHeat) {
+                bestHeat = h
+                best = i
+            }
+        }
+        return if (best >= 0) best else null
+    }
+
+    private fun removeEntriesOfPage(page: Int) {
+        val it = cache.entries.iterator()
+        while (it.hasNext()) {
+            if (it.next().value.page == page) it.remove()
+        }
+    }
+
+    /** 清空(字体重载时调用;全部图集页退役,帧末重置游标后原地复用 —— 不再滞留旧显存) */
     fun reset() {
         cache.clear()
         misses.clear()
+        GlyphAtlas.retireAllPages()
     }
 }

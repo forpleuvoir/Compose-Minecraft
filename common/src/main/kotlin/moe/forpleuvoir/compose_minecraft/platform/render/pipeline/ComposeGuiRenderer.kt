@@ -5,6 +5,11 @@ import com.mojang.blaze3d.ProjectionType
 import com.mojang.blaze3d.pipeline.RenderPipeline
 import com.mojang.blaze3d.systems.RenderPass
 import com.mojang.blaze3d.systems.RenderSystem
+import com.mojang.blaze3d.vertex.VertexConsumer
+import moe.forpleuvoir.compose_minecraft.platform.render.text.GlyphAtlas
+import moe.forpleuvoir.compose_minecraft.platform.render.text.GlyphCache
+import moe.forpleuvoir.compose_minecraft.platform.render.text.GuiGlyphRenderState
+import moe.forpleuvoir.compose_minecraft.platform.render.text.MinecraftGuiText
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.MinecraftCustomFonts
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.Font
@@ -23,6 +28,7 @@ import net.minecraft.client.renderer.state.gui.GuiTextRenderState
 import net.minecraft.client.renderer.state.gui.pip.OversizedItemRenderState
 import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState
 import org.joml.Matrix4f
+import org.joml.Vector2f
 import moe.forpleuvoir.compose_minecraft.platform.render.state.ItemRenderState
 import moe.forpleuvoir.compose_minecraft.platform.render.pip.EntityPipRenderState
 import moe.forpleuvoir.compose_minecraft.platform.render.pip.ComposeOversizedItemRenderer
@@ -112,8 +118,13 @@ class ComposeGuiRenderer : GuiCommandSink {
      * T.25:吸收另一收集器的命令到**本收集器末尾**(元素顺序在自身之前,用于
      * 「渲染父屏」:父屏内容画在子屏之下),并清空对方 —— 对方收集器不被提交
      * (父屏已 removed,renderer 未注册),每帧被重新填充,不清空会无限累积。
+     *
+     * P3②:吸收前先落盘双方开启中的文本批次 —— 父屏批次必须先于本屏既有
+     * 元素之后、被吸收内容之前定序,否则跨渲染器的连续同 key run 会错序。
      */
     fun absorbAndClear(other: ComposeGuiRenderer) {
+        flushTextBatch()
+        other.flushTextBatch()
         items.addAll(other.items)
         other.items.clear()
     }
@@ -159,26 +170,141 @@ class ComposeGuiRenderer : GuiCommandSink {
         }
     }
 
+    // ── P3② 文本批次合并状态 ─────────────────────────────────────────────
+    //
+    // 目标:同页同 scissor 的**连续** gui_text run 合并为单次提交,消掉每 run 的
+    // 元素对象/数组拷贝/bounds 计算等固定开销。层级安全设计(用户拍板:我们是
+    // Compose UI 树,z 序 = 记录顺序,**绝不做原版 sortElements 式重排**):
+    // - 合并仅发生在记录顺序中相邻的 run 之间 —— flush-on-key-change:
+    //   (page, scissor) 变化、或任何非文本元素插入,立即落盘再开新批;
+    // - 落盘元素按开启批时序 append 进 [items],所有 quad 的绘制顺序与逐元素
+    //   提交完全一致,SrcOver 混合结果不变 → 层级零变化;
+    // - 缓冲为原始数组 + 游标,容量跨帧复用(稳态零分配)。
+
+    /** 是否有开启中的文本批 */
+    private var textBatchOpen = false
+
+    /** 开启批的图集页(纹理绑定 key) */
+    private var textBatchPage = -1
+
+    /** 开启批的 scissor(裁剪 key;ScreenRectangle 值相等语义) */
+    private var textBatchScissor: ScreenRectangle? = null
+
+    /** 交错 [x, y, u, v] 平铺缓冲(**世界坐标**,追加时已按各自 pose 预变换) */
+    private var textBatchVertices = FloatArray(2048)
+
+    /** 每顶点 0xAARRGGBB 缓冲 */
+    private var textBatchColors = IntArray(512)
+
+    private var textBatchVCount = 0
+    private var textBatchCCount = 0
+
+    /** pose 预变换 scratch(渲染线程单线程复用;与原版 addVertexWith2DPose 同一实现) */
+    private val transformVec2 = Vector2f()
+
     // ── GuiCommandSink ─────────────────────────────────────────
 
     override fun addElement(element: GuiElementRenderState) {
+        if (element is GuiGlyphRenderState) {
+            val scissor = element.scissorArea()
+            if (!textBatchOpen ||
+                element.pageIndex != textBatchPage ||
+                scissorChanged(scissor, textBatchScissor)
+            ) {
+                flushTextBatch()
+                textBatchOpen = true
+                textBatchPage = element.pageIndex
+                textBatchScissor = scissor
+            }
+            appendTextElement(element)
+            return
+        }
+        // 非文本元素是天然的批次屏障:先落盘,保住其前后内容的相对顺序
+        flushTextBatch()
         items.add(Item(element = element))
     }
 
     override fun addText(text: GuiTextRenderState) {
+        flushTextBatch()
         items.add(Item(text = text))
     }
 
     override fun addItem(item: ItemRenderState) {
+        flushTextBatch()
         items.add(Item(itemState = item))
     }
 
     override fun addEntity(entity: EntityPipRenderState) {
+        flushTextBatch()
         items.add(Item(entityState = entity))
     }
 
     override fun addPicturesInPictureState(state: PictureInPictureRenderState) {
+        flushTextBatch()
         items.add(Item(pipState = state))
+    }
+
+    /**
+     * 追加一个 [GuiGlyphRenderState] 的 quad 到开启批:局部坐标经该元素自带
+     * pose 预变换为世界坐标(与原版 `addVertexWith2DPose` 内部同为
+     * `Matrix3x2fc.transformPosition`,恒等替换),UV/顶点色原样拷贝。
+     */
+    private fun appendTextElement(element: GuiGlyphRenderState) {
+        val src = element.vertices
+        val srcColors = element.colors
+        val needV = textBatchVCount + src.size
+        val needC = textBatchCCount + srcColors.size
+        if (textBatchVertices.size < needV) {
+            textBatchVertices = textBatchVertices.copyOf(maxOf(needV, textBatchVertices.size * 2))
+        }
+        if (textBatchColors.size < needC) {
+            textBatchColors = textBatchColors.copyOf(maxOf(needC, textBatchColors.size * 2))
+        }
+        val pose = element.pose
+        var si = 0 // 源顶点游标(x,y,u,v)
+        var vi = 0 // 源顶点序号(取色)
+        var di = textBatchVCount
+        var ci = textBatchCCount
+        while (si + 4 <= src.size) {
+            pose.transformPosition(src[si], src[si + 1], transformVec2)
+            textBatchVertices[di] = transformVec2.x
+            textBatchVertices[di + 1] = transformVec2.y
+            textBatchVertices[di + 2] = src[si + 2]
+            textBatchVertices[di + 3] = src[si + 3]
+            textBatchColors[ci] = srcColors[vi]
+            vi++
+            di += 4
+            ci++
+            si += 4
+        }
+        textBatchVCount = needV
+        textBatchCCount = needC
+    }
+
+    /**
+     * 落盘开启中的文本批:整段拷贝为精确长度数组,作为单个合并元素按当前
+     * 记录位置 append 进 [items]。key 复位,缓冲容量保留跨帧复用。
+     */
+    private fun flushTextBatch() {
+        if (!textBatchOpen) return
+        val page = textBatchPage
+        val scissor = textBatchScissor
+        textBatchOpen = false
+        textBatchPage = -1
+        textBatchScissor = null
+        if (textBatchVCount == 0) return
+        items.add(
+            Item(
+                element = MergedTextRenderState(
+                    vertices = textBatchVertices.copyOf(textBatchVCount),
+                    colors = textBatchColors.copyOf(textBatchCCount),
+                    scissor = scissor,
+                    pageIndex = page,
+                ),
+            )
+        )
+        textBatchVCount = 0
+        textBatchCCount = 0
     }
 
     // ── 提交(仿原版 GuiRenderer.render:prepare → upload → draw)────
@@ -193,7 +319,15 @@ class ComposeGuiRenderer : GuiCommandSink {
         // T.32:自定义字体自愈 —— 资源重载清空 FontManager.fontSets 后重建已注册字体
         // (无注册时 O(1) 空检查,见 MinecraftCustomFonts.ensureAlive)
         MinecraftCustomFonts.ensureAlive()
-        if (items.isEmpty()) return
+        // P3① 图集 LRU 时钟 + 活跃页水位淘汰(淘汰页本帧不再分配,
+        // 游标在帧末 flushRetiredPages 重置复用)
+        GlyphCache.onFrameStart()
+        // P3②:收集阶段(extract)开启的文本批在本帧 prepare 前落盘
+        flushTextBatch()
+        if (items.isEmpty()) {
+            GlyphAtlas.flushRetiredPages()
+            return
+        }
         prepare()
         vertexBuffer.upload()
         draw()
@@ -202,6 +336,9 @@ class ComposeGuiRenderer : GuiCommandSink {
         vertexBuffer.endFrame()
         draws.clear()
         items.clear()
+        // P3①:draw 完成后重置已退役页游标 —— 此前本帧元素仍持有旧槽位 UV,
+        // 提前重置会让下一帧收集阶段覆盖其内容造成花屏
+        GlyphAtlas.flushRetiredPages()
     }
 
     /**
@@ -398,6 +535,65 @@ class ComposeGuiRenderer : GuiCommandSink {
         val textureSetup: TextureSetup,
         val scissorArea: ScreenRectangle?,
     )
+
+    /**
+     * P3② 批次合并产物:(page, scissor) 相同的连续 gui_text run 合并为单个
+     * 提交元素。顶点已是**世界坐标**(追加时按各自 pose 预变换,与
+     * `addVertexWith2DPose` 逐位一致),buildVertices 直接以恒等位姿写出。
+     * bounds = 世界包围盒与 scissor 求交(对齐 [GuiGlyphRenderState] 语义)。
+     */
+    private class MergedTextRenderState(
+        private val vertices: FloatArray,
+        private val colors: IntArray,
+        private val scissor: ScreenRectangle?,
+        private val pageIndex: Int,
+    ) : GuiElementRenderState {
+
+        override fun pipeline(): RenderPipeline = MinecraftGuiText.pipeline
+
+        override fun textureSetup(): TextureSetup = GlyphAtlas.textureSetup(pageIndex)
+
+        override fun scissorArea(): ScreenRectangle? = scissor
+
+        override fun buildVertices(vertexConsumer: VertexConsumer) {
+            var i = 0
+            var vi = 0
+            while (i + 4 <= vertices.size) {
+                vertexConsumer
+                    .addVertex(vertices[i], vertices[i + 1], 0.0f)
+                    .setUv(vertices[i + 2], vertices[i + 3])
+                    .setColor(colors[vi])
+                vi++
+                i += 4
+            }
+        }
+
+        override fun bounds(): ScreenRectangle {
+            if (vertices.isEmpty()) return ScreenRectangle(0, 0, 0, 0)
+            var minX = Float.MAX_VALUE
+            var minY = Float.MAX_VALUE
+            var maxX = -Float.MAX_VALUE
+            var maxY = -Float.MAX_VALUE
+            var i = 0
+            while (i + 4 <= vertices.size) {
+                val x = vertices[i]
+                val y = vertices[i + 1]
+                if (x < minX) minX = x
+                if (y < minY) minY = y
+                if (x > maxX) maxX = x
+                if (y > maxY) maxY = y
+                i += 4
+            }
+            // 世界坐标无需再变换;floor/ceil 保守取整后与 scissor 求交
+            val world = ScreenRectangle(
+                kotlin.math.floor(minX).toInt(),
+                kotlin.math.floor(minY).toInt(),
+                kotlin.math.ceil(maxX - minX).toInt(),
+                kotlin.math.ceil(maxY - minY).toInt(),
+            )
+            return scissor?.intersection(world) ?: world
+        }
+    }
 
     companion object {
         /** 物品离屏渲染器缓存上限(LRU 淘汰,防显存泄漏) */

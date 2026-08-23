@@ -17,16 +17,20 @@ import org.joml.Matrix3x2fc
  * - UV:R8 图集页内的归一化坐标([GlyphAtlas]);
  * - bounds:局部包围盒经 pose 变换后与 scissor 求交(元素被
  *   GuiRenderer 接受的前提)。
+ *
+ * P3② 批次合并:[pose]/[pageIndex]/[vertices]/[colors] 对渲染器开放
+ * (internal)—— ComposeGuiRenderer 把 (page, scissor) 相同的连续 run
+ * 预变换进世界坐标后合并为单个提交元素。
  */
 internal class GuiGlyphRenderState(
-    private val pose: Matrix3x2fc,
+    internal val pose: Matrix3x2fc,
     private val scissor: ScreenRectangle?,
     /** 交错 [x, y, u, v] 平铺,每 quad 6 顶点 */
-    private val vertices: FloatArray,
+    internal val vertices: FloatArray,
     /** 每顶点 0xAARRGGBB(与顶点数等长) */
-    private val colors: IntArray,
+    internal val colors: IntArray,
     /** 图集页索引([MinecraftGuiText.pipeline] 的 Sampler0 绑定来源) */
-    private val pageIndex: Int,
+    internal val pageIndex: Int,
 ) : GuiElementRenderState {
 
     private val elementBounds: ScreenRectangle = computeBounds(pose, scissor, vertices)

@@ -33,10 +33,10 @@ import kotlin.math.sqrt
 internal object TrueTypeTextWriter {
 
     /** 斜体剪切斜率:水平偏移 = 斜率 × (基线 − 角点 y),对齐原版 0.25 总斜率 */
-    private const val ITALIC_SHEAR = 0.25f
+    internal const val ITALIC_SHEAR = 0.25f
 
     /** 位图最小光栅化系数:避免亚像素字号光栅化出糊图(极端缩小场景仍可读) */
-    private const val MIN_RASTER_SCALE = 0.25f
+    internal const val MIN_RASTER_SCALE = 0.25f
 
     /**
      * 尝试用自研管线绘制一条文本命令。返回 true 表示已提交;
@@ -232,8 +232,9 @@ internal object TrueTypeTextWriter {
     /**
      * 支持范围判定:颜色/alpha/装饰线(下划线/删除线)/混淆/渐变/粗体/斜体
      * 均管线内实现;资源字体 run 无对应字形源,回退原版。
+     * internal:P3③ RasterBackend CPU 快照路径共用同一判定,避免语义漂移。
      */
-    private fun supports(cmd: DrawTextCommand): Boolean {
+    internal fun supports(cmd: DrawTextCommand): Boolean {
         val style = cmd.style
         // 注意:MC Style.getFont() 在未设置时返回 FontDescription.DEFAULT(非 null),
         // 判「是否显式指定字体」必须用平台的 fontOriginal 原始可空扩展
@@ -252,8 +253,9 @@ internal object TrueTypeTextWriter {
     /**
      * 屏幕像素对齐:把局部坐标吸附到「1/矩阵缩放」网格,使变换后的四边形
      * 边界落在整数屏幕像素上 —— 消除浮点落点 + LINEAR 采样造成的半像素模糊。
+     * internal:P3③ RasterBackend CPU 快照路径共用。
      */
-    private fun snap(v: Float, grid: Float): Float = round(v * grid) / grid
+    internal fun snap(v: Float, grid: Float): Float = round(v * grid) / grid
 
     /**
      * 单页 quad 组装缓冲:预分配原始数组 + 游标写入(零装箱、零逐元素分配),
