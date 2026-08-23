@@ -1,5 +1,8 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.text
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import moe.forpleuvoir.compose_minecraft.mc
 
 /**
@@ -40,9 +43,8 @@ data class FontSource(
  */
 object TextRenderConfig {
 
-    /** 全局开关:开启且字体就绪时 Compose 文本走自研 TTF 管线 */
-    @Volatile
-    var enabled: Boolean = false
+    /** 全局开关:开启且字体就绪时 Compose 文本走自研 TTF 管线(默认启用) */
+    var enabled: Boolean by mutableStateOf(true)
 
     /** 常规体字体文件列表(D1 开放设计),按优先级排序 */
     val fontSources: MutableList<FontSource> = mutableListOf()
@@ -67,8 +69,7 @@ object TextRenderConfig {
      * 同 sp 下视觉偏大 —— 默认 16sp 与原版位图的 18sp 观感对齐。
      * 仅在 [enabled] 时作为默认字号生效。
      */
-    @Volatile
-    var ttfDefaultFontSizeSp: Float = 16f
+    var ttfDefaultFontSizeSp: Float by mutableStateOf(16f)
 
     /**
      * 默认字号 = 原版 Font.lineHeight × 本倍数(默认 2,即平台惯例的 18sp)。
@@ -82,8 +83,7 @@ object TextRenderConfig {
      * 调大可降低闪烁与光栅化开销)。每次重掷按「字符序号 + 时间槽」确定性选样,
      * 同一槽位内稳定。最小值钳制为 1。
      */
-    @Volatile
-    var obfuscatedUpdateIntervalMs: Long = 16L
+    var obfuscatedUpdateIntervalMs: Long by mutableStateOf(16L)
 
     /**
      * 调试:为每个文本 run 绘制行盒轮廓(绿)+ 基线(红)。在分流层实现,
@@ -98,6 +98,5 @@ object TextRenderConfig {
      * 钳制 0.5..2。默认 1/32 —— 18sp(32px 位图)时强度 1.0 = 每侧 +1px、
      * 笔画总宽 +2px,清晰加粗;调大更粗、调小更细。
      */
-    @Volatile
-    var boldEmboldenRatio: Float = 1f / 32f
+    var boldEmboldenRatio: Float by mutableStateOf(1f / 32f)
 }

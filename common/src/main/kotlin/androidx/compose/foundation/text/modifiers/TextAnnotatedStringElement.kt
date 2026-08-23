@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.node.ModifierNodeElement
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
@@ -56,6 +57,8 @@ internal class TextAnnotatedStringElement(
     private val segments: List<StyleSegment> = emptyList(),
     // 平台适配点(T.29):字号渲染缩放(18sp → 2x)
     private val scale: Float = 1f,
+    /** 平台适配点(T.TT P2):子树级渲染后端定向 */
+    private val backend: TextRenderBackend = TextRenderBackend.DEFAULT,
 ) : ModifierNodeElement<TextAnnotatedStringNode>() {
 
     override fun create(): TextAnnotatedStringNode =
@@ -76,11 +79,12 @@ internal class TextAnnotatedStringElement(
             onShowTranslation,
             segments,
             scale,
+            backend,
         )
 
     override fun update(node: TextAnnotatedStringNode) {
         node.doInvalidations(
-            drawChanged = node.updateDraw(color, style),
+            drawChanged = node.updateDraw(color, style, backend),
             textChanged = node.updateText(text = text),
             layoutChanged =
                 node.updateLayoutRelatedArgs(

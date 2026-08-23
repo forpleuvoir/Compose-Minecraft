@@ -852,6 +852,13 @@ internal class MinecraftCanvas internal constructor(
 
     internal val drawCommands = ArrayList<DrawCommand>()
 
+    /**
+     * 文本渲染后端覆盖(P2 LocalTextRenderBackend):绘制节点在调用
+     * paragraph.paint 前设置、finally 恢复;null = 跟随全局开关。
+     * recordTextDraw 落章时读取,随命令进入分流层。
+     */
+    internal var textBackendOverride: TextRenderBackend? = null
+
     /** 回放用:当前帧的全部绘制命令(阶段 C 由 MinecraftRenderContext 消费) */
     internal fun commands(): List<DrawCommand> = drawCommands
 
@@ -880,7 +887,7 @@ internal class MinecraftCanvas internal constructor(
                 style = style,
                 alpha = alpha,
                 shader = shader,
-                backend = backend,
+                backend = textBackendOverride ?: backend,
             )
         )
     }

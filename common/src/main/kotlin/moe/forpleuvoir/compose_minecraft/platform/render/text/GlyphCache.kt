@@ -40,9 +40,22 @@ internal object GlyphCache {
         val hasBitmap: Boolean = widthLocal > 0f
     }
 
-    private data class Key(val fontId: Int, val codepoint: Int, val quantizedSizePx: Float, val bold: Boolean)
+    // 键打包进单个 Long(零分配查询):字体槽位 | 量化字号 | 粗体 | 码点
+    private val fontSlots = HashMap<Int, Int>()
+    private var nextFontSlot = 0
 
-    private val cache = HashMap<Key, CachedGlyph>()
+    private fun fontSlot(font: TrueTypeFont): Int =
+        fontSlots.getOrPut(System.identityHashCode(font)) {
+            (++nextFontSlot).also { require(it < 16) { "too many fonts" } }
+        }
+
+    private fun packKey(slot: Int, codepoint: Int, q: Float, bold: Boolean): Long =
+        ((slot.toLong() and 0xF) shl 60) or
+            (((q * 4).toInt().toLong() and 0xFFFF) shl 44) or
+            ((if (bold) 1L else 0L) shl 43) or
+            (codepoint.toLong() and 0x1FFFFF)
+
+    private val cache = HashMap<Long, CachedGlyph>()
 
     /** 缺字负缓存(按字体实例区分,支持常规/粗体双字重) */
     private val misses = HashMap<Int, HashSet<Int>>()
@@ -62,11 +75,11 @@ internal object GlyphCache {
         /** 折算除数:位图像素 → 1x 布局像素(mscale × 超采样) */
         rasterDiv: Float = 1f,
     ): CachedGlyph? {
-        val fontId = System.identityHashCode(font)
-        misses.getOrPut(fontId) { HashSet() }
-        if (misses[fontId]!!.contains(codepoint)) return null
+        val slot = fontSlot(font)
+        val missSet = misses.getOrPut(slot) { HashSet() }
+        if (codepoint in missSet) return null
         val q = quantize(sizePx)
-        val key = Key(fontId, codepoint, q, bold)
+        val key = packKey(slot, codepoint, q, bold)
         cache[key]?.let { return it }
 
         // 膨胀强度:连续值(设备字号 × 可配比例),软边衰减保留灰度过渡
@@ -77,7 +90,7 @@ internal object GlyphCache {
             ?: run {
                 // 无轮廓(空白字符)与真缺字的区分:空白字符可光栅化为空但 hasGlyph 为 true
                 if (!font.hasGlyph(codepoint)) {
-                    misses.getOrPut(fontId) { HashSet() }.add(codepoint)
+                    missSet.add(codepoint)
                     return null
                 }
                 null

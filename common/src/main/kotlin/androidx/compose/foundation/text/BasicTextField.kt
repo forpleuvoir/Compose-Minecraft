@@ -32,6 +32,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.contextmenu.modifier.ToolbarRequesterImpl
 import androidx.compose.foundation.text.handwriting.stylusHandwriting
 import androidx.compose.foundation.text.input.InputTransformation
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalTextRenderBackend
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
 import androidx.compose.foundation.text.input.KeyboardActionHandler
 import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldDecorator

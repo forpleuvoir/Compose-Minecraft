@@ -55,12 +55,22 @@ val LocalDefaultFont = staticCompositionLocalOf<FontDescription> { MinecraftFont
 // - 原版位图渲染器:原版行高 × 可配倍数(默认 ×2 = 18sp);
 // - TrueType 渲染器:固定 16sp(矢量字形墨迹占比高,同 sp 视觉更大)。
 // 部分模组会修改 Font.lineHeight,动态读取以兼容。
+/**
+ * 文本渲染后端定向选择(T.TT P2):子树级强制原版位图渲染。
+ *
+ * - 默认 [TextRenderBackend.DEFAULT]:跟随全局开关(TextRenderConfig.enabled);
+ * - 提供 [TextRenderBackend.VANILLA]:该子树内文本强制原版位图字形渲染;
+ * - 无「强制启用」档:启用是平台级决策,不暴露给子树。
+ *
+ * 组合期读取(BasicText/BasicTextField 内),经绘制节点盖章进 DrawTextCommand。
+ */
+val LocalTextRenderBackend =
+    staticCompositionLocalOf { moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend.DEFAULT }
+
+// static(零读跟踪):默认值固定为原版语义 = 行高 × 倍数;
+// TTF 渲染器的 16sp 默认由读取点(BasicText 等)按后端分支解析
 val LocalDefaultFontSize = staticCompositionLocalOf<TextUnit> {
-    if (TextRenderConfig.enabled) {
-        TextRenderConfig.ttfDefaultFontSizeSp.sp
-    } else {
-        (mc.font.lineHeight * TextRenderConfig.defaultFontSizeLineMultiple).sp
-    }
+    (mc.font.lineHeight * TextRenderConfig.defaultFontSizeLineMultiple).sp
 }
 
 /**

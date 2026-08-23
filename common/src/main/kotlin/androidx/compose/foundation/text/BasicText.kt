@@ -61,7 +61,9 @@ import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.isUnspecified
 import androidx.compose.ui.unit.sp
 import moe.forpleuvoir.compose_minecraft.mc
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalTextRenderBackend
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFont
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFontSize
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withDefaultFont
@@ -155,7 +157,12 @@ fun BasicText(
     // 未显式指定字体(platformStyle.font)补 LocalDefaultFont。
     val defaultTextStyle = LocalDefaultTextStyle.current
     val defaultFont = LocalDefaultFont.current
-    val defaultFontSize = LocalDefaultFontSize.current
+    // 后端感知默认字号:TTF 渲染器墨迹占比高,默认 16sp 与原版位图 18sp 观感对齐
+    val defaultFontSize = if (TextRenderConfig.enabled) {
+        TextRenderConfig.ttfDefaultFontSizeSp.sp
+    } else {
+        LocalDefaultFontSize.current
+    }
     val effectiveStyle =
         remember(style, defaultTextStyle, defaultFont, defaultFontSize) {
             val withFont = (style ?: defaultTextStyle).withDefaultFont(defaultFont)
@@ -168,6 +175,8 @@ fun BasicText(
     val textAlpha = platformData.alpha
     // 平台适配点(T.TT):渐变画刷(TextStyle.brush 非 SolidColor),绘制走 brush 重载
     val textBrush = platformData.brush
+    // 平台适配点(T.TT P2):子树级渲染后端定向(LocalTextRenderBackend)
+    val textBackend = LocalTextRenderBackend.current
 
     BackgroundTextMeasurement(text = text, style = mcStyle, fontFamilyResolver = fontFamilyResolver)
 
@@ -204,6 +213,7 @@ fun BasicText(
                     scale = scale,
                     alpha = textAlpha,
                     brush = textBrush,
+                    backend = textBackend,
                 )
         }
     Layout(finalModifier, EmptyMeasurePolicy)
@@ -361,7 +371,12 @@ fun BasicText(
     // 未显式指定字体(platformStyle.font)补 LocalDefaultFont。
     val defaultTextStyle = LocalDefaultTextStyle.current
     val defaultFont = LocalDefaultFont.current
-    val defaultFontSize = LocalDefaultFontSize.current
+    // 后端感知默认字号:TTF 渲染器墨迹占比高,默认 16sp 与原版位图 18sp 观感对齐
+    val defaultFontSize = if (TextRenderConfig.enabled) {
+        TextRenderConfig.ttfDefaultFontSizeSp.sp
+    } else {
+        LocalDefaultFontSize.current
+    }
     val effectiveStyle =
         remember(style, defaultTextStyle, defaultFont, defaultFontSize) {
             val withFont = (style ?: defaultTextStyle).withDefaultFont(defaultFont)

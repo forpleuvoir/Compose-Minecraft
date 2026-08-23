@@ -24,6 +24,8 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorProducer
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
+import androidx.compose.ui.graphics.MinecraftCanvas
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.isSpecified
@@ -86,6 +88,8 @@ internal class TextAnnotatedStringNode(
     private var segments: List<StyleSegment> = emptyList(),
     // 平台适配点(T.29):字号渲染缩放(18sp → 2x),透传给 MultiParagraphLayoutCache
     private var scale: Float = 1f,
+    /** 平台适配点(T.TT P2):子树级渲染后端定向 */
+    private var textBackend: TextRenderBackend = TextRenderBackend.DEFAULT,
 ) : Modifier.Node(), LayoutModifierNode, DrawModifierNode, SemanticsModifierNode {
     override val shouldAutoInvalidate: Boolean
         get() = false
@@ -133,7 +137,7 @@ internal class TextAnnotatedStringNode(
     }
 
     /** Element has draw parameters to update */
-    fun updateDraw(color: ColorProducer?, style: Style): Boolean {
+    fun updateDraw(color: ColorProducer?, style: Style, backend: TextRenderBackend = textBackend): Boolean {
         var changed = false
         if (color != this.overrideColor) {
             changed = true
@@ -141,6 +145,8 @@ internal class TextAnnotatedStringNode(
         overrideColor = color
         // 平台适配点:MC Style 无布局/绘制属性分离,整样式参与比较
         changed = changed || style != this.style
+        changed = changed || backend != this.textBackend
+        this.textBackend = backend
         return changed
     }
 
@@ -576,7 +582,13 @@ internal class TextAnnotatedStringNode(
                 val color =
                     if (overrideColorVal.isSpecified) overrideColorVal
                     else style.color?.toColor() ?: Color.White
-                localParagraph.paint(canvas = canvas, color = color)
+                val prevBackend = (canvas as? MinecraftCanvas)?.textBackendOverride
+                (canvas as? MinecraftCanvas)?.textBackendOverride = textBackend
+                try {
+                    localParagraph.paint(canvas = canvas, color = color)
+                } finally {
+                    (canvas as? MinecraftCanvas)?.textBackendOverride = prevBackend
+                }
             } finally {
                 if (willClip) {
                     canvas.restore()

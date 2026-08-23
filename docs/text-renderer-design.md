@@ -1,6 +1,6 @@
 # 文本渲染器替换 —— 设计文档(TrueType 渲染管线)
 
-> 状态:**P1 已实施(2026-08-23),默认关;P2/P3 待做**
+> 状态:**P1/P2 已实施(2026-08-23),TTF 为默认渲染器;P3 待做**
 > 目标:用自研 TrueType 文本渲染管线替换 Compose 文本的默认渲染路径(原版 MC 位图字体管线)。
 > 参考:[Modern UI](https://github.com/BloCamLimb/ModernUI-MC)(成熟先例)。
 >
@@ -63,7 +63,8 @@ when (cmd.backend) {
 ```
 
 - 未覆盖字形(如 emoji):逐 run 回退 `addText`(与原版渲染共存于同一帧);
-- 全局开关:`TextRenderConfig.enabled`(默认 false,验证稳定后再翻默认)。
+- 全局开关:`TextRenderConfig.enabled`(**默认 true**,TTF 为默认渲染器;
+  可全局关闭回退原版)。
 
 ### 3.1.1 手动指定渲染器(LocalTextRenderBackend)
 

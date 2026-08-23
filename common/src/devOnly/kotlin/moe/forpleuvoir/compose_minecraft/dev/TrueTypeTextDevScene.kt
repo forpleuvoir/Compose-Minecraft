@@ -15,7 +15,9 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalTextRenderBackend
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -73,14 +75,9 @@ fun TrueTypeTextDevScene() {
         true
     }
 
-    var truetype by remember { mutableStateOf(true) }
+    // 初始选中状态跟随实际全局开关(而非假定 TTF)
+    var truetype by remember { mutableStateOf(TextRenderConfig.enabled) }
 
-    // 作用域限制(用户拍板):新渲染器只在本测试界面生效 —— 进入时开启,
-    // 离开时恢复原值,其余场景(主菜单等)始终原版渲染
-    DisposableEffect(Unit) {
-        TextRenderConfig.enabled = true
-        onDispose { TextRenderConfig.enabled = false }
-    }
 
     Box(
         Modifier
@@ -228,6 +225,23 @@ fun TrueTypeTextDevScene() {
                         style = Style.EMPTY.withColor(Color(0xFFA5D6A7)).toTextStyle(),
                     )
 
+                    SectionLabelTt("⑪ 定向回退(LocalTextRenderBackend.VANILLA 子树)")
+                    CompositionLocalProvider(LocalTextRenderBackend provides TextRenderBackend.VANILLA) {
+                        BasicText(
+                            "本行强制原版位图渲染(VANILLA 子树)",
+                            style = Style.EMPTY.withColor(Color.White).toTextStyle()
+                                .merge(TextStyle(fontSize = 18.sp)),
+                            modifier = Modifier
+                                .background(Color(0xFF3A2A1B))
+                                .padding(horizontal = 6.dp),
+                        )
+                    }
+                    BasicText(
+                        "对照:此行在 TTF 渲染器下为矢量字形",
+                        style = TextStyle(fontSize = 18.sp, color = Color.White),
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+
                     SectionLabelTt("⑧ 混淆 §k(同宽随机字形,默认 16ms 重掷可配;advance 不变布局不抖)")
                     BasicText(
                         component = Component.literal("OBFS 混淆混淆 obfuscation 0123")
@@ -305,11 +319,13 @@ fun TrueTypeTextDevScene() {
                     )
 
                     SectionLabelTt("⑫ 渐变文本(逐字形采样)")
+
+
                     BasicText(
                         "渐变文字 Gradient Text",
                         style = TextStyle(
                             // 横向渐变:单行文本只有水平方向有采样跨度,垂直渐变会恒取首色
-                        brush = Brush.horizontalGradient(listOf(Color(0xFFFFEB3B), Color(0xFFE91E63))),
+                            brush = Brush.horizontalGradient(listOf(Color(0xFFFFEB3B), Color(0xFFE91E63))),
                             fontSize = 32.sp,
                         ),
                     )

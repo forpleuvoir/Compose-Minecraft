@@ -57,6 +57,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.MinecraftCanvas
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.focus.FocusRequester
@@ -196,6 +198,8 @@ internal fun CoreTextField(
     decorationBox: @Composable (innerTextField: @Composable () -> Unit) -> Unit =
         @Composable { innerTextField -> innerTextField() },
     textScrollerPosition: TextFieldScrollerPosition? = null,
+    /** 平台适配点(T.TT P2):子树级渲染后端定向 */
+    textBackend: TextRenderBackend = TextRenderBackend.DEFAULT,
 ) {
     val focusRequester = remember { FocusRequester() }
     val legacyTextInputServiceAdapter = remember { createLegacyPlatformTextInputServiceAdapter() }
@@ -384,7 +388,7 @@ internal fun CoreTextField(
             offsetMapping,
         )
 
-    val drawModifier = Modifier.textFieldDraw(state, value, offsetMapping)
+    val drawModifier = Modifier.textFieldDraw(state, value, offsetMapping, textBackend)
 
     val onPositionedModifier =
         Modifier.onGloballyPositioned {
@@ -1034,26 +1038,37 @@ internal fun Modifier.textFieldDraw(
     state: LegacyTextFieldState,
     value: TextFieldValue,
     offsetMapping: OffsetMapping,
-): Modifier = defaultTextFieldDraw(state, value, offsetMapping)
+    backend: TextRenderBackend,
+): Modifier = defaultTextFieldDraw(state, value, offsetMapping, backend)
 
 internal fun Modifier.defaultTextFieldDraw(
     state: LegacyTextFieldState,
     value: TextFieldValue,
     offsetMapping: OffsetMapping,
+    /** 平台适配点(T.TT P2):子树级渲染后端定向 */
+    backend: TextRenderBackend = TextRenderBackend.DEFAULT,
 ): Modifier =
     this.drawBehind {
         state.layoutResult?.let { layoutResult ->
             drawIntoCanvas { canvas ->
-                TextFieldDelegate.draw(
-                    canvas,
-                    value,
-                    state.selectionPreviewHighlightRange,
-                    state.deletionPreviewHighlightRange,
-                    offsetMapping,
-                    layoutResult.value,
-                    state.highlightPaint,
-                    state.selectionBackgroundColor,
-                )
+                // P2:子树渲染后端定向 —— 绘制面盖章,recordTextDraw 落章进命令
+                val mcCanvas = canvas as? MinecraftCanvas
+                val prevBackend = mcCanvas?.textBackendOverride
+                mcCanvas?.textBackendOverride = backend
+                try {
+                    TextFieldDelegate.draw(
+                        canvas,
+                        value,
+                        state.selectionPreviewHighlightRange,
+                        state.deletionPreviewHighlightRange,
+                        offsetMapping,
+                        layoutResult.value,
+                        state.highlightPaint,
+                        state.selectionBackgroundColor,
+                    )
+                } finally {
+                    mcCanvas?.textBackendOverride = prevBackend
+                }
             }
         }
     }

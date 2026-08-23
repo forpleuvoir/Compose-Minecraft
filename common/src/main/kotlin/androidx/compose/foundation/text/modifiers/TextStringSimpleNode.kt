@@ -22,6 +22,7 @@ import androidx.compose.foundation.internal.requirePreconditionNotNull
 import androidx.compose.foundation.text.DefaultMinLines
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.MinecraftCanvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
@@ -60,6 +61,7 @@ import androidx.compose.ui.unit.Constraints.Companion.fitPrioritizingWidth
 import androidx.compose.ui.util.fastRoundToInt
 import androidx.compose.ui.util.trace
 import kotlin.jvm.JvmName
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toColor
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
@@ -89,6 +91,8 @@ internal class TextStringSimpleNode(
     private var textAlpha: Float = 1f,
     /** 平台适配点(T.TT):渐变画刷(TextStyle.brush 非 SolidColor),绘制走 brush 重载。 */
     private var textBrush: Brush? = null,
+    /** 平台适配点(T.TT P2):子树级渲染后端定向 */
+    private var textBackend: TextRenderBackend = TextRenderBackend.DEFAULT,
 ) : Modifier.Node(), LayoutModifierNode, DrawModifierNode, SemanticsModifierNode {
     override val shouldAutoInvalidate: Boolean
         get() = false
@@ -182,7 +186,13 @@ internal class TextStringSimpleNode(
         return textSubstitution?.takeIf { it.isShowingSubstitution }?.layoutCache ?: layoutCache
     }
 
-    fun updateDraw(color: ColorProducer?, style: Style, alpha: Float = 1f, brush: Brush? = textBrush): Boolean {
+    fun updateDraw(
+        color: ColorProducer?,
+        style: Style,
+        alpha: Float = 1f,
+        brush: Brush? = textBrush,
+        backend: TextRenderBackend = this.textBackend,
+    ): Boolean {
         var changed = false
         if (color != this.overrideColor) {
             changed = true
@@ -194,6 +204,8 @@ internal class TextStringSimpleNode(
         textAlpha = alpha
         changed = changed || brush != this.textBrush
         this.textBrush = brush
+        changed = changed || backend != this.textBackend
+        this.textBackend = backend
         return changed
     }
 
@@ -525,14 +537,21 @@ internal class TextStringSimpleNode(
                 // 经 recordTextDraw alpha 参数消费;MC TextColor 无 alpha 通道)
                 // 平台适配点(T.TT):TextStyle.brush(非 SolidColor)→ 渐变逐字形取色绘制
                 val textBrush = textBrush
-                if (textBrush != null) {
-                    localParagraph.paint(
-                        canvas = canvas,
-                        brush = textBrush,
-                        alpha = color.alpha * textAlpha,
-                    )
-                } else {
-                    localParagraph.paint(canvas = canvas, color = color.copy(alpha = color.alpha * textAlpha))
+                // P2:子树渲染后端定向 —— 绘制面盖章,recordTextDraw 落章进命令
+                val prevBackend = (canvas as? MinecraftCanvas)?.textBackendOverride
+                (canvas as? MinecraftCanvas)?.textBackendOverride = textBackend
+                try {
+                    if (textBrush != null) {
+                        localParagraph.paint(
+                            canvas = canvas,
+                            brush = textBrush,
+                            alpha = color.alpha * textAlpha,
+                        )
+                    } else {
+                        localParagraph.paint(canvas = canvas, color = color.copy(alpha = color.alpha * textAlpha))
+                    }
+                } finally {
+                    (canvas as? MinecraftCanvas)?.textBackendOverride = prevBackend
                 }
             } finally {
                 if (willClip) {

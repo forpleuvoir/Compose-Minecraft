@@ -55,7 +55,7 @@ class DevSceneInitializer : MinecraftInitializer {
                     // BlockableEventLoop.runAllTasks 会执行到队列空,任务内再入队会造成死循环卡死游戏。
                     mc.execute {
                         if (mc.gui.screen() is TitleScreen) {
-                            mc.gui.setScreen(ComposeScreen { MinecraftDevSceneContent() })
+                            mc.gui.setScreen(ComposeScreen { TrueTypeTextDevScene() })  // DIAG
                         }
                     }
                     break
