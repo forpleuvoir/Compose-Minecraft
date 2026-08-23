@@ -245,6 +245,9 @@ internal class GuiStateBackend : GeometryBackend {
             println(
                 "[TT] '" + cmd.text.take(10) + "' font=" + cmd.style.fontOriginal +
                     " bold=" + cmd.style.isBold + " backend=" + cmd.backend +
+                    " em=" + font.emPx + " provEm=" + font.font.providerEmPx +
+                    " box=" + font.lineHeightPx + " base=" + font.baselineFromTopPx +
+                    " y=" + cmd.y +
                     " channel=" + font.font.channel +
                     " -> " + if (font.font.channel == moe.forpleuvoir.compose_minecraft.platform.render.text.FontChannel.STB_VECTOR) "STB" else "BITMAP/FREETYPE"
             )

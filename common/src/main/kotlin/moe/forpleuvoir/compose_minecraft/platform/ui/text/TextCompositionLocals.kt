@@ -16,6 +16,7 @@
 
 package moe.forpleuvoir.compose_minecraft.platform.ui.text
 
+import moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
 
 import androidx.compose.runtime.Composable
@@ -69,9 +70,11 @@ val LocalDefaultFontSize = staticCompositionLocalOf<TextUnit> { TextUnit.Unspeci
  */
 @Composable
 fun resolveDefaultFont(): FontDescription {
-    // P2-B5:哨兵映射随双模式开关消亡 —— 业务 Provider 即最终语义,
-    // 「默认字体是谁」由 FontResolver.defaultFontId 唯一决定。
-    return LocalDefaultFont.current
+    // P2-B5:「默认字体是谁」由 FontResolver.defaultFontId 唯一决定。
+    // LocalDefaultFont 冻结默认(fusion_pixel)视为「未指定」→ 跟随 defaultFontId;
+    // 业务显式 Provider 的字体始终优先(对照屏切 defaultFontId 即生效)。
+    val provided = LocalDefaultFont.current
+    return if (provided == MinecraftFonts.FusionPixel) FontResolver.defaultFontId else provided
 }
 
 /** 解析生效默认字号(sp):跟随 [TextRenderConfig.effectiveDefaultFontSizeSp] 实时值 */
