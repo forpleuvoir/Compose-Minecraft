@@ -292,13 +292,14 @@ internal class GuiStateBackend : GeometryBackend {
     ) {
         MinecraftGuiText.ensureCompiled()
         val ms = max(0.05f, matrixScale(cmd.matrix))
-        val metrics = activeMetricsSource()
+        // P1:度量按命令样式解析(唯一决策点 FontResolver)
+        val metrics = FontResolver.resolveNative(cmd.style).metrics
         var width = 0f
         var i = 0
         while (i < cmd.text.length) {
             val cp = cmd.text.codePointAt(i)
             i += Character.charCount(cp)
-            width += metrics.charAdvance(cp)
+            width += metrics.advance(cp)
         }
         val height = metrics.lineHeight
         val baseline = cmd.y + metrics.baselineFromTop
@@ -349,7 +350,8 @@ internal class GuiStateBackend : GeometryBackend {
         val splitter = font.splitter
         val pose = cmd.matrix.toMatrix3x2f()
         // P3 基线补偿:布局基线(像素字体自然行盒)− 原版硬编码锚点 7
-        val metricsSrc = activeMetricsSource()
+        // P1:度量按命令样式解析(唯一决策点 FontResolver)
+        val metricsSrc = FontResolver.resolveNative(cmd.style).metrics
         val yBase = cmd.y + (metricsSrc.baselineFromTop - VANILLA_BASELINE_ANCHOR)
         var penX = 0f
         var i = 0
@@ -401,17 +403,17 @@ internal class GuiStateBackend : GeometryBackend {
     private val pixelCoverageCache = java.util.concurrent.ConcurrentHashMap<Int, Boolean>()
 
     /**
-     * 像素字体是否覆盖该码点([PixelFont] 独立单例 stb 查询 —— 与原版 FreeType
+     * 像素字体是否覆盖该码点(P1:经注册表字体的覆盖判定 —— 与原版 FreeType
      * 渲染端同读一份 glyf 表,判定一致;缓存避免逐帧查询)。
      */
     private fun pixelFontCovers(codepoint: Int): Boolean =
-        pixelCoverageCache.computeIfAbsent(codepoint) { PixelFont.covers(it) }
+        pixelCoverageCache.computeIfAbsent(codepoint) { BuiltinFonts.fusionPixel.covers(it) }
 
     /**
      * 按码点覆盖切段提交原版渲染:fusion_pixel 覆盖的段保持其字体描述;
      * 未覆盖段(阿拉伯文/emoji 等)字体换回 [FontDescription.DEFAULT] ——
      * 由 minecraft:default 字形渲染,实现「Compose 内像素字体 + 缺字退回原版」。
-     * 段内 x 偏移用 [activeMetricsSource] 推进(与布局度量同源,含 kern)。
+     * 段内 x 偏移用命令样式的解析度量推进(与布局度量同源,含 kern)。
      */
     private fun submitSegmentedVanillaText(
         cmd: DrawTextCommand,
@@ -421,8 +423,9 @@ internal class GuiStateBackend : GeometryBackend {
         val alphaByte = (cmd.alpha * 255f).roundToInt().coerceIn(0, 255)
         val baseColor = cmd.style.color?.value?.or(0xFF000000.toInt()) ?: 0xFFFFFFFF.toInt()
         val argb = (baseColor and 0x00FFFFFF) or (alphaByte shl 24)
-        val metricsSrc = activeMetricsSource()
         // P3 基线补偿:布局基线 − 原版硬编码锚点(见 VANILLA_BASELINE_ANCHOR 注释)
+        // P1:度量按命令样式解析(唯一决策点 FontResolver)
+        val metricsSrc = FontResolver.resolveNative(cmd.style).metrics
         val yBase = cmd.y + (metricsSrc.baselineFromTop - VANILLA_BASELINE_ANCHOR)
         val pose = cmd.matrix.toMatrix3x2f()
         val scr = scissor?.toScreenRectangle()
@@ -464,7 +467,7 @@ internal class GuiStateBackend : GeometryBackend {
                 segStartPen = pen
             }
             cur = covered
-            pen += metricsSrc.charAdvance(cp) + metricsSrc.codepointKern(prev, cp)
+            pen += metricsSrc.advance(cp) + metricsSrc.kern(prev, cp)
             prev = cp
             i += cc
         }

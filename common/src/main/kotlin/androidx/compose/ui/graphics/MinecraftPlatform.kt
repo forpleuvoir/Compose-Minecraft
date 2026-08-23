@@ -24,7 +24,7 @@ import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
-import moe.forpleuvoir.compose_minecraft.platform.render.text.activeMetricsSource
+import moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.toPaintSnapshot
 import net.minecraft.network.chat.Style
 import net.minecraft.resources.Identifier
@@ -1238,13 +1238,14 @@ internal class MinecraftCanvas internal constructor(
     /**
      * 平台适配点(T.36):判断文本命令的行(局部 y∈[command.y, command.y+行高])
      * 经 [m] 映射到目标画布空间后,是否完全在 [clip] 的 y 范围之外(垂直视口外)。
-     * 行高随当前度量来源([activeMetricsSource]):原版 9px 固定 / TrueType 为
-     * 字体真实行高(T.TT);文本 scale 已含在命令矩阵,映射后自然放大。
+     * 行高按命令样式经 FontResolver 解析(P1):原版 9px 固定 / TrueType 为
+     * 字体真实行高;文本 scale 已含在命令矩阵,映射后自然放大。
      * 只按 y 剔除(垂直滚动主场景),x 方向交给渲染端 scissor(行宽未知且不误剔可见行)。
      */
     private fun isTextLineOutsideY(m: Matrix, command: DrawTextCommand, clip: Rect): Boolean {
         // T.TT 语义一致模式:布局度量恒原版(9px),两种渲染器一致
-        val lineHeight = activeMetricsSource().lineHeight
+        // P1:度量按命令样式解析(唯一决策点 FontResolver)
+        val lineHeight = FontResolver.resolveNative(command.style).metrics.lineHeight
         val top = m.map(Offset(command.x, command.y)).y
         val bottom = m.map(Offset(command.x, command.y + lineHeight)).y
         val minY = minOf(top, bottom)

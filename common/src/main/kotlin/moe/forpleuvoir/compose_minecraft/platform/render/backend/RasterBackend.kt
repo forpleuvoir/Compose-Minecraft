@@ -232,7 +232,7 @@ internal class RasterBackend(
                 ?: chain.firstOrNull { it.hasGlyph(drawCp) }
             if (renderFont == null) {
                 // 缺字:CPU 快照无原版字形可兜底 → 跳过墨迹、保留推进
-                penX += metrics.charAdvance(cp)
+                penX += metrics.advance(cp)
                 prevCp = cp
                 continue
             }
@@ -266,7 +266,7 @@ internal class RasterBackend(
                     rgb = color and 0x00FFFFFF, alphaByte = alphaByte,
                 )
             }
-            penX += metrics.charAdvance(cp) + metrics.codepointKern(prevCp, cp)
+            penX += metrics.advance(cp) + metrics.kern(prevCp, cp)
             prevCp = cp
         }
 

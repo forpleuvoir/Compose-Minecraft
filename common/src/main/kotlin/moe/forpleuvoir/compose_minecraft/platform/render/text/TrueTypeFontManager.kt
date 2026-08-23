@@ -150,7 +150,7 @@ internal object TrueTypeFontManager {
         }
         if (fonts.isEmpty()) return null
         // 度量仅常规链需要(粗体链只用于绘制字形,不参与布局)
-        val metrics = if (!bold) TrueTypeMetricsSource(fonts, VanillaMetricsSource) else null
+        val metrics = if (!bold) TrueTypeMetricsSource(fonts, VanillaRunMetrics) else null
         return Chain(fonts, paths, metrics, fingerprint)
     }
 

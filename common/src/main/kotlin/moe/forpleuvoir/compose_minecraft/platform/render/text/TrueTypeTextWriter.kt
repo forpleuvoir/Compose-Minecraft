@@ -170,7 +170,7 @@ internal object TrueTypeTextWriter {
             if (renderFont == null) {
                 if (vanillaStart < 0) vanillaStart = penX
                 vanillaText.appendCodePoint(cp)
-                penX += metrics.charAdvance(cp)
+                penX += metrics.advance(cp)
                 continue
             }
             flushVanilla()
@@ -183,7 +183,7 @@ internal object TrueTypeTextWriter {
                 // 极端情况(字形超图集页):该字符交原版字形内联渲染
                 if (vanillaStart < 0) vanillaStart = penX
                 vanillaText.appendCodePoint(cp)
-                penX += metrics.charAdvance(cp)
+                penX += metrics.advance(cp)
                 continue
             }
 
@@ -205,7 +205,7 @@ internal object TrueTypeTextWriter {
                 )
             }
             // 推进笔位:advance + 字偶距(与布局前缀和严格一致)
-            penX += metrics.charAdvance(cp) + metrics.codepointKern(prevCp, cp)
+            penX += metrics.advance(cp) + metrics.kern(prevCp, cp)
             prevCp = cp
         }
 
