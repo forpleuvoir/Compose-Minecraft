@@ -129,6 +129,9 @@ internal class TextLayoutState {
         fontFamilyResolver: FontFamily.Resolver,
         constraints: Constraints,
     ): TextLayoutResult {
+        // 缩放契约说明:约束以「缩放后空间」传入,段内(MinecraftParagraph.layoutText)
+        // 自行按 1/scale 折算 —— 此处保持原样透传,**不得**在外层重复折算
+        // (曾因外层多除一次导致字段可用宽度减半,实测反馈 2026-08)
         val layoutResult =
             layoutCache.layoutWithNewMeasureInputs(
                 density = density,

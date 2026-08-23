@@ -38,9 +38,22 @@ internal object TrueTypeTextWriter {
     /** 位图最小光栅化系数:避免亚像素字号光栅化出糊图(极端缩小场景仍可读) */
     internal const val MIN_RASTER_SCALE = 0.25f
 
+    /** 拒绝原因观测([TextRenderConfig.debugTextBounds] 开启时打印) */
+    private fun reject(cmd: DrawTextCommand, reason: String): Boolean {
+        if (TextRenderConfig.debugTextBounds) {
+            println("[TT] reject '" + cmd.text.take(10) + "' font=" + cmd.style.fontOriginal + " reason=" + reason)
+        }
+        return false
+    }
+
     /**
      * 尝试用自研管线绘制一条文本命令。返回 true 表示已提交;
      * false 表示拒绝(调用方回退 `sink.addText` 原版渲染)。
+     *
+     * 架构边界(P3 定案):本管线**只服务矢量字体**(minecraft:default 的 run,
+     * 经系统字体链)。像素字体(compose_minecraft:fusion_pixel)归原版 FreeType
+     * 渲染器 —— 由 `font/fusion_pixel.json`(size=12)声明,经 GuiStateBackend
+     * 的分段回退路径渲染;度量由 [PixelFont] 提供。
      */
     fun trySubmit(
         cmd: DrawTextCommand,
@@ -49,11 +62,11 @@ internal object TrueTypeTextWriter {
     ): Boolean {
         // 常规回退链(首 = 主字体,供布局度量与混淆池);粗体 run 先走粗体链
         val regularChain = TrueTypeFontManager.regularChain()
-        if (regularChain.isEmpty()) return false
-        // 原生排版:布局/推进度量 = 字体自身度量(与字形墨迹同源,间距由字体设计保证)
-        val metrics = TrueTypeFontManager.metricsOrNull() ?: return false
+        if (regularChain.isEmpty()) return reject(cmd, "chain empty")
+        // 原生排版:布局/推进度量 = 字体自身度量(与布局层 `cumFloatWidths` 严格同源)
+        val metrics = TrueTypeFontManager.metricsOrNull() ?: return reject(cmd, "metrics unavailable")
         if (!supports(cmd)) {
-            return false
+            return reject(cmd, "unsupported font")
         }
         val style = cmd.style
 
@@ -108,19 +121,25 @@ internal object TrueTypeTextWriter {
         // 其余字符保持 TTF —— 单个缺字不再拖垮整个 run
         var vanillaStart = -1f
         val vanillaText = StringBuilder()
+        // P3 基线补偿:原版把字形基线硬编码在 行顶+7(GlyphBitmap.getTop),
+        // 像素/系统字体布局基线更高 —— 回退段提交 y 需补差值,否则上移
+        val vanillaBaselineY = cmd.y + (metrics.baselineFromTop - 7f)
         fun flushVanilla() {
             if (vanillaStart < 0) return
             val seg = vanillaText.toString()
             // 布局已按「缺字回退原版度量」为该段预留了精确宽度(混合度量源),
             // 原版字形按自身宽度渲染恰好填满 —— 无需任何缩放适配
             val segColor = colorAt(vanillaStart + (penX - vanillaStart) / 2f, cmd.y + metrics.lineHeight / 2f)
+            // P3 像素化:回退段强制 minecraft:default 字形 —— 命名资源字体无跨字体
+            // 回退,fusion_pixel 字体集对缺字码点只会给出方框
+            val segStyle = style.withFont(net.minecraft.network.chat.FontDescription.DEFAULT)
             sink.addText(
                 GuiTextRenderState(
                     mc.font,
-                    Language.getInstance().getVisualOrder(style.toComponent(seg)),
+                    Language.getInstance().getVisualOrder(segStyle.toComponent(seg)),
                     cmd.matrix.toMatrix3x2f(),
                     vanillaStart.roundToInt(),
-                    cmd.y.roundToInt(),
+                    vanillaBaselineY.roundToInt(),
                     segColor,
                     0,
                     false,
@@ -239,7 +258,8 @@ internal object TrueTypeTextWriter {
         // 注意:MC Style.getFont() 在未设置时返回 FontDescription.DEFAULT(非 null),
         // 判「是否显式指定字体」必须用平台的 fontOriginal 原始可空扩展
         val font = style.fontOriginal ?: return true
-        // minecraft:default 由本管线接管;其余显式资源字体回退原版
+        // minecraft:default 由本管线接管(矢量语义);其余显式资源字体回退原版 ——
+        // 含 compose_minecraft:fusion_pixel(P3 定案:像素字体归原版 FreeType 渲染)
         return font == net.minecraft.network.chat.FontDescription.DEFAULT
     }
 

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
@@ -25,12 +26,14 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalCharFilter
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.MinecraftFonts
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.input.TextFieldValue
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
@@ -70,6 +73,26 @@ fun TextInputDevScene() {
                 onClick = { if (!ComposeScreen.closeCurrent()) ComposeScreen.open { MinecraftDevSceneContent() } },
             )
 
+            DevMenuButton(
+                title = "等宽测试界面",
+                subtitle = "Back to menu",
+                onClick = {
+                    ComposeScreen.open {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            BasicTextField(
+                                state = rememberTextFieldState(),
+                                modifier =
+                                    Modifier
+                                        .padding(top = 4.dp)
+                                        .size(360.dp, 640.dp)
+                                        .background(Color(0xFF263238)),
+                                textStyle = Style.EMPTY.withColor(Color.White).withFont(MinecraftFonts.FusionPixelMono),
+                                cursorBrush = SolidColor(Color.White),
+                            )
+                        }
+                    }
+                },
+            )
             BasicText(
                 "文本输入测试",
                 style = Style.EMPTY.withColor(Color.White).withBold(true).toTextStyle(),
@@ -100,8 +123,8 @@ fun TextInputDevScene() {
                         state = textFieldState,
                         modifier =
                             Modifier
-                                .width(220.dp)
-                                .height(160.dp)
+                                .width(360.dp)
+                                .height(540.dp)
                                 .focusRequester(focusRequester)
                                 .background(Color(0xFF263238))
                                 .padding(2.dp),
@@ -109,6 +132,19 @@ fun TextInputDevScene() {
                         cursorBrush = SolidColor(Color.White),
                         lineLimits = TextFieldLineLimits.Default,
                     )
+
+                val monoFieldState = rememberTextFieldState("x=128 y=64 z=-256 | if (a == b) { return 0 }")
+                Spacer(modifier = Modifier.width(8.dp))
+                BasicTextField(
+                    state = monoFieldState,
+                    modifier =
+                        Modifier
+                            .padding(top = 4.dp)
+                            .size(360.dp, 640.dp)
+                            .background(Color(0xFF263238)),
+                    textStyle = Style.EMPTY.withColor(Color.White).withFont(MinecraftFonts.FusionPixelMono),
+                    cursorBrush = SolidColor(Color.White),
+                )
                 Spacer(modifier = Modifier.width(8.dp))
                 if (show)
                     BasicText(

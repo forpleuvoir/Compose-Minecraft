@@ -1,0 +1,10 @@
+{
+  "providers": [
+    {
+      "type": "ttf",
+      "file": "compose_minecraft:fusion-pixel-12px-proportional-zh_hans.ttf",
+      "size": 12,
+      "oversample": 1
+    }
+  ]
+}

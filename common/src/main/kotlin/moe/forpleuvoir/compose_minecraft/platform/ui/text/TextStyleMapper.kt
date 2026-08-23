@@ -16,7 +16,6 @@
 
 package moe.forpleuvoir.compose_minecraft.platform.ui.text
 
-import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -50,8 +49,8 @@ import net.minecraft.network.chat.TextColor
  * 映射规则:
  * - color → MC `TextColor`(只取 RGB,alpha 分量走渲染 alpha);
  * - alpha → 独立渲染 alpha(与图层 alpha 相乘);
- * - fontSize(sp)→ 缩放:value × density × fontScale / 9f(公式同
- *   `TextUnit.toTextScale`,18sp = 2x);Unspecified → 平台默认 18f;
+ * - fontSize(sp)→ 缩放:value × density × fontScale / fontScaleBasePx(双模式基准,
+ *   见 [TextRenderConfig.fontScaleBasePx]);Unspecified → 平台默认;
  * - fontWeight ≥ 600 → bold(MC 只有布尔);
  * - fontStyle == Italic → italic;
  * - textDecoration 含 Underline/LineThrough → underlined/strikethrough;
@@ -70,14 +69,9 @@ data class PlatformTextData(
     val ignored: List<String>,
 )
 
-/** 平台默认字号(sp):与 [androidx.compose.foundation.text.BasicText] 默认一致(18sp = 2x)。 */
-// 默认字号动态跟随原版行高(行高 ×2),兼容修改 Font.lineHeight 的模组
+/** 平台默认字号(sp):双模式统一([TextRenderConfig.effectiveDefaultFontSizeSp])。 */
 val MC_DEFAULT_FONT_SIZE_SP: Float
-    get() = if (TextRenderConfig.enabled) {
-        TextRenderConfig.ttfDefaultFontSizeSp
-    } else {
-        mc.font.lineHeight * TextRenderConfig.defaultFontSizeLineMultiple
-    }
+    get() = TextRenderConfig.effectiveDefaultFontSizeSp
 
 /**
  * [TextStyle] → [PlatformTextData]。仅在组合期调用(density 来自 [androidx.compose.ui.platform.LocalDensity])。
@@ -146,7 +140,8 @@ fun TextStyle.toPlatformData(density: Density): PlatformTextData {
         } else {
             span.fontSize.value
         }
-    val scale = fontSizeSp * density.density * density.fontScale / 9f
+    // 字号缩放基准 = 双模式统一(像素 em 12 / stb 模式原版行高 9)
+    val scale = fontSizeSp * density.density * density.fontScale / TextRenderConfig.fontScaleBasePx
 
     return PlatformTextData(
         mcStyle = mcStyle,

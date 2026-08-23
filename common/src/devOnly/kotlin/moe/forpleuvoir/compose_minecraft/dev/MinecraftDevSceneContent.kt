@@ -221,6 +221,12 @@ fun MinecraftDevSceneContent() {
                 subtitle = "自研 stb_truetype 管线 vs 原版位图:开关切换、字号阶梯、换行与输入框度量同源",
                 onClick = { ComposeScreen.open { TrueTypeTextDevScene() } },
             )
+
+            DevMenuButton(
+                title = "字体缺字回退测试 (P3 像素化)",
+                subtitle = "Fusion Pixel 覆盖内像素字形;阿拉伯文/泰文/Emoji 等未覆盖文字退回原版字形,附 default 对照组",
+                onClick = { ComposeScreen.open { FontFallbackDevScene() } },
+            )
         }
     }
 }

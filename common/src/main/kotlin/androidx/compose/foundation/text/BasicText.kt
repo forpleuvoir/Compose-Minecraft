@@ -63,8 +63,9 @@ import androidx.compose.ui.unit.sp
 import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalTextRenderBackend
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFont
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.resolveDefaultFont
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.resolveDefaultFontSize
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
-import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFontSize
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withDefaultFont
 import androidx.compose.ui.unit.IntOffset
@@ -156,17 +157,14 @@ fun BasicText(
     // 平台适配点(T.30):style 可空 —— 未显式传 style 用 LocalDefaultTextStyle 兜底;
     // 未显式指定字体(platformStyle.font)补 LocalDefaultFont。
     val defaultTextStyle = LocalDefaultTextStyle.current
-    val defaultFont = LocalDefaultFont.current
-    // 后端感知默认字号:TTF 渲染器墨迹占比高,默认 16sp 与原版位图 18sp 观感对齐
-    val defaultFontSize = if (TextRenderConfig.enabled) {
-        TextRenderConfig.ttfDefaultFontSizeSp.sp
-    } else {
-        LocalDefaultFontSize.current
-    }
+    val defaultFont = resolveDefaultFont()
+    // 默认字号 = 双模式统一解析(P3 像素化:经 resolveDefaultFontSize,
+    // 原「TTF 16sp / 原版 18sp」后端分支随全局默认字体切换为 Fusion Pixel 而移除)
+    val defaultFontSize = resolveDefaultFontSize()
     val effectiveStyle =
         remember(style, defaultTextStyle, defaultFont, defaultFontSize) {
             val withFont = (style ?: defaultTextStyle).withDefaultFont(defaultFont)
-            // 平台适配点(T.32):fontSize 未显式指定时补 LocalDefaultFontSize(显式优先)
+            // 平台适配点(T.32):fontSize 未显式指定时补解析后的默认字号(显式 provide 优先)
             if (withFont.fontSize.isUnspecified) withFont.merge(TextStyle(fontSize = defaultFontSize)) else withFont
         }
     val platformData = remember(effectiveStyle, density) { effectiveStyle.toPlatformData(density) }
@@ -237,7 +235,7 @@ fun BasicText(
  * @param minLines 最小可见行数。
  * @param color 覆盖文本颜色的颜色生产者(覆盖所有段)。
  * @param fontSize 平台适配点(T.19):字体大小,经渲染矩阵缩放实现(布局尺寸与字形
- *   矩阵同步缩放);仅支持 sp 单位。基准行高 [MC_TEXT_SCALE_BASE_PX] = 9px(T.26),
+ *   矩阵同步缩放);仅支持 sp 单位。缩放基准见 [TextRenderConfig.fontScaleBasePx](T.26 → P3 双模式),
  *   **18sp = 2x 平台基准字号**(整数放大),9sp = 1x 原生像素;
  *   默认 18sp 与 [androidx.compose.foundation.text.input.BasicTextField] 默认一致。
  */
@@ -262,7 +260,7 @@ fun BasicText(
     val scale = fontSize.toTextScale(LocalDensity.current)
 
     // 平台适配点(T.30):默认字体 —— defaultStyle 未指定 font 时补 LocalDefaultFont
-    val defaultFont = LocalDefaultFont.current
+    val defaultFont = resolveDefaultFont()
     val effectiveDefaultStyle =
         remember(defaultStyle, defaultFont) {
             if (defaultStyle.font == null) defaultStyle.withFont(defaultFont) else defaultStyle
@@ -370,17 +368,14 @@ fun BasicText(
     // 平台适配点(T.30):style 可空 —— 未显式传 style 用 LocalDefaultTextStyle 兜底;
     // 未显式指定字体(platformStyle.font)补 LocalDefaultFont。
     val defaultTextStyle = LocalDefaultTextStyle.current
-    val defaultFont = LocalDefaultFont.current
-    // 后端感知默认字号:TTF 渲染器墨迹占比高,默认 16sp 与原版位图 18sp 观感对齐
-    val defaultFontSize = if (TextRenderConfig.enabled) {
-        TextRenderConfig.ttfDefaultFontSizeSp.sp
-    } else {
-        LocalDefaultFontSize.current
-    }
+    val defaultFont = resolveDefaultFont()
+    // 默认字号 = 双模式统一解析(P3 像素化:经 resolveDefaultFontSize,
+    // 原「TTF 16sp / 原版 18sp」后端分支随全局默认字体切换为 Fusion Pixel 而移除)
+    val defaultFontSize = resolveDefaultFontSize()
     val effectiveStyle =
         remember(style, defaultTextStyle, defaultFont, defaultFontSize) {
             val withFont = (style ?: defaultTextStyle).withDefaultFont(defaultFont)
-            // 平台适配点(T.32):fontSize 未显式指定时补 LocalDefaultFontSize(显式优先)
+            // 平台适配点(T.32):fontSize 未显式指定时补解析后的默认字号(显式 provide 优先)
             if (withFont.fontSize.isUnspecified) withFont.merge(TextStyle(fontSize = defaultFontSize)) else withFont
         }
     val platformData = remember(effectiveStyle, density) { effectiveStyle.toPlatformData(density) }
@@ -954,13 +949,12 @@ internal fun BackgroundTextMeasurement(
  * 9sp → 1x(行高 9px 原生)、18sp → 2x(行高 18px)、36sp → 4x(行高 36px)。
  */
 // 基准行高动态跟随原版 Font.lineHeight(兼容修改行高的模组)
-internal val MC_TEXT_SCALE_BASE_PX: Float get() = mc.font.lineHeight.toFloat()
 
 /**
  * 平台适配点(T.19):TextUnit(sp) → 文本渲染缩放。
  *
  * MC 无原生字号系统,文字大小经渲染矩阵缩放实现(T.10 的 scale 链路)。
- * 基准行高 [MC_TEXT_SCALE_BASE_PX] = MC 1x 行高 9px:**18sp = 2x = 18px 行高**
+ * 缩放基准 = [TextRenderConfig.fontScaleBasePx](像素模式 12px / stb 模式 9px)
  * (MC 平台基准字号;16sp ≈ 1.78x 非整数缩放、非自然字号,尽量避免);
  * 仅支持 sp 单位 —— em 需要基准字号链(TextStyle 已随平台移除),无法解析。
  */
@@ -969,6 +963,6 @@ internal fun TextUnit.toTextScale(density: Density): Float {
     require(type == TextUnitType.Sp) {
         "Platform (T.19): fontSize only supports sp units (MC has no native font size system, em cannot be resolved)"
     }
-    // sp → px(密度 1 下 18sp = 18px)→ 缩放 = px / MC 1x 行高(9px),18sp → 2x
-    return value * density.density * density.fontScale / MC_TEXT_SCALE_BASE_PX
+    // sp → px → 缩放 = px / 双模式基准(像素模式 12 / stb 模式 9)
+    return value * density.density * density.fontScale / TextRenderConfig.fontScaleBasePx
 }

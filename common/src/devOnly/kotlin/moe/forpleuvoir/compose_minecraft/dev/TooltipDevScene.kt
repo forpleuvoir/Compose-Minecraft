@@ -135,7 +135,7 @@ fun TooltipDevScene() {
                     val isHovered by interactionSource.collectIsHoveredAsState()
                     Box(
                         modifier = Modifier
-                            .height(44.dp)
+                            .padding(12.dp)
                             .background(if (isHovered) Color(0xFF2E7D32) else Color(0xFF37474F))
                             .hoverable(interactionSource)
                             .minecraftTooltip(TooltipLines.fromItem(ItemStack(Items.MELON)), guiScaleEnabled),
@@ -195,7 +195,7 @@ private fun TooltipSlot(
     LaunchedEffect(isHovered) { onHover(isHovered) }
     Box(
         modifier = Modifier
-            .size(92.dp, 44.dp)
+            .padding(12.dp)
             .background(if (hovered) Color(0xFF2E7D32) else Color(0xFF37474F))
             .hoverable(interactionSource),
         contentAlignment = Alignment.Center,

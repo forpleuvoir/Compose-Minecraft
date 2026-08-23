@@ -18,7 +18,7 @@ package androidx.compose.foundation.text.modifiers
 
 import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.text.DefaultMinLines
-import androidx.compose.foundation.text.MC_TEXT_SCALE_BASE_PX
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.text.ceilToIntPx
 import androidx.compose.ui.text.AnnotatedString
@@ -220,7 +220,7 @@ internal class MultiParagraphLayoutCache(
             val scale =
                 with(localAutoSize) {
                     with(fontSizeSearchScope) {
-                        getFontSize(finalConstraints, text).toPx() / MC_TEXT_SCALE_BASE_PX
+                        getFontSize(finalConstraints, text).toPx() / TextRenderConfig.fontScaleBasePx
                     }
                 }
             val multiParagraph = layoutText(finalConstraints, layoutDirection, scale)
@@ -489,7 +489,7 @@ internal class MultiParagraphLayoutCache(
             // 平台适配点(T.20/T.25):MC 无原生字号系统,字号经渲染 scale 驱动
             // (基准 = MC 1x 行高 9px,18sp → 2x = 18px 行高);用局部 intrinsics
             // 布局(不污染主布局缓存)
-            val scale = fontSize.toPx() / MC_TEXT_SCALE_BASE_PX
+            val scale = fontSize.toPx() / TextRenderConfig.fontScaleBasePx
             val localIntrinsics =
                 MultiParagraphIntrinsics(
                     annotatedString = text,

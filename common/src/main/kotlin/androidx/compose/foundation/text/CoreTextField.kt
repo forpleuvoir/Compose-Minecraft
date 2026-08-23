@@ -59,6 +59,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.MinecraftCanvas
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontOriginal
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.resolveDefaultFont
+import net.minecraft.network.chat.FontDescription
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.focus.FocusRequester
@@ -201,6 +205,15 @@ internal fun CoreTextField(
     /** 平台适配点(T.TT P2):子树级渲染后端定向 */
     textBackend: TextRenderBackend = TextRenderBackend.DEFAULT,
 ) {
+    // 平台适配点(P3 像素化):未显式指定字体的输入框文本跟随全局默认字体
+    // (像素模式 = fusion_pixel,经原版 FreeType 渲染;stb 模式 = minecraft:default,
+    // 由自研管线渲染)—— 否则 style 无 font 时被 stb 管线拦截,输入框永远走旧渲染
+    val textStyle = if (textStyle.fontOriginal == null) {
+        textStyle.withFont(resolveDefaultFont())
+    } else textStyle
+    if (TextRenderConfig.debugTextBounds) {
+        println("[TT-FIELD] resolved font=" + textStyle.fontOriginal)
+    }
     val focusRequester = remember { FocusRequester() }
     val legacyTextInputServiceAdapter = remember { createLegacyPlatformTextInputServiceAdapter() }
     val textInputService: TextInputService = remember {

@@ -18,6 +18,7 @@ import moe.forpleuvoir.compose_minecraft.platform.render.toMatrix3x2f
 import moe.forpleuvoir.compose_minecraft.platform.render.toScreenRectangle
 import moe.forpleuvoir.compose_minecraft.platform.render.util.BlendPipelines
 import moe.forpleuvoir.compose_minecraft.platform.render.util.MinecraftImageTextureCache
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontOriginal
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toComponent
 import net.minecraft.client.gui.render.TextureSetup
 import net.minecraft.client.renderer.RenderPipelines
@@ -25,6 +26,7 @@ import net.minecraft.client.renderer.state.gui.BlitRenderState
 import net.minecraft.client.renderer.state.gui.ColoredRectangleRenderState
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState
 import net.minecraft.locale.Language
+import net.minecraft.network.chat.FontDescription
 import org.joml.Matrix3x2f
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -240,9 +242,22 @@ internal class GuiStateBackend : GeometryBackend {
         // - DEFAULT:全局开关开启且字体就绪 → 自研 TrueType 管线
         //   (TrueTypeTextWriter 拒绝的 run —— 缺字/未支持样式/渐变 —— 逐 run 回退);
         // - 其余(开关关闭 / 字体不可用)→ 原版 sink.addText(D4,与现状一致)。
+        // P3 像素化路由不变量:像素模式(usePixelDefaultFont)下默认/fusion_pixel
+        // 的 run 必须由自研管线渲染(度量=PixelFont 同源),enabled 对其不生效;
+        // 非像素模式维持旧语义(enabled 关闭 → 全部原版)。
         val goingVanilla = cmd.backend == TextRenderBackend.VANILLA ||
-            !TextRenderConfig.enabled ||
+            (!TextRenderConfig.enabled && !TextRenderConfig.usePixelDefaultFont) ||
             !TrueTypeTextWriter.trySubmit(cmd, scissor?.toScreenRectangle(), sink)
+        // 文本路由观测([TextRenderConfig.debugTextBounds]):每个 run 的字体描述、
+        // 粗体与最终分流 —— 排查「粗体/回退/混排走错渲染器」类问题的第一手证据
+        if (TextRenderConfig.debugTextBounds) {
+            println(
+                "[TT] '" + cmd.text.take(10) + "' font=" + cmd.style.fontOriginal +
+                    " bold=" + cmd.style.isBold + " backend=" + cmd.backend +
+                    " usePixel=" + TextRenderConfig.usePixelDefaultFont +
+                    " -> " + if (goingVanilla) "VANILLA" else "STB"
+            )
+        }
         // T.TT 诊断:TTF 模式下的回退 run 打印(行盒调试开关兼作回退诊断)
         if (goingVanilla && TextRenderConfig.enabled && TextRenderConfig.debugTextBounds) {
             println("[TT-FALLBACK] '${cmd.text.take(16)}' backend=${cmd.backend} hasShader=${cmd.shader != null}")
@@ -257,7 +272,7 @@ internal class GuiStateBackend : GeometryBackend {
         if (cmd.shader != null) {
             splitGradientText(cmd, scissor, sink)
         } else {
-            sink.addText(text(cmd, scissor))
+            submitSegmentedVanillaText(cmd, scissor, sink)
         }
         if (TextRenderConfig.debugTextBounds) drawDebugTextBounds(cmd, scissor, sink)
     }
@@ -333,6 +348,9 @@ internal class GuiStateBackend : GeometryBackend {
         val font = mc.font
         val splitter = font.splitter
         val pose = cmd.matrix.toMatrix3x2f()
+        // P3 基线补偿:布局基线(像素字体自然行盒)− 原版硬编码锚点 7
+        val metricsSrc = activeMetricsSource()
+        val yBase = cmd.y + (metricsSrc.baselineFromTop - VANILLA_BASELINE_ANCHOR)
         var penX = 0f
         var i = 0
         val n = cmd.text.length
@@ -343,17 +361,19 @@ internal class GuiStateBackend : GeometryBackend {
             val advance = splitter.stringWidth(chText)
             // 采样点:字符中心(x)/ 当前行高中点(y);sampleGradient 已含命令 alpha
             val color = ColorEvaluator.sampleGradient(
-                ColorEvaluator.gradientTAt(cmd.x + penX + advance / 2f, cmd.y + activeMetricsSource().lineHeight / 2f, cmd.shader!!),
+                ColorEvaluator.gradientTAt(cmd.x + penX + advance / 2f, cmd.y + metricsSrc.lineHeight / 2f, cmd.shader!!),
                 cmd.shader,
                 cmd.alpha,
             )
+            // P3 像素化缺字回退:像素字体缺的字符换回 minecraft:default 字形
+            val segStyle = if (pixelFontCovers(cp)) cmd.style else cmd.style.withFont(FontDescription.DEFAULT)
             sink.addText(
                 GuiTextRenderState(
                     font,
-                    Language.getInstance().getVisualOrder(cmd.style.toComponent(chText)),
+                    Language.getInstance().getVisualOrder(segStyle.toComponent(chText)),
                     pose,
                     (cmd.x + penX).roundToInt(),
-                    cmd.y.roundToInt(),
+                    yBase.roundToInt(),
                     color,
                     0,
                     false,
@@ -364,6 +384,91 @@ internal class GuiStateBackend : GeometryBackend {
             penX += advance
             i += cc
         }
+    }
+
+    // ── P3 像素化缺字回退(命名资源字体无跨字体回退,提交层切段换字体)──────
+
+    /**
+     * 原版字形基线锚点:原版把所有字形基线硬编码在 `行顶 + 7`
+     * ([com.mojang.blaze3d.font.GlyphBitmap.getTop] = `7 - bearingTop`,
+     * 7 = 原版位图字体 ascent)。布局侧基线来自像素字体自然行盒
+     * (@pixelFontEmSp em ≈ 13px)—— 提交 y 必须补差值,否则整体上移 ≈6px
+     * (实测反馈:渲染位置往上偏移)。
+     */
+    private val VANILLA_BASELINE_ANCHOR = 7f
+
+    /** 像素字体码点覆盖缓存(true = fusion_pixel 有字形;false = 换原版字形) */
+    private val pixelCoverageCache = java.util.concurrent.ConcurrentHashMap<Int, Boolean>()
+
+    /**
+     * 像素字体是否覆盖该码点([PixelFont] 独立单例 stb 查询 —— 与原版 FreeType
+     * 渲染端同读一份 glyf 表,判定一致;缓存避免逐帧查询)。
+     */
+    private fun pixelFontCovers(codepoint: Int): Boolean =
+        pixelCoverageCache.computeIfAbsent(codepoint) { PixelFont.covers(it) }
+
+    /**
+     * 按码点覆盖切段提交原版渲染:fusion_pixel 覆盖的段保持其字体描述;
+     * 未覆盖段(阿拉伯文/emoji 等)字体换回 [FontDescription.DEFAULT] ——
+     * 由 minecraft:default 字形渲染,实现「Compose 内像素字体 + 缺字退回原版」。
+     * 段内 x 偏移用 [activeMetricsSource] 推进(与布局度量同源,含 kern)。
+     */
+    private fun submitSegmentedVanillaText(
+        cmd: DrawTextCommand,
+        scissor: Rect?,
+        sink: GuiCommandSink,
+    ) {
+        val alphaByte = (cmd.alpha * 255f).roundToInt().coerceIn(0, 255)
+        val baseColor = cmd.style.color?.value?.or(0xFF000000.toInt()) ?: 0xFFFFFFFF.toInt()
+        val argb = (baseColor and 0x00FFFFFF) or (alphaByte shl 24)
+        val metricsSrc = activeMetricsSource()
+        // P3 基线补偿:布局基线 − 原版硬编码锚点(见 VANILLA_BASELINE_ANCHOR 注释)
+        val yBase = cmd.y + (metricsSrc.baselineFromTop - VANILLA_BASELINE_ANCHOR)
+        val pose = cmd.matrix.toMatrix3x2f()
+        val scr = scissor?.toScreenRectangle()
+
+        var segStart = 0
+        fun flush(endIdx: Int, startPen: Float, covered: Boolean) {
+            if (endIdx <= segStart) return
+            val segText = cmd.text.substring(segStart, endIdx)
+            val segStyle = if (covered) cmd.style else cmd.style.withFont(FontDescription.DEFAULT)
+            sink.addText(
+                GuiTextRenderState(
+                    mc.font,
+                    Language.getInstance().getVisualOrder(segStyle.toComponent(segText)),
+                    pose,
+                    (cmd.x + startPen).roundToInt(),
+                    yBase.roundToInt(),
+                    argb,
+                    0,
+                    false,
+                    false,
+                    scr,
+                )
+            )
+        }
+
+        var i = 0
+        var pen = 0f
+        var segStartPen = 0f
+        var prev = -1
+        var cur: Boolean? = null
+        val n = cmd.text.length
+        while (i < n) {
+            val cp = cmd.text.codePointAt(i)
+            val cc = Character.charCount(cp)
+            val covered = pixelFontCovers(cp)
+            if (cur != null && covered != cur) {
+                flush(i, segStartPen, cur)
+                segStart = i
+                segStartPen = pen
+            }
+            cur = covered
+            pen += metricsSrc.charAdvance(cp) + metricsSrc.codepointKern(prev, cp)
+            prev = cp
+            i += cc
+        }
+        flush(n, segStartPen, cur ?: true)
     }
 
     override fun drawGradientRect(cmd: DrawGradientRectCommand) {
@@ -626,53 +731,12 @@ internal class GuiStateBackend : GeometryBackend {
     }
 
     /**
-     * 把一条文本绘制命令转成 [GuiTextRenderState]。
-     *
-     * - 文本:命令携带的 MC 样式快照([Style])→ 构造带完整 [Style] 的 [Component],
-     *   颜色/加粗/斜体/下划线/删除线/乱码/资源字体全部生效(T.1);
-     * - 颜色:样式 color(TextColor.value 为 0xRRGGBB,补 alpha 为不透明;无颜色时用 MC 默认白);
-     * - 背景/阴影:对齐 MC 原生(backgroundColor=0 无背景、dropShadow=false),
-     *   不再由样式携带(原 McTextStyle 的 background/shadow 字段已随包装移除);
-     * - 坐标:命令记录的**行顶** y(MC 的 y 即行顶:下划线画在 y+9、背景为 y..y+9,
-     *   见 Font.PreparedTextBuilder.accept),不可再加基线偏移;
-     * - pose:命令矩阵(字形顶点经 pose 变换;JOML Matrix3x2f 为列主序构造);
-     * - scissor:命令裁剪矩形(记录时已换算为屏幕空间,MC scissor 即屏幕坐标)。
-     */
-    private fun text(command: DrawTextCommand, scissor: Rect?): GuiTextRenderState {
-        val font = mc.font
-        val alphaByte = (command.alpha * 255f).roundToInt().coerceIn(0, 255)
-        val color = if (command.shader != null) {
-            // 渐变文本:以文本位置中心采样渐变颜色
-            val cx = command.x + command.text.length * 4f // 粗略居中
-            val cy = command.y + 4f
-            val t = ColorEvaluator.gradientTAt(cx, cy, command.shader)
-            val argb = ColorEvaluator.sampleGradient(t, command.shader, command.alpha)
-            argb
-        } else {
-            val baseColor = command.style.color?.value?.or(0xFF000000.toInt()) ?: 0xFFFFFFFF.toInt()
-            (baseColor and 0x00FFFFFF) or (alphaByte shl 24)
-        }
-        return GuiTextRenderState(
-            font,
-            Language.getInstance().getVisualOrder(command.style.toComponent(command.text)),
-            command.matrix.toMatrix3x2f(),
-            command.x.roundToInt(),
-            command.y.roundToInt(),
-            color,
-            0, // backgroundColor:对齐 MC 原生,无背景
-            false, // dropShadow:对齐 MC 原生,不画阴影
-            false, // includeEmpty
-            scissor?.toScreenRectangle(),
-        )
-    }
-
-    /**
      * 把一条矩形绘制转成 [BlitRenderState]。
      *
      * - pose:命令记录时的矩阵快照(列主序 4x4)→ JOML Matrix3x2f;
      * - 坐标:场景 px(密度 1)= GUI 单位,四舍五入为 int;
      * - 颜色:Compose Color → 0xAARRGGBB(alpha 叠加 Paint.alpha);
-     * - scissor:命令记录时的裁剪矩形(记录时已换算为屏幕空间)。
+     * - scissor:命令记录时的裁剪矩形(记录时已换算为屏幕空间,MC scissor 即屏幕坐标)。
      */
     private fun blit(
         matrix: FloatArray,

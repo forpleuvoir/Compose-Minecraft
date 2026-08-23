@@ -66,6 +66,10 @@ internal object TrueTypeFontManager {
     private fun boldFingerprint(): Int =
         java.util.Objects.hashCode(TextRenderConfig.boldFontSources)
 
+    // P3 修正:内置 Fusion Pixel 不再注入本链 —— 本链是自研 stb 渲染器的
+    // 「系统字体链」(渲染 minecraft:default 的 run);像素字体的度量/覆盖
+    // 判定由独立的 [PixelFont] 单例承担,二者职责分离,互不污染。
+
     private fun ensureRegular(): Chain? {
         val fp = regularFingerprint()
         regular?.let { if (it.configFingerprint == fp) return it }
@@ -115,17 +119,33 @@ internal object TrueTypeFontManager {
         val paths = ArrayList<String>(sources.size)
         sources.forEach { source ->
             try {
-                val file: Path = Paths.get(source.path)
-                if (!Files.isRegularFile(file)) {
-                    LOGGER.warn("[ComposeMinecraft] font source not found, skipped: {}", source.path)
-                    return@forEach
+                // 每字体 em:像素字体用其设计网格(designSizePx),普通字体跟随全局基准
+                val baseSizePx = source.designSizePx ?: TextRenderConfig.baseFontSizePx
+                val font = if (source.resourcePath != null) {
+                    val stream = TrueTypeFontManager::class.java.getResourceAsStream(source.resourcePath)
+                    if (stream == null) {
+                        LOGGER.warn("[ComposeMinecraft] builtin font resource not found, skipped: {}", source.resourcePath)
+                        return@forEach
+                    }
+                    val bytes = stream.use { it.readBytes() }
+                    val buffer = java.nio.ByteBuffer.allocateDirect(bytes.size).put(bytes).flip() as java.nio.ByteBuffer
+                    TrueTypeFont.load(buffer, baseSizePx)
+                } else {
+                    val file: Path = Paths.get(source.path)
+                    if (!Files.isRegularFile(file)) {
+                        LOGGER.warn("[ComposeMinecraft] font source not found, skipped: {}", source.path)
+                        return@forEach
+                    }
+                    TrueTypeFont.load(TrueTypeFont.readFile(file), baseSizePx)
                 }
-                val font = TrueTypeFont.load(TrueTypeFont.readFile(file), TextRenderConfig.baseFontSizePx)
                 fonts += font
-                paths += source.path
-                LOGGER.info("[ComposeMinecraft] font chain member[{}]: {}", fonts.size - 1, source.path)
+                paths += source.resourcePath ?: source.path
+                LOGGER.info(
+                    "[ComposeMinecraft] font chain member[{}]: {} (em={}px)",
+                    fonts.size - 1, paths.last(), baseSizePx,
+                )
             } catch (t: Throwable) {
-                LOGGER.error("[ComposeMinecraft] failed to load font source {}", source.path, t)
+                LOGGER.error("[ComposeMinecraft] failed to load font source {}", source.resourcePath ?: source.path, t)
             }
         }
         if (fonts.isEmpty()) return null

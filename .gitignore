@@ -10,3 +10,5 @@ out/
 .reasonix
 .dsh-vision-router/
 reasonix.toml
+# 字体下载缓存
+downloads/

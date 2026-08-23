@@ -107,12 +107,21 @@ internal class TrueTypeMetricsSource(
 }
 
 /**
- * 当前生效的度量来源(布局构造时查询快照):
- * 开关开启且字体加载成功 → TTF 原生度量;否则原版(逐字节现状)。
+ * 当前生效的度量来源(布局构造时查询快照)。
+ *
+ * P3 像素化双模式:
+ * - [TextRenderConfig.usePixelDefaultFont](默认):像素默认字体模式 →
+ *   [PixelFont.metricsSource](覆盖码点 = 像素 advance,缺字退原版度量;
+ *   行高/基线 = 像素自然行盒)—— 与原版 FreeType 渲染端同源;
+ * - 否则(stb 系统字体模式):[enabled] 开启且链就绪 → 链度量;否则原版。
  */
-internal fun activeMetricsSource(): MetricsSource =
-    if (TextRenderConfig.enabled) {
+internal fun activeMetricsSource(): MetricsSource {
+    if (TextRenderConfig.usePixelDefaultFont) {
+        PixelFont.metricsSource?.let { return it }
+    }
+    return if (TextRenderConfig.enabled) {
         TrueTypeFontManager.metricsOrNull() ?: VanillaMetricsSource
     } else {
         VanillaMetricsSource
     }
+}

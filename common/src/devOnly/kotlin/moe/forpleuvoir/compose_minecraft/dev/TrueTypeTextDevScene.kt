@@ -16,6 +16,7 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalTextRenderBackend
 import androidx.compose.runtime.getValue
@@ -49,6 +50,14 @@ import net.minecraft.network.chat.Style
  */
 @Composable
 fun TrueTypeTextDevScene() {
+    // 本屏 = 自研 stb 渲染器对照(系统字体链):进入时切到 stb 模式,
+    // 离开时恢复进入前的值(捕获与置位收拢在同一 DisposableEffect,避免
+    // 组合期分步写入的时序隐患)
+    DisposableEffect(Unit) {
+        val previous = TextRenderConfig.usePixelDefaultFont
+        TextRenderConfig.usePixelDefaultFont = false
+        onDispose { TextRenderConfig.usePixelDefaultFont = previous }
+    }
     // 首次组合注册 dev 字体源(幂等)
     remember {
         val devFont = "C:\\Windows\\Fonts\\msyh.ttc"

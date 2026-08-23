@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.MinecraftCanvas
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shader
 import androidx.compose.ui.graphics.Shadow
@@ -412,7 +413,7 @@ internal class MinecraftParagraphIntrinsics(
             // 段字号缩放公式与 foundation toTextScale 一致(sp × density × fontScale / MC 基准行高 9px),
             // 再除以基础缩放得相对系数
             val r = seg.fontSizeSp
-                ?.let { sp -> (sp * density.density * density.fontScale / 9f) / scale }
+                ?.let { sp -> (sp * density.density * density.fontScale / TextRenderConfig.fontScaleBasePx) / scale }
                 ?: 1f
             val end = minOf(offset + seg.text.length, arr.size)
             for (j in offset until end) arr[j] = r

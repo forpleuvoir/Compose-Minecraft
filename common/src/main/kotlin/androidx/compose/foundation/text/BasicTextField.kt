@@ -33,7 +33,10 @@ import androidx.compose.foundation.text.contextmenu.modifier.ToolbarRequesterImp
 import androidx.compose.foundation.text.handwriting.stylusHandwriting
 import androidx.compose.foundation.text.input.InputTransformation
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalTextRenderBackend
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontOriginal
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.resolveDefaultFont
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
 import androidx.compose.foundation.text.input.KeyboardActionHandler
 import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldDecorator
@@ -202,9 +205,9 @@ fun BasicTextField(
     outputTransformation: OutputTransformation? = null,
     decorator: TextFieldDecorator? = null,
     scrollState: ScrollState = rememberScrollState(),
-    // 平台适配点(T.26):输入框文本字号(sp 驱动渲染缩放;默认 18sp = 2x,MC 平台
-    // 基准字号 —— 9sp=1x 原生行高过小,16sp≈1.78x 非整数缩放糊,见 BasicText.toTextScale)
-    fontSize: TextUnit = 18.sp,
+    // 平台适配点(T.26 → P3 像素化):输入框文本字号默认 = 双模式统一基准
+    // (像素模式 24sp / stb 模式 18sp,见 TextRenderConfig.effectiveDefaultFontSizeSp)
+    fontSize: TextUnit = TextRenderConfig.effectiveDefaultFontSizeSp.sp,
     // Last parameter must not be a function unless it's intended to be commonly used as a trailing
     // lambda.
 ) {
@@ -256,8 +259,8 @@ internal fun BasicTextField(
     decorator: TextFieldDecorator? = null,
     scrollState: ScrollState = rememberScrollState(),
     isPassword: Boolean = false,
-    // 平台适配点(T.26):输入框文本字号(sp 驱动渲染缩放;默认 18sp = 2x 平台基准字号)
-    fontSize: TextUnit = 18.sp,
+    // 平台适配点(T.26 → P3 像素化):输入框文本字号默认 = 双模式统一基准
+    fontSize: TextUnit = TextRenderConfig.effectiveDefaultFontSizeSp.sp,
     // Last parameter must not be a function unless it's intended to be commonly used as a trailing
     // lambda.
 ) {
@@ -299,6 +302,13 @@ internal fun BasicTextField(
     // Invalidate textLayoutState if TextFieldState itself has changed, since TextLayoutState
     // would be carrying an invalid TextFieldState in its nonMeasureInputs.
     val textLayoutState = remember(transformedState) { TextLayoutState() }
+
+    // 平台适配点(P3 像素化):state 重载**不经过 CoreTextField**,是输入框可见文本
+    // 的独立绘制路径(TextFieldTextLayoutModifier)—— 必须在此盖章默认字体,
+    // 否则无 font 的样式会被自研管线拦截、渲染成系统默认字形(实测反馈)
+    val textStyle = if (textStyle.fontOriginal == null) {
+        textStyle.withFont(resolveDefaultFont())
+    } else textStyle
 
     // InputTransformation.keyboardOptions might be backed by Snapshot state.
     // Read in a restartable composable scope to make sure the resolved value is always up-to-date.
