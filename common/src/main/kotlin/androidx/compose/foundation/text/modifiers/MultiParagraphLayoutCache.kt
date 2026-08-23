@@ -19,6 +19,7 @@ package androidx.compose.foundation.text.modifiers
 import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.text.DefaultMinLines
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontSizeToScale
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.text.ceilToIntPx
 import androidx.compose.ui.text.AnnotatedString
@@ -215,13 +216,17 @@ internal class MultiParagraphLayoutCache(
         }
         if (autoSize != null) {
             // 平台适配点(T.20/T.25):TextAutoSize 二分搜索最大适配字号(sp → 渲染 scale,
-            // 基准 = MC 1x 行高 9px,18sp → 2x = 18px 行高),用搜索得到的字号重新布局
+            // 唯一换算入口 fontSizeToScale),用搜索得到的字号重新布局
             val localAutoSize = autoSize!!
             val scale =
-                with(localAutoSize) {
-                    with(fontSizeSearchScope) {
-                        getFontSize(finalConstraints, text).toPx() / TextRenderConfig.fontScaleBasePx
-                    }
+                with(density!!) {
+                    fontSizeToScale(
+                        with(localAutoSize) {
+                            with(fontSizeSearchScope) {
+                                getFontSize(finalConstraints, text).value
+                            }
+                        },
+                    )
                 }
             val multiParagraph = layoutText(finalConstraints, layoutDirection, scale)
             layoutCache = textLayoutResult(layoutDirection, finalConstraints, multiParagraph)
@@ -487,9 +492,8 @@ internal class MultiParagraphLayoutCache(
             fontSize: TextUnit,
         ): TextLayoutResult {
             // 平台适配点(T.20/T.25):MC 无原生字号系统,字号经渲染 scale 驱动
-            // (基准 = MC 1x 行高 9px,18sp → 2x = 18px 行高);用局部 intrinsics
-            // 布局(不污染主布局缓存)
-            val scale = fontSize.toPx() / TextRenderConfig.fontScaleBasePx
+            // (唯一换算入口 fontSizeToScale);用局部 intrinsics 布局(不污染主布局缓存)
+            val scale = fontSizeToScale(fontSize.value)
             val localIntrinsics =
                 MultiParagraphIntrinsics(
                     annotatedString = text,

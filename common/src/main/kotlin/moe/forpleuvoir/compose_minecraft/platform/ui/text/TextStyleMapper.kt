@@ -74,6 +74,17 @@ val MC_DEFAULT_FONT_SIZE_SP: Float
     get() = TextRenderConfig.effectiveDefaultFontSizeSp
 
 /**
+ * 字号 → 渲染缩放**唯一换算入口**(P2-B1 公式合一,行为不变):
+ * `scale = sp × density × fontScale ÷ fontScaleBasePx`。
+ *
+ * 总设计 A4/I5:尺寸空间统一后本函数将去除基准除法(布局直出最终像素 em),
+ * 届时仅此处一处改动 —— 全部调用点(TextStyleMapper/toTextScale/autoSize×2)
+ * 已收敛至此,禁止再出现第二套公式(census-A 的教训)。
+ */
+internal fun Density.fontSizeToScale(sp: Float): Float =
+    sp * density * fontScale / TextRenderConfig.fontScaleBasePx
+
+/**
  * [TextStyle] → [PlatformTextData]。仅在组合期调用(density 来自 [androidx.compose.ui.platform.LocalDensity])。
  */
 fun TextStyle.toPlatformData(density: Density): PlatformTextData {
@@ -140,8 +151,8 @@ fun TextStyle.toPlatformData(density: Density): PlatformTextData {
         } else {
             span.fontSize.value
         }
-    // 字号缩放基准 = 双模式统一(像素 em 12 / stb 模式原版行高 9)
-    val scale = fontSizeSp * density.density * density.fontScale / TextRenderConfig.fontScaleBasePx
+    // 字号缩放 = 唯一换算入口(P2-B1 公式合一;像素 em 12 / stb 模式原版行高 9)
+    val scale = density.fontSizeToScale(fontSizeSp)
 
     return PlatformTextData(
         mcStyle = mcStyle,
