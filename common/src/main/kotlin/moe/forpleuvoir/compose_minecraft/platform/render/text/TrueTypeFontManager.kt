@@ -149,8 +149,11 @@ internal object TrueTypeFontManager {
             }
         }
         if (fonts.isEmpty()) return null
-        // 度量仅常规链需要(粗体链只用于绘制字形,不参与布局)
-        val metrics = if (!bold) TrueTypeMetricsSource(fonts, VanillaRunMetrics) else null
+        // 度量仅常规链需要(粗体链只用于绘制字形,不参与布局);
+        // 链网格 em = 首字体加载 em,混合源按目标 em 统一缩放(P2-B3)
+        val metrics = if (!bold) {
+            TrueTypeMetricsSource(fonts, VanillaRunMetrics, fonts.first().baseSizePx)
+        } else null
         return Chain(fonts, paths, metrics, fingerprint)
     }
 

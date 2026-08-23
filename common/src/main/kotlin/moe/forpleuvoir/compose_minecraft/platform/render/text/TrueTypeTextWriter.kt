@@ -59,15 +59,16 @@ internal object TrueTypeTextWriter {
         cmd: DrawTextCommand,
         scissor: ScreenRectangle?,
         sink: GuiCommandSink,
+        font: ResolvedFont? = null,
     ): Boolean {
-        // 常规回退链(首 = 主字体,供布局度量与混淆池);粗体 run 先走粗体链
+        // P2-B4(A3):字体绑定随命令到达;仅服务 STB_VECTOR 通道绑定(A2 单点分流)
+        val binding = font ?: FontResolver.resolveNative(cmd.style)
+        if (binding.font.channel != FontChannel.STB_VECTOR) return reject(cmd, "channel=${binding.font.channel}")
+        // 常规回退链(首 = 主字体,供字形查找与混淆池);粗体 run 先走粗体链
         val regularChain = TrueTypeFontManager.regularChain()
         if (regularChain.isEmpty()) return reject(cmd, "chain empty")
-        // 原生排版:布局/推进度量 = 字体自身度量(与布局层 `cumFloatWidths` 严格同源)
-        val metrics = TrueTypeFontManager.metricsOrNull() ?: return reject(cmd, "metrics unavailable")
-        if (!supports(cmd)) {
-            return reject(cmd, "unsupported font")
-        }
+        // 原生排版:布局/推进度量 = 绑定度量(与布局层 cumFloatWidths 严格同源,I2)
+        val metrics = binding.metrics
         val style = cmd.style
 
         // 基础色:与 GuiStateBackend.text 原版路径同一取色语义(样式色补 alpha);
@@ -82,9 +83,9 @@ internal object TrueTypeTextWriter {
 
         // 光栅化放大系数:姿态矩阵最大轴缩放(位图按屏幕实际像素密度生成)
         val rasterScale = max(MIN_RASTER_SCALE, matrixScale(cmd.matrix))
-        val sizePx = GlyphCache.quantize(regularChain[0].baseSizePx * rasterScale)
+        val sizePx = GlyphCache.quantize(binding.emPx * rasterScale)
 
-        val baselineY = cmd.y + metrics.baselineFromTop
+        val baselineY = cmd.y + binding.baselineFromTopPx
         var penX = cmd.x
 
         // 混淆:确定性随机槽位 + 字符序号种子(同槽内稳定,跨槽重掷);
@@ -123,29 +124,23 @@ internal object TrueTypeTextWriter {
         val vanillaText = StringBuilder()
         // P3 基线补偿:原版把字形基线硬编码在 行顶+7(GlyphBitmap.getTop),
         // 像素/系统字体布局基线更高 —— 回退段提交 y 需补差值,否则上移
-        val vanillaBaselineY = cmd.y + (metrics.baselineFromTop - 7f)
+        // 位图终端绑定(unifont,网格 9):回退段 pose 比与其布局宽度缩放严格一致
+        val bitmapTerminal = FontResolver.resolve(BuiltinFonts.uniFontTerminal.id, binding.emPx)
         fun flushVanilla() {
             if (vanillaStart < 0) return
             val seg = vanillaText.toString()
             // 布局已按「缺字回退原版度量」为该段预留了精确宽度(混合度量源),
             // 原版字形按自身宽度渲染恰好填满 —— 无需任何缩放适配
-            val segColor = colorAt(vanillaStart + (penX - vanillaStart) / 2f, cmd.y + metrics.lineHeight / 2f)
-            // P3 像素化:回退段强制 minecraft:default 字形 —— 命名资源字体无跨字体
-            // 回退,fusion_pixel 字体集对缺字码点只会给出方框
-            val segStyle = style.withFont(net.minecraft.network.chat.FontDescription.DEFAULT)
-            sink.addText(
-                GuiTextRenderState(
-                    mc.font,
-                    Language.getInstance().getVisualOrder(segStyle.toComponent(seg)),
-                    cmd.matrix.toMatrix3x2f(),
-                    vanillaStart.roundToInt(),
-                    vanillaBaselineY.roundToInt(),
-                    segColor,
-                    0,
-                    false,
-                    false,
-                    scissor,
-                )
+            val segColor = colorAt(vanillaStart + (penX - vanillaStart) / 2f, cmd.y + binding.lineHeightPx / 2f)
+            // 回退段交位图终端(minecraft:default 字形集);锚点补偿/pose 比
+            // 由 VanillaBitmapSubmitter 内部统一完成(I4 唯一实现)
+            VanillaBitmapSubmitter.submitFor(
+                cmd = cmd, sink = sink, scissor = scissor,
+                text = seg, font = bitmapTerminal,
+                fontId = net.minecraft.network.chat.FontDescription.DEFAULT,
+                xBaseline = vanillaStart,
+                yBaseline = cmd.y + binding.baselineFromTopPx,
+                colorArgb = segColor,
             )
             vanillaStart = -1f
             vanillaText.clear()
@@ -246,21 +241,6 @@ internal object TrueTypeTextWriter {
             QuadBatch.recycle(batch)
         }
         return true
-    }
-
-    /**
-     * 支持范围判定:颜色/alpha/装饰线(下划线/删除线)/混淆/渐变/粗体/斜体
-     * 均管线内实现;资源字体 run 无对应字形源,回退原版。
-     * internal:P3③ RasterBackend CPU 快照路径共用同一判定,避免语义漂移。
-     */
-    internal fun supports(cmd: DrawTextCommand): Boolean {
-        val style = cmd.style
-        // 注意:MC Style.getFont() 在未设置时返回 FontDescription.DEFAULT(非 null),
-        // 判「是否显式指定字体」必须用平台的 fontOriginal 原始可空扩展
-        val font = style.fontOriginal ?: return true
-        // minecraft:default 由本管线接管(矢量语义);其余显式资源字体回退原版 ——
-        // 含 compose_minecraft:fusion_pixel(P3 定案:像素字体归原版 FreeType 渲染)
-        return font == net.minecraft.network.chat.FontDescription.DEFAULT
     }
 
     /** 命令矩阵(列主序 4x4)2D 部分的最大轴缩放 */

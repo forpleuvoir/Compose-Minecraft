@@ -67,7 +67,7 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.text.resolveDefaultFont
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.resolveDefaultFontSize
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultTextStyle
-import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontSizeToScale
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontSizeToEmPx
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withDefaultFont
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.util.fastFilter
@@ -965,5 +965,5 @@ internal fun TextUnit.toTextScale(density: Density): Float {
         "Platform (T.19): fontSize only supports sp units (MC has no native font size system, em cannot be resolved)"
     }
     // sp → px → 缩放:唯一换算入口(P2-B1 公式合一)
-    return density.fontSizeToScale(value)
+    return density.fontSizeToEmPx(value)
 }

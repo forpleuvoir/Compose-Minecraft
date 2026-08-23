@@ -19,7 +19,7 @@ package androidx.compose.foundation.text.modifiers
 import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.text.DefaultMinLines
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
-import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontSizeToScale
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontSizeToEmPx
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.text.ceilToIntPx
 import androidx.compose.ui.text.AnnotatedString
@@ -216,11 +216,11 @@ internal class MultiParagraphLayoutCache(
         }
         if (autoSize != null) {
             // 平台适配点(T.20/T.25):TextAutoSize 二分搜索最大适配字号(sp → 渲染 scale,
-            // 唯一换算入口 fontSizeToScale),用搜索得到的字号重新布局
+            // 唯一换算入口 fontSizeToEmPx),用搜索得到的字号重新布局
             val localAutoSize = autoSize!!
             val scale =
                 with(density!!) {
-                    fontSizeToScale(
+                    fontSizeToEmPx(
                         with(localAutoSize) {
                             with(fontSizeSearchScope) {
                                 getFontSize(finalConstraints, text).value
@@ -492,8 +492,8 @@ internal class MultiParagraphLayoutCache(
             fontSize: TextUnit,
         ): TextLayoutResult {
             // 平台适配点(T.20/T.25):MC 无原生字号系统,字号经渲染 scale 驱动
-            // (唯一换算入口 fontSizeToScale);用局部 intrinsics 布局(不污染主布局缓存)
-            val scale = fontSizeToScale(fontSize.value)
+            // (唯一换算入口 fontSizeToEmPx);用局部 intrinsics 布局(不污染主布局缓存)
+            val scale = fontSizeToEmPx(fontSize.value)
             val localIntrinsics =
                 MultiParagraphIntrinsics(
                     annotatedString = text,

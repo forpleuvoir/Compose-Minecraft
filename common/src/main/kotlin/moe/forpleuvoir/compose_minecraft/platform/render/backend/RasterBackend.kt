@@ -183,10 +183,11 @@ internal class RasterBackend(
      */
     override fun drawText(cmd: DrawTextCommand) {
         if (cmd.backend == TextRenderBackend.VANILLA || !TextRenderConfig.enabled) return
+        val binding = cmd.font ?: moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.resolveNative(cmd.style)
+        if (binding.font.channel != moe.forpleuvoir.compose_minecraft.platform.render.text.FontChannel.STB_VECTOR) return
         val chain = TrueTypeFontManager.regularChain()
         if (chain.isEmpty()) return
-        val metrics = TrueTypeFontManager.metricsOrNull() ?: return
-        if (!TrueTypeTextWriter.supports(cmd)) return
+        val metrics = binding.metrics
 
         val style = cmd.style
         // 取色语义与 TrueTypeTextWriter 一致:样式色补 alpha,渐变按采样点逐字形取色
@@ -199,9 +200,9 @@ internal class RasterBackend(
 
         // 光栅化字号 = baseSizePx × 姿态矩阵缩放(量化 0.25px),与 GUI 端同式
         val rasterScale = max(TrueTypeTextWriter.MIN_RASTER_SCALE, matrixScale(cmd.matrix))
-        val sizePx = GlyphCache.quantize(chain[0].baseSizePx * rasterScale)
+        val sizePx = GlyphCache.quantize(binding.emPx * rasterScale)
 
-        val baselineY = cmd.y + metrics.baselineFromTop
+        val baselineY = cmd.y + binding.baselineFromTopPx
         var penX = cmd.x
 
         // 混淆:确定性随机槽位 + 字符序号种子(与 GUI 端同一公式,快照观感一致)

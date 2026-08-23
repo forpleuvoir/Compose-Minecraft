@@ -795,6 +795,12 @@ internal class MinecraftCanvas internal constructor(
          * 组合期由文本组件随 scale 一起捕获盖章(P2 接入 LocalTextRenderBackend)。
          */
         val backend: TextRenderBackend = TextRenderBackend.DEFAULT,
+        /**
+         * 字体绑定(P2-B4,总设计 A3「绑定随数据走」):布局期解析的
+         * ResolvedFont 随命令到达渲染端 —— 度量/通道/回退两端同源,
+         * 结构上不可能分叉;null = 渲染端按 style 现场解析(兼容路径)。
+         */
+        val font: moe.forpleuvoir.compose_minecraft.platform.render.text.ResolvedFont? = null,
     ) : DrawCommand {
         override val paint: PaintSnapshot? = null
     }
@@ -876,6 +882,7 @@ internal class MinecraftCanvas internal constructor(
         alpha: Float = 1f,
         shader: Shader? = null,
         backend: TextRenderBackend = TextRenderBackend.DEFAULT,
+        font: moe.forpleuvoir.compose_minecraft.platform.render.text.ResolvedFont? = null,
     ) {
         drawCommands.add(
             DrawTextCommand(
@@ -888,6 +895,7 @@ internal class MinecraftCanvas internal constructor(
                 alpha = alpha,
                 shader = shader,
                 backend = textBackendOverride ?: backend,
+                font = font,
             )
         )
     }
@@ -1206,6 +1214,7 @@ internal class MinecraftCanvas internal constructor(
                         alpha = command.alpha * alphaMultiplier,
                         shader = command.shader,
                         backend = command.backend,
+                        font = command.font,
                     )
                 }
             } else if (command is DrawGradientRectCommand) {
@@ -1427,6 +1436,8 @@ internal class MinecraftCanvas internal constructor(
                 combine(matrix), clip, text, x, y, style,
                 alpha = alpha * alphaMultiplier,
                 shader = shader,
+                backend = backend,
+                font = font,
             )
 
             is DrawGradientRectCommand -> DrawGradientRectCommand(

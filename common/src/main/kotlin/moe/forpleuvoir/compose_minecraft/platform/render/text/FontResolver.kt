@@ -276,21 +276,15 @@ private class FusionPixelFont(
         if (mono) PixelFont.fontOfMono() else PixelFont.fontOfProportional()
     }
 
-    /** 混合度量(缓存单例:覆盖码点像素 advance / 缺字原版 advance;@providerEm) */
-    private val baseMetrics: RunMetrics by lazy {
-        val f = fontRef ?: return@lazy VanillaRunMetrics
-        object : RunMetrics {
-            override fun advance(codepoint: Int): Float =
-                if (covers(codepoint)) f.codepointAdvance(codepoint)
-                else VanillaRunMetrics.advance(codepoint)
-
-            override fun kern(prev: Int, next: Int): Float {
-                if (prev < 0 || next < 0 || !covers(next) || !covers(prev)) return 0f
-                return f.codepointKernAdvance(prev, next)
-            }
-
-            override val lineHeight: Float get() = f.lineHeightPx
-            override val baselineFromTop: Float get() = f.ascentPx
+    /** 混合度量(像素网格 12 + 原版回退按各自网格比缩放;空格恒覆盖) */
+    private val mixed: TrueTypeMetricsSource? by lazy {
+        fontRef?.let { f ->
+            TrueTypeMetricsSource(
+                chain = listOf(f),
+                vanillaFallback = VanillaRunMetrics,
+                chainEmPx = providerEmPx,
+                coverage = { t, cp -> cp == ' '.code || t.hasGlyph(cp) },
+            )
         }
     }
 
@@ -303,7 +297,8 @@ private class FusionPixelFont(
 
     override val fallbackId: FontDescription get() = FontDescription.DEFAULT
 
-    override fun metricsAt(emPx: Float): RunMetrics = scaled(baseMetrics, emPx)
+    override fun metricsAt(emPx: Float): RunMetrics =
+        mixed?.at(emPx) ?: scaledVanilla(emPx)
 
     override fun lineHeightAt(emPx: Float): Float =
         (fontRef?.lineHeightPx ?: VanillaRunMetrics.lineHeight) * (emPx / providerEmPx)
@@ -311,8 +306,9 @@ private class FusionPixelFont(
     override fun baselineFromTopAt(emPx: Float): Float =
         (fontRef?.ascentPx ?: VanillaRunMetrics.baselineFromTop) * (emPx / providerEmPx)
 
-    private fun scaled(base: RunMetrics, emPx: Float): RunMetrics =
-        if (emPx == providerEmPx) base else ScaledRunMetrics(base, emPx / providerEmPx)
+    private fun scaledVanilla(emPx: Float): RunMetrics =
+        if (emPx == VanillaRunMetrics.lineHeight) VanillaRunMetrics
+        else ScaledRunMetrics(VanillaRunMetrics, emPx / VanillaRunMetrics.lineHeight)
 }
 
 /**
@@ -342,9 +338,15 @@ private class DefaultChainFont : PlatformFont {
     override val fallbackId: FontDescription get() = BuiltinFonts.uniFontTerminal.id
 
     override fun metricsAt(emPx: Float): RunMetrics {
-        val base = TrueTypeFontManager.metricsOrNull() ?: VanillaRunMetrics
-        return if (emPx == providerEmPx) base else ScaledRunMetrics(base, emPx / providerEmPx)
+        // 混合源按目标 em 统一缩放(链内 ×em/chainEm,原版回退 ×em/9)——
+        // 回退段宽度与其位图渲染 pose 比严格一致(I2)
+        return TrueTypeFontManager.metricsOrNull()?.at(emPx)
+            ?: scaledVanilla(emPx)
     }
+
+    private fun scaledVanilla(emPx: Float): RunMetrics =
+        if (emPx == VanillaRunMetrics.lineHeight) VanillaRunMetrics
+        else ScaledRunMetrics(VanillaRunMetrics, emPx / VanillaRunMetrics.lineHeight)
 
     override fun lineHeightAt(emPx: Float): Float = metricsAt(emPx).lineHeight
     override fun baselineFromTopAt(emPx: Float): Float = metricsAt(emPx).baselineFromTop
