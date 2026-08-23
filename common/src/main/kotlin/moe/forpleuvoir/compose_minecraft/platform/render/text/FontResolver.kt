@@ -53,6 +53,8 @@ enum class FontChannel {
 data class MeasureSpec(
     val emPx: Float,
     val bold: Boolean = false,
+    /** 渲染样式快照(mc.font 渲染通道的权威计宽输入;矢量通道可 null) */
+    val style: net.minecraft.network.chat.Style? = null,
 )
 
 /**
@@ -331,7 +333,11 @@ private class FusionPixelFont(
     override val fallbackId: FontDescription get() = FontDescription.DEFAULT
 
     override fun metricsAt(spec: MeasureSpec): RunMetrics =
-        mixed?.at(spec.emPx) ?: scaledVanilla(spec.emPx)
+        VanillaPipelineMetrics.of(
+            id, spec.copy(style = spec.style ?: net.minecraft.network.chat.Style.EMPTY.withFont(id)),
+            mixed?.at(spec.emPx) ?: scaledVanilla(spec.emPx),
+            providerEmPx,
+        )
 
     override fun lineHeightAt(emPx: Float): Float =
         (fontRef?.lineHeightPx ?: VanillaRunMetrics.lineHeight) * (emPx / providerEmPx)
@@ -400,20 +406,59 @@ private class VanillaBitmapFont(
 
     override val fallbackId: FontDescription? = null
 
-    override fun metricsAt(spec: MeasureSpec): RunMetrics {
-        val emPx = spec.emPx
-        val base: RunMetrics = if (!spec.bold) VanillaRunMetrics else object : RunMetrics {
-            // 原版渲染器粗体每字符 +1 网格像素(getCharWidth 加宽),度量必须同宽
-            override fun advance(codepoint: Int): Float = VanillaRunMetrics.advance(codepoint) + 1f
-            override val lineHeight: Float get() = VanillaRunMetrics.lineHeight
-            override val baselineFromTop: Float get() = VanillaRunMetrics.baselineFromTop
-        }
-        return if (emPx == providerEmPx) base
-        else ScaledRunMetrics(base, emPx / providerEmPx)
-    }
+    override fun metricsAt(spec: MeasureSpec): RunMetrics =
+        VanillaPipelineMetrics.of(
+            id, spec.copy(style = spec.style ?: net.minecraft.network.chat.Style.EMPTY.withFont(id)),
+            if (spec.emPx == providerEmPx) VanillaRunMetrics
+            else ScaledRunMetrics(VanillaRunMetrics, spec.emPx / providerEmPx),
+            providerEmPx,
+        )
 
     override fun lineHeightAt(emPx: Float): Float = metricsAt(MeasureSpec(emPx)).lineHeight
     override fun baselineFromTopAt(emPx: Float): Float = metricsAt(MeasureSpec(emPx)).baselineFromTop
+}
+
+/**
+ * 原版管线权威度量(P2-B5 定案):advance **直接询问 mc.font.splitter**
+ * 的样式化计宽(Font 构造同一宽度源:`该style字体字形.getAdvance(isBold)`)
+ * —— 粗体加宽、provider 覆盖、未来任何样式效应自动携带,零隐性约定(A5);
+ * 尺寸差异仅做 k=emPx/providerEm 同源缩放(与位图 pose 一致)。kern 恒 0(原版无字距)。
+ */
+internal class VanillaPipelineMetrics private constructor(
+    private val id: net.minecraft.network.chat.FontDescription,
+    private val spec: MeasureSpec,
+    /** 行盒/基线来源(自然度量,与字符宽无关) */
+    private val natural: RunMetrics,
+    private val ratio: Float,
+) : RunMetrics {
+    private val cache = java.util.concurrent.ConcurrentHashMap<Int, Float>()
+
+    override fun advance(codepoint: Int): Float = cache.computeIfAbsent(codepoint) {
+        val ch = String(Character.toChars(it))
+        val style = (spec.style ?: net.minecraft.network.chat.Style.EMPTY).withFont(id)
+        val w = moe.forpleuvoir.compose_minecraft.mc.font.splitter
+            .stringWidth(net.minecraft.network.chat.Component.literal(ch).setStyle(style))
+        w * ratio
+    }
+
+    override fun kern(prev: Int, next: Int): Float = 0f
+    override val lineHeight: Float get() = natural.lineHeight * ratio
+    override val baselineFromTop: Float get() = natural.baselineFromTop * ratio
+
+    companion object {
+        private val pool =
+            java.util.concurrent.ConcurrentHashMap<Pair<net.minecraft.network.chat.FontDescription, MeasureSpec>, VanillaPipelineMetrics>()
+
+        /** @param providerEmPx 该字体在 mc.font 中的网格 em(fusion=12 / 位图=9) */
+        fun of(
+            id: net.minecraft.network.chat.FontDescription,
+            spec: MeasureSpec,
+            natural: RunMetrics,
+            providerEmPx: Float,
+        ): RunMetrics = pool.computeIfAbsent(id to spec) {
+            VanillaPipelineMetrics(id, spec, natural, spec.emPx / providerEmPx)
+        }
+    }
 }
 
 /** 原版位图度量(@9 网格原生 em;单例) */
