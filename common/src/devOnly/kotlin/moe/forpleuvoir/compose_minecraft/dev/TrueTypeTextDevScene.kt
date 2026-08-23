@@ -16,6 +16,7 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFont
 import androidx.compose.runtime.DisposableEffect
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalTextRenderBackend
@@ -53,15 +54,10 @@ fun TrueTypeTextDevScene() {
     // 本屏 = 自研 stb 渲染器对照(系统字体链):进入时切到 stb 模式,
     // 离开时恢复进入前的值(捕获与置位收拢在同一 DisposableEffect,避免
     // 组合期分步写入的时序隐患)
-    DisposableEffect(Unit) {
-        // P2-B5:「模式开关」消亡 —— 对照场景直接切换默认字体配置点
-        // P2-B5:进入对照屏固定用系统链(stb)为基准;顶部开关再切位图 default
-        val previous = moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFontId
-        val F = moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
-        val B = moe.forpleuvoir.compose_minecraft.platform.render.text.BuiltinFonts
-        F.defaultFontId = B.systemChain.id
-        onDispose { F.defaultFontId = previous }
-    }
+    // P2-B5:对照屏字体作用域 —— 不动全局配置,经 LocalDefaultFont 局部覆盖
+    // (离开作用域自动恢复);顶部开关只是切换本屏提供的字体 id。
+    val B = moe.forpleuvoir.compose_minecraft.platform.render.text.BuiltinFonts
+    var bitmapMode by remember { mutableStateOf(false) }
     // 首次组合注册 dev 字体源(幂等)
     remember {
         val devFont = "C:\\Windows\\Fonts\\msyh.ttc"
@@ -88,15 +84,14 @@ fun TrueTypeTextDevScene() {
         true
     }
 
-    // 初始选中状态跟随实际全局开关(而非假定 TTF)
-    var truetype by remember {
-        mutableStateOf(
-            moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFontId ==
-                moe.forpleuvoir.compose_minecraft.platform.render.text.BuiltinFonts.systemChain.id
-        )
-    }
+    val truetype = !bitmapMode
 
 
+
+
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalDefaultFont provides (if (bitmapMode) B.vanillaDefault.id else B.systemChain.id)
+    ) {
     Box(
         Modifier
             .fillMaxSize()
@@ -128,20 +123,12 @@ fun TrueTypeTextDevScene() {
                 ModeButton(
                     label = "原版位图渲染",
                     selected = !truetype,
-                    onClick = {
-                        moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFontId =
-                            moe.forpleuvoir.compose_minecraft.platform.render.text.BuiltinFonts.vanillaDefault.id
-                        truetype = false
-                    },
+                    onClick = { bitmapMode = true },
                 )
                 ModeButton(
                     label = "TrueType 渲染",
                     selected = truetype,
-                    onClick = {
-                        moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFontId =
-                            moe.forpleuvoir.compose_minecraft.platform.render.text.BuiltinFonts.systemChain.id
-                        truetype = true
-                    },
+                    onClick = { bitmapMode = false },
                 )
                 var boundsOn by remember { mutableStateOf(TextRenderConfig.debugTextBounds) }
                 ModeButton(
@@ -211,7 +198,7 @@ fun TrueTypeTextDevScene() {
                             .append(Component.literal("普通段 ").withStyle(Style.EMPTY.withColor(Color.White)))
                             .append(Component.literal("红色段 ").withStyle(Style.EMPTY.withColor(Color(0xFFFF7043))))
                             .append(Component.literal("青色段").withStyle(Style.EMPTY.withColor(Color(0xFF4FC3F7)))),
-                        fontSize = 24.sp,
+                        fontSize = 18.sp,
                     )
                     BasicText(
                         component = Component.literal("粗体段(管线合成)").withStyle(Style.EMPTY.withBold(true)),
@@ -256,7 +243,7 @@ fun TrueTypeTextDevScene() {
                     SectionLabelTt("⑪ 定向回退(LocalTextRenderBackend.VANILLA 子树)")
                     CompositionLocalProvider(LocalTextRenderBackend provides TextRenderBackend.VANILLA) {
                         BasicText(
-                            "本行强制原版位图渲染(VANILLA 子树)",
+                            "本行强制原版位图渲染(VANILLAVANILLAVANILLAVANILLA子嘟嘟嘟嘟嘟嘟哒哒哒哒哒哒对对对树)",
                             style = Style.EMPTY.withColor(Color.White).toTextStyle()
                                 .merge(TextStyle(fontSize = 18.sp)),
                             modifier = Modifier
@@ -360,6 +347,7 @@ fun TrueTypeTextDevScene() {
                 }
             }
         }
+    }
     }
 }
 

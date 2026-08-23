@@ -1,5 +1,8 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.text
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.mojang.logging.LogUtils
 import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.boldRaw
@@ -108,14 +111,10 @@ interface PlatformFont {
     val fallbackId: FontDescription?
 
     /**
-     * 该 em 下的逐码点度量。**bold 语义**(A5 度量≡渲染):原版位图渲染器
-     * 对粗体每字符多占 +1 网格像素 —— 位图字体的粗体度量必须反映之;
-     * 矢量字体(合成/真粗体不改变 advance)忽略此参。
+     * 该 spec 下的完整度量(advance/行盒/基线单源给出,无旁路方法;
+     * bold 等宽度效应由实现按 spec 处理 —— A5 度量≡渲染)。
      */
     fun metricsAt(spec: MeasureSpec): RunMetrics
-
-    fun lineHeightAt(emPx: Float): Float
-    fun baselineFromTopAt(emPx: Float): Float
 }
 
 /** 一个码点的最终渲染归属(沿 fallback 链解析的结果) */
@@ -131,8 +130,8 @@ class ResolvedFont internal constructor(
 ) {
     val emPx: Float get() = spec.emPx
     val metrics: RunMetrics = font.metricsAt(spec)
-    val lineHeightPx: Float = font.lineHeightAt(emPx)
-    val baselineFromTopPx: Float = font.baselineFromTopAt(emPx)
+    val lineHeightPx: Float get() = metrics.lineHeight
+    val baselineFromTopPx: Float get() = metrics.baselineFromTop
 
     /** 码点归属缓存(布局/切段高频查询;covers 可能是 JNI 查询) */
     private val ownerCache = java.util.concurrent.ConcurrentHashMap<Int, GlyphOwner>()
@@ -141,20 +140,33 @@ class ResolvedFont internal constructor(
      * 该码点的最终渲染归属:本字体覆盖 → 本字体自身通道;
      * 否则沿 [PlatformFont.fallbackId] 链下探,终局必达 MC_BITMAP(I6)。
      */
-    fun ownerOf(codepoint: Int): GlyphOwner = ownerCache.computeIfAbsent(codepoint) {
+    fun ownerOf(codepoint: Int): GlyphOwner = ownerForChannel(codepoint, allowStb = true)
+
+    /**
+     * 归属解析(可排除 STB 通道):定向退回(VANILLA)时 STB 字体无法由
+     * mc.font 渲染 —— 沿 fallback 链下探到首个非 STB 通道且覆盖该码点的
+     * 字体(终局必达位图);allowStb=true 时与 ownerOf 相同。
+     */
+    fun ownerForChannel(codepoint: Int, allowStb: Boolean): GlyphOwner {
+        val key = if (allowStb) codepoint else -codepoint.dec()
+        return ownerCache.computeIfAbsent(key) { ownerImpl(codepoint, allowStb) }
+    }
+
+    private fun ownerImpl(codepoint: Int, allowStb: Boolean): GlyphOwner {
         var font = this.font
         var visited = 0
         while (visited++ < MAX_CHAIN_DEPTH) {
-            if (font.covers(codepoint)) return@computeIfAbsent GlyphOwner(font, font.channel)
+            val channelOk = allowStb || font.channel != FontChannel.STB_VECTOR
+            if (channelOk && font.covers(codepoint)) return GlyphOwner(font, font.channel)
             val next = font.fallbackId?.let { id -> FontRegistry[id] }
             if (next == null) {
                 // 链尽(含终端位图字体):交原版位图渲染(missing 方框兜底)
-                return@computeIfAbsent GlyphOwner(font, FontChannel.MC_BITMAP)
+                return GlyphOwner(font, FontChannel.MC_BITMAP)
             }
             font = next
         }
         FONT_LOGGER.error("[ComposeMinecraft] fallback chain too deep at font={}, treating as bitmap", font.id)
-        GlyphOwner(font, FontChannel.MC_BITMAP)
+        return GlyphOwner(font, FontChannel.MC_BITMAP)
     }
     companion object {
         private const val MAX_CHAIN_DEPTH = 8
@@ -189,8 +201,12 @@ object FontResolver {
 
     /**
      * 当前默认字体 id(P2-B5,A8 唯一配置点;dev 对照场景直接改写此值)。
+     * **快照状态**:改写即触发读取它的组合失效并重排版 —— 默认字体的
+     * 解析结果永远跟随此值,不存在需要手动刷新的第二份状态。
      */
-    var defaultFontId: FontDescription = BuiltinFonts.fusionPixel.id
+    var defaultFontId: FontDescription by androidx.compose.runtime.mutableStateOf(
+        BuiltinFonts.fusionPixel.id
+    )
 
     /** 当前默认字体(注册表条目;缺失属启动期程序错误,fail-loud)。 */
     fun defaultFont(): PlatformFont =
@@ -242,6 +258,20 @@ object FontResolver {
     }
 
     // ── 内部 ────────────────────────────────────────────────────────
+
+    /**
+     * 位图优先解析(P2-B5「退回即全部退回」):STB 字体无法由 mc.font 渲染,
+     * 强制原版通道时其 id 应替换为沿 fallback 链的首个非 STB 等价字体
+     * (系统链 → minecraft:default);FreeType/位图字体原样返回。
+     */
+    fun bitmapPreferred(id: FontDescription): FontDescription {
+        var f = FontRegistry[id] ?: return id
+        var hops = 0
+        while (f.channel == FontChannel.STB_VECTOR && hops++ < 8) {
+            f = f.fallbackId?.let { FontRegistry[it] } ?: break
+        }
+        return f.id
+    }
 
     private val pool = java.util.concurrent.ConcurrentHashMap<Pair<PlatformFont, MeasureSpec>, ResolvedFont>()
 
@@ -300,6 +330,34 @@ object BuiltinFonts {
     }
 }
 
+/**
+ * 度量工厂(P2-B5 去特判收口):目标 em 缩放、样式兜底、回退口径
+ * 只在此实现一次;PlatformFont 实现只声明原生数据。
+ */
+internal object FontMetrics {
+
+    /** mc.font 渲染通道(MC_FREETYPE/MC_BITMAP):advance=splitter 样式化计宽 */
+    fun mcFont(
+        id: FontDescription,
+        spec: MeasureSpec,
+        /** 网格原生态度量(禁止传入已按目标 em 缩放的值 —— 防双重缩放) */
+        native: RunMetrics,
+        providerEmPx: Float,
+    ): RunMetrics {
+        val effSpec = if (spec.style != null) spec
+        else spec.copy(style = net.minecraft.network.chat.Style.EMPTY.withFont(id))
+        return VanillaPipelineMetrics.of(id, effSpec, native, providerEmPx)
+    }
+
+    /** stb 矢量链通道:混合源按目标 em 缩放;链未就绪退原版(同比例) */
+    fun stbChain(spec: MeasureSpec, source: TrueTypeMetricsSource?): RunMetrics =
+        source?.at(spec.emPx) ?: scaledVanilla(spec.emPx)
+
+    fun scaledVanilla(emPx: Float): RunMetrics =
+        if (emPx == VanillaRunMetrics.lineHeight) VanillaRunMetrics
+        else ScaledRunMetrics(VanillaRunMetrics, emPx / VanillaRunMetrics.lineHeight)
+}
+
 /** fusion_pixel(proportional / mono):FreeType 渲染 + 同文件 stb 度量 */
 private class FusionPixelFont(
     override val id: FontDescription,
@@ -333,21 +391,12 @@ private class FusionPixelFont(
     override val fallbackId: FontDescription get() = FontDescription.DEFAULT
 
     override fun metricsAt(spec: MeasureSpec): RunMetrics =
-        VanillaPipelineMetrics.of(
-            id, spec.copy(style = spec.style ?: net.minecraft.network.chat.Style.EMPTY.withFont(id)),
-            mixed?.at(spec.emPx) ?: scaledVanilla(spec.emPx),
-            providerEmPx,
+        // native 必须是网格原生态;缩放与样式兜底统一在 FontMetrics
+        FontMetrics.mcFont(
+            id, spec,
+            native = mixed?.at(providerEmPx) ?: VanillaRunMetrics,
+            providerEmPx = providerEmPx,
         )
-
-    override fun lineHeightAt(emPx: Float): Float =
-        (fontRef?.lineHeightPx ?: VanillaRunMetrics.lineHeight) * (emPx / providerEmPx)
-
-    override fun baselineFromTopAt(emPx: Float): Float =
-        (fontRef?.ascentPx ?: VanillaRunMetrics.baselineFromTop) * (emPx / providerEmPx)
-
-    private fun scaledVanilla(emPx: Float): RunMetrics =
-        if (emPx == VanillaRunMetrics.lineHeight) VanillaRunMetrics
-        else ScaledRunMetrics(VanillaRunMetrics, emPx / VanillaRunMetrics.lineHeight)
 }
 
 /**
@@ -374,22 +423,9 @@ private class SystemChainFont : PlatformFont {
     /** 缺字回退 minecraft:default 位图(unifont 终端覆盖) */
     override val fallbackId: FontDescription get() = BuiltinFonts.vanillaDefault.id
 
-    override fun metricsAt(spec: MeasureSpec): RunMetrics = metricsAtImpl(spec)
-
-    private fun metricsAtImpl(spec: MeasureSpec): RunMetrics {
-        val emPx = spec.emPx
-// 矢量粗体不改变 advance(忽略 bold);链内 ×em/chainEm、原版回退 ×em/9 ——
-        // 回退段宽度与其位图渲染 pose 比严格一致(I2)
-        return TrueTypeFontManager.metricsOrNull()?.at(emPx)
-            ?: scaledVanilla(emPx)
-    }
-
-    private fun scaledVanilla(emPx: Float): RunMetrics =
-        if (emPx == VanillaRunMetrics.lineHeight) VanillaRunMetrics
-        else ScaledRunMetrics(VanillaRunMetrics, emPx / VanillaRunMetrics.lineHeight)
-
-    override fun lineHeightAt(emPx: Float): Float = metricsAt(MeasureSpec(emPx)).lineHeight
-    override fun baselineFromTopAt(emPx: Float): Float = metricsAt(MeasureSpec(emPx)).baselineFromTop
+    override fun metricsAt(spec: MeasureSpec): RunMetrics =
+        // 矢量粗体不改 advance(bold 由 stb 合成/真字重承载);口径统一在工厂
+        FontMetrics.stbChain(spec, TrueTypeFontManager.metricsOrNull())
 }
 
 /** 原版资源字体(alt/unifont 等):位图通道,fallbackId=null 即链终局 */
@@ -407,15 +443,7 @@ private class VanillaBitmapFont(
     override val fallbackId: FontDescription? = null
 
     override fun metricsAt(spec: MeasureSpec): RunMetrics =
-        VanillaPipelineMetrics.of(
-            id, spec.copy(style = spec.style ?: net.minecraft.network.chat.Style.EMPTY.withFont(id)),
-            if (spec.emPx == providerEmPx) VanillaRunMetrics
-            else ScaledRunMetrics(VanillaRunMetrics, spec.emPx / providerEmPx),
-            providerEmPx,
-        )
-
-    override fun lineHeightAt(emPx: Float): Float = metricsAt(MeasureSpec(emPx)).lineHeight
-    override fun baselineFromTopAt(emPx: Float): Float = metricsAt(MeasureSpec(emPx)).baselineFromTop
+        FontMetrics.mcFont(id, spec, native = VanillaRunMetrics, providerEmPx = 9f)
 }
 
 /**

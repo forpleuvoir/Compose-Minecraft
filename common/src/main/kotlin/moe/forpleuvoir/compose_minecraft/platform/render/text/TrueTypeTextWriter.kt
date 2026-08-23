@@ -127,7 +127,7 @@ internal object TrueTypeTextWriter {
         // 位图终端绑定(unifont,网格 9):回退段 pose 比与其布局宽度缩放严格一致
         val bitmapTerminal = FontResolver.resolve(
             BuiltinFonts.uniFontTerminal.id,
-            moe.forpleuvoir.compose_minecraft.platform.render.text.MeasureSpec(binding.emPx, cmd.style.isBold),
+            moe.forpleuvoir.compose_minecraft.platform.render.text.MeasureSpec(binding.emPx, style = cmd.style),
         )
         fun flushVanilla() {
             if (vanillaStart < 0) return
@@ -175,7 +175,10 @@ internal object TrueTypeTextWriter {
             val syntheticBold = bold && renderFont !in boldChainFonts
             val glyph = GlyphCache.getOrCreate(
                 renderFont, drawCp, sizePx, syntheticBold,
-                sizePx / renderFont.baseSizePx,
+                // P2-B4 修正:布局已是最终像素空间,位图→命令坐标的除数 =
+                // 光栅化时附加的外部矩阵缩放(无变换即 1);旧公式 sizePx/base
+                // 是网格坐标系残留,会把位图压小 provEm/em 倍
+                rasterScale,
             )
             if (glyph == null) {
                 // 极端情况(字形超图集页):该字符交原版字形内联渲染
@@ -185,6 +188,17 @@ internal object TrueTypeTextWriter {
                 continue
             }
 
+            if (charIndex == 1 && TextRenderConfig.debugTextBounds) {
+                // [TT-S] 临时探针:首字形实测链路值(定位后移除)
+                println(
+                    "[TT-S] '" + cmd.text.take(6) + "' em=" + binding.emPx +
+                        " mScale=" + rasterScale + " sizePx=" + sizePx +
+                        " div=" + (sizePx / renderFont.baseSizePx) +
+                        " wLocal=" + glyph.widthLocal + " hLocal=" + glyph.heightLocal +
+                        " baseY=" + baselineY + " y=" + cmd.y +
+                        " topLocal=" + glyph.bearingTopLocal
+                )
+            }
             if (glyph.hasBitmap) {
                 // stb yoff 为屏幕 y-down 约定(负值 = 位图顶在基线上方),直接加到基线上
                 val leftRaw = penX + glyph.bearingXLocal

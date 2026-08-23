@@ -244,7 +244,7 @@ internal class RasterBackend(
 
             if (glyph != null && glyph.width > 0 && glyph.height > 0) {
                 // 位图像素 → 1x 局部坐标(GUI 端 rasterDiv 同源公式)
-                val rasterDiv = sizePx / renderFont.baseSizePx
+                val rasterDiv = rasterScale
                 val wLocal = glyph.width / rasterDiv
                 val hLocal = glyph.height / rasterDiv
                 val leftRaw = penX + glyph.bearingX / rasterDiv

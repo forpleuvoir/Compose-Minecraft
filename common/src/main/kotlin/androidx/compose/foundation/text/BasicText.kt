@@ -76,6 +76,7 @@ import androidx.compose.ui.util.fastMapIndexedNotNull
 import androidx.compose.ui.util.fastRoundToInt
 import kotlin.math.floor
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.flatten
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontOriginal
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.obfuscatedRaw
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toPlatformData
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toStyleSegments
@@ -264,7 +265,9 @@ fun BasicText(
     val defaultFont = resolveDefaultFont()
     val effectiveDefaultStyle =
         remember(defaultStyle, defaultFont) {
-            if (defaultStyle.font == null) defaultStyle.withFont(defaultFont) else defaultStyle
+            // ⚠️ 必须用 fontOriginal(可空原始值):MC Style.getFont() 未设置时
+            // 返回 DEFAULT 非 null —— 用 .font 判空会导致默认字体盖章永不生效
+            if (defaultStyle.fontOriginal == null) defaultStyle.withFont(defaultFont) else defaultStyle
         }
 
     // 平台适配点(T.3):展平为带自身样式的段;每段缺失属性用 defaultStyle 补缺(applyTo 语义)

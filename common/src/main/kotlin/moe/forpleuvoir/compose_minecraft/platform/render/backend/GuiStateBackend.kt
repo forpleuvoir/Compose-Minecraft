@@ -241,16 +241,20 @@ internal class GuiStateBackend : GeometryBackend {
         // P2-B4(A2/A3):通道由命令携带的字体绑定唯一决定 —— 无模式开关、
         // 无白名单特判。VANILLA 定向 = 全部位图通道渲染(归属 id 不变)。
         val font = cmd.font ?: moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.resolveNative(cmd.style)
+        // 路由观测:同键(文本头+字体+通道)只打印一次,杜绝逐帧刷屏
         if (TextRenderConfig.debugTextBounds) {
-            println(
-                "[TT] '" + cmd.text.take(10) + "' font=" + cmd.style.fontOriginal +
-                    " bold=" + cmd.style.isBold + " backend=" + cmd.backend +
-                    " em=" + font.emPx + " provEm=" + font.font.providerEmPx +
-                    " box=" + font.lineHeightPx + " base=" + font.baselineFromTopPx +
-                    " y=" + cmd.y +
-                    " channel=" + font.font.channel +
-                    " -> " + if (font.font.channel == moe.forpleuvoir.compose_minecraft.platform.render.text.FontChannel.STB_VECTOR) "STB" else "BITMAP/FREETYPE"
-            )
+            val k = cmd.text.take(8) + "|" + font.font.id + "|" + font.font.channel
+            if (ttLogKeys.add(k)) {
+                println(
+                    "[TT] '" + cmd.text.take(10) + "' font=" + cmd.style.fontOriginal +
+                        " bold=" + cmd.style.isBold +
+                        " em=" + font.emPx + " provEm=" + font.font.providerEmPx +
+                        " box=" + font.lineHeightPx + " base=" + font.baselineFromTopPx +
+                        " y=" + cmd.y +
+                        " channel=" + font.font.channel +
+                        " -> " + if (font.font.channel == moe.forpleuvoir.compose_minecraft.platform.render.text.FontChannel.STB_VECTOR) "STB" else "BITMAP/FREETYPE"
+                )
+            }
         }
         when {
             cmd.backend == TextRenderBackend.VANILLA ->
@@ -317,7 +321,7 @@ internal class GuiStateBackend : GeometryBackend {
         while (i < n) {
             val cp = cmd.text.codePointAt(i)
             val cc = Character.charCount(cp)
-            val owner = primary.ownerOf(cp)
+            val owner = primary.ownerForChannel(cp, allowStb)
             if (cur != null && owner != cur) {
                 flush(i)
                 segStart = i
@@ -387,6 +391,8 @@ internal class GuiStateBackend : GeometryBackend {
     }
 
     /** 样式色 × alpha → ARGB(与写器取色同一语义) */
+    private val ttLogKeys = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<String, Boolean>())
+
     private fun solidArgb(cmd: DrawTextCommand): Int {
         val alphaByte = (cmd.alpha * 255f).roundToInt().coerceIn(0, 255)
         val baseColor = cmd.style.color?.value?.or(0xFF000000.toInt()) ?: 0xFFFFFFFF.toInt()

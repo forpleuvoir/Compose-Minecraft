@@ -81,7 +81,8 @@ internal object GlyphCache {
         codepoint: Int,
         sizePx: Float,
         bold: Boolean = false,
-        /** 折算除数:位图像素 → 1x 布局像素(mscale × 超采样) */
+        /** 折算除数:位图像素 → 命令布局像素(= 光栅化时附加的矩阵缩放;
+         *  绝对像素坐标系下不含任何字号分量 —— 字号已体现在 sizePx 本身) */
         rasterDiv: Float = 1f,
     ): CachedGlyph? {
         val slot = fontSlot(font)
