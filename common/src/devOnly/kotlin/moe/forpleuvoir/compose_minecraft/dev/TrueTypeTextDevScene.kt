@@ -218,6 +218,8 @@ fun TrueTypeTextDevScene() {
                     BasicTextField(
                         state = input,
                         textStyle = Style.EMPTY.withColor(Color.White),
+                        // P2-B5:默认字号随字体(16sp),对照须显式同字号
+                        fontSize = 18.sp,
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(Color(0xFF232A4A))
