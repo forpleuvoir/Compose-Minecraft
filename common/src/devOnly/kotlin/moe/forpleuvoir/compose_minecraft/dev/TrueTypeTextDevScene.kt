@@ -342,7 +342,7 @@ fun TrueTypeTextDevScene() {
                     BasicText(
                         "说明:粗体走独立字重文件;移除 boldFontSources 后此行退化为膨胀合成。",
                         style = Style.EMPTY.withColor(Color(0xFF78909C)).toTextStyle()
-                            .merge(TextStyle(fontSize = 10.sp)),
+                            .merge(TextStyle(fontSize = 18.sp)),
                         modifier = Modifier.padding(top = 2.dp),
                     )
 

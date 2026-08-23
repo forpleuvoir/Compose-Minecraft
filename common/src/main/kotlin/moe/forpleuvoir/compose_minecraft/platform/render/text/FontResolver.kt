@@ -2,6 +2,7 @@ package moe.forpleuvoir.compose_minecraft.platform.render.text
 
 import com.mojang.logging.LogUtils
 import moe.forpleuvoir.compose_minecraft.mc
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.boldRaw
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontOriginal
 import net.minecraft.network.chat.FontDescription
 import net.minecraft.network.chat.Style
@@ -86,8 +87,12 @@ interface PlatformFont {
      */
     val fallbackId: FontDescription?
 
-    /** 该 em 下的逐码点度量(实现应返回内部缓存的稳定实例) */
-    fun metricsAt(emPx: Float): RunMetrics
+    /**
+     * 该 em 下的逐码点度量。**bold 语义**(A5 度量≡渲染):原版位图渲染器
+     * 对粗体每字符多占 +1 网格像素 —— 位图字体的粗体度量必须反映之;
+     * 矢量字体(合成/真粗体不改变 advance)忽略此参。
+     */
+    fun metricsAt(emPx: Float, bold: Boolean = false): RunMetrics
 
     fun lineHeightAt(emPx: Float): Float
     fun baselineFromTopAt(emPx: Float): Float
@@ -103,8 +108,9 @@ data class GlyphOwner(val font: PlatformFont, val channel: FontChannel)
 class ResolvedFont internal constructor(
     val font: PlatformFont,
     val emPx: Float,
+    val bold: Boolean = false,
 ) {
-    val metrics: RunMetrics = font.metricsAt(emPx)
+    val metrics: RunMetrics = font.metricsAt(emPx, bold)
     val lineHeightPx: Float = font.lineHeightAt(emPx)
     val baselineFromTopPx: Float = font.baselineFromTopAt(emPx)
 
@@ -177,25 +183,26 @@ object FontResolver {
      * 未知 id:ERROR(一次)后退回默认字体 —— 永不抛出,永不静默错量;
      * 默认字体未注册属启动期程序错误,直接失败(fail-loud)。
      */
-    fun resolve(id: FontDescription?, emPx: Float): ResolvedFont {
+    fun resolve(id: FontDescription?, emPx: Float, bold: Boolean = false): ResolvedFont {
         val font = id?.let { FontRegistry[it] }
         if (font == null) {
             // 显式指定了未知字体 id:ERROR(一次)后退回默认 —— 禁止静默错量
             if (id != null && warnedMissing.add(id)) {
                 FONT_LOGGER.error("[ComposeMinecraft] unknown font id {}, fallback to default", id)
             }
-            return resolveFont(defaultFont(), emPx)
+            return resolveFont(defaultFont(), emPx, bold)
         }
-        return resolveFont(font, emPx)
+        return resolveFont(font, emPx, bold)
     }
 
-    private fun resolveFont(font: PlatformFont, emPx: Float): ResolvedFont =
-        pool.computeIfAbsent(BindingKey(font, emPx)) { ResolvedFont(font, emPx) }
+    private fun resolveFont(font: PlatformFont, emPx: Float, bold: Boolean = false): ResolvedFont =
+        pool.computeIfAbsent(BindingKey(font, emPx, bold)) { ResolvedFont(font, emPx, bold) }
 
-    fun resolveDefault(emPx: Float): ResolvedFont = resolve(null, emPx)
+    fun resolveDefault(emPx: Float, bold: Boolean = false): ResolvedFont = resolve(null, emPx, bold)
 
-    /** 按 style 解析(null fontOriginal = 默认字体) */
-    fun resolve(style: Style, emPx: Float): ResolvedFont = resolve(style.fontOriginal, emPx)
+    /** 按 style 解析(null fontOriginal = 默认字体;粗体取自样式) */
+    fun resolve(style: Style, emPx: Float): ResolvedFont =
+        resolve(style.fontOriginal, emPx, style.boldRaw == true)
 
     /**
      * P1 过渡入口:按字体的原生参考 em([PlatformFont.providerEmPx])解析 ——
@@ -206,17 +213,17 @@ object FontResolver {
     fun resolveNative(style: Style): ResolvedFont {
         val id = style.fontOriginal
         val font = id?.let { FontRegistry[it] }
-        if (font != null) return resolveFont(font, font.providerEmPx)
+        if (font != null) return resolveFont(font, font.providerEmPx, style.boldRaw == true)
         if (id != null && warnedMissing.add(id)) {
             FONT_LOGGER.error("[ComposeMinecraft] unknown font id {} (native path), fallback to default", id)
         }
         val def = defaultFont()
-        return resolveFont(def, def.providerEmPx)
+        return resolveFont(def, def.providerEmPx, style.boldRaw == true)
     }
 
     // ── 内部 ────────────────────────────────────────────────────────
 
-    private data class BindingKey(val font: PlatformFont, val emPx: Float)
+    private data class BindingKey(val font: PlatformFont, val emPx: Float, val bold: Boolean)
 
     private val pool = java.util.concurrent.ConcurrentHashMap<BindingKey, ResolvedFont>()
 
@@ -307,7 +314,7 @@ private class FusionPixelFont(
 
     override val fallbackId: FontDescription get() = FontDescription.DEFAULT
 
-    override fun metricsAt(emPx: Float): RunMetrics =
+    override fun metricsAt(emPx: Float, bold: Boolean): RunMetrics =
         mixed?.at(emPx) ?: scaledVanilla(emPx)
 
     override fun lineHeightAt(emPx: Float): Float =
@@ -345,8 +352,8 @@ private class SystemChainFont : PlatformFont {
     /** 缺字回退 minecraft:default 位图(unifont 终端覆盖) */
     override val fallbackId: FontDescription get() = BuiltinFonts.vanillaDefault.id
 
-    override fun metricsAt(emPx: Float): RunMetrics {
-        // 混合源按目标 em 统一缩放(链内 ×em/chainEm,原版回退 ×em/9)——
+    override fun metricsAt(emPx: Float, bold: Boolean): RunMetrics {
+        // 混合源按目标 em 统一缩放(矢量粗体不改变 advance,忽略 bold)(链内 ×em/chainEm,原版回退 ×em/9)——
         // 回退段宽度与其位图渲染 pose 比严格一致(I2)
         return TrueTypeFontManager.metricsOrNull()?.at(emPx)
             ?: scaledVanilla(emPx)
@@ -374,9 +381,16 @@ private class VanillaBitmapFont(
 
     override val fallbackId: FontDescription? = null
 
-    override fun metricsAt(emPx: Float): RunMetrics =
-        if (emPx == providerEmPx) VanillaRunMetrics
-        else ScaledRunMetrics(VanillaRunMetrics, emPx / providerEmPx)
+    override fun metricsAt(emPx: Float, bold: Boolean): RunMetrics {
+        val base: RunMetrics = if (!bold) VanillaRunMetrics else object : RunMetrics {
+            // 原版渲染器粗体每字符 +1 网格像素(getCharWidth 加宽),度量必须同宽
+            override fun advance(codepoint: Int): Float = VanillaRunMetrics.advance(codepoint) + 1f
+            override val lineHeight: Float get() = VanillaRunMetrics.lineHeight
+            override val baselineFromTop: Float get() = VanillaRunMetrics.baselineFromTop
+        }
+        return if (emPx == providerEmPx) base
+        else ScaledRunMetrics(base, emPx / providerEmPx)
+    }
 
     override fun lineHeightAt(emPx: Float): Float = metricsAt(emPx).lineHeight
     override fun baselineFromTopAt(emPx: Float): Float = metricsAt(emPx).baselineFromTop

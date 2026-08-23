@@ -293,7 +293,7 @@ internal class GuiStateBackend : GeometryBackend {
             val owner = cur ?: return
             val text = cmd.text.substring(segStart, endIdx)
             val resolved = moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
-                .resolve(owner.font.id, primary.emPx)
+                .resolve(owner.font.id, primary.emPx, primary.bold)
             val segCmd = androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand(
                 matrix = cmd.matrix, clip = cmd.clip, text = text,
                 x = segX, y = cmd.y, style = cmd.style, alpha = cmd.alpha,
