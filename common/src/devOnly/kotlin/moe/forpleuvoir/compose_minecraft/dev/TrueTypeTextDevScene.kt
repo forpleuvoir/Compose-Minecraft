@@ -41,7 +41,7 @@ import net.minecraft.network.chat.Style
 /**
  * TrueType 文本渲染对照测试(T.TT,第一步:管线 + 开关 + 度量同源 + 回退)。
  *
- * - 顶部开关切换原版位图渲染 / 自研 TrueType 渲染(全局 [TextRenderConfig.enabled]);
+ * - 顶部开关切换系统矢量链 / 原版位图 default(经 FontResolver.defaultFontId);
  * - 切换后整棵子树重建([key]):布局度量重新快照,宽度/行高按新来源计算;
  * - dev 字体:C:\Windows\Fonts\msyh.ttc(微软雅黑,仅 dev 验证用,
  *   D1 内置字体后续再定,不打包进发布 JAR);
@@ -55,10 +55,12 @@ fun TrueTypeTextDevScene() {
     // 组合期分步写入的时序隐患)
     DisposableEffect(Unit) {
         // P2-B5:「模式开关」消亡 —— 对照场景直接切换默认字体配置点
+        // P2-B5:进入对照屏固定用系统链(stb)为基准;顶部开关再切位图 default
         val previous = moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFontId
-        moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFontId =
-            net.minecraft.network.chat.FontDescription.DEFAULT
-        onDispose { moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFontId = previous }
+        val F = moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
+        val B = moe.forpleuvoir.compose_minecraft.platform.render.text.BuiltinFonts
+        F.defaultFontId = B.systemChain.id
+        onDispose { F.defaultFontId = previous }
     }
     // 首次组合注册 dev 字体源(幂等)
     remember {
@@ -87,7 +89,12 @@ fun TrueTypeTextDevScene() {
     }
 
     // 初始选中状态跟随实际全局开关(而非假定 TTF)
-    var truetype by remember { mutableStateOf(TextRenderConfig.enabled) }
+    var truetype by remember {
+        mutableStateOf(
+            moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFontId ==
+                moe.forpleuvoir.compose_minecraft.platform.render.text.BuiltinFonts.systemChain.id
+        )
+    }
 
 
     Box(
@@ -121,12 +128,20 @@ fun TrueTypeTextDevScene() {
                 ModeButton(
                     label = "原版位图渲染",
                     selected = !truetype,
-                    onClick = { TextRenderConfig.enabled = false; truetype = false },
+                    onClick = {
+                        moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFontId =
+                            moe.forpleuvoir.compose_minecraft.platform.render.text.BuiltinFonts.vanillaDefault.id
+                        truetype = false
+                    },
                 )
                 ModeButton(
                     label = "TrueType 渲染",
                     selected = truetype,
-                    onClick = { TextRenderConfig.enabled = true; truetype = true },
+                    onClick = {
+                        moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFontId =
+                            moe.forpleuvoir.compose_minecraft.platform.render.text.BuiltinFonts.systemChain.id
+                        truetype = true
+                    },
                 )
                 var boundsOn by remember { mutableStateOf(TextRenderConfig.debugTextBounds) }
                 ModeButton(

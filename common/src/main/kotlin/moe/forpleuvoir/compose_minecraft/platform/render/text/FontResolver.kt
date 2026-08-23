@@ -234,7 +234,7 @@ object FontResolver {
  *   缺字回退 unifont(位图终端);
  * - 原版资源字体族(alt/unifont 等):位图通道,自身即终端。
  */
-internal object BuiltinFonts {
+object BuiltinFonts {
 
     /** fusion_pixel proportional(平台当前默认字体 —— 仅此一处表达这一事实) */
     val fusionPixel: PlatformFont = FusionPixelFont(
@@ -248,8 +248,19 @@ internal object BuiltinFonts {
         mono = true,
     )
 
-    /** minecraft:default(stb 就绪 ? 矢量链 : 位图;缺字回退 unifont) */
-    val defaultChain: PlatformFont = DefaultChainFont()
+    /** 系统矢量链的注册 id(平台私有命名空间;位图档对应 minecraft:default) */
+    val systemFontId: FontDescription =
+        FontDescription.Resource(Identifier.fromNamespaceAndPath("compose_minecraft", "system_font"))
+
+    /**
+     * 系统矢量字体链(stb:msyh/simhei/seguisym 等,P2-B5 定案:
+     * 「stb 默认字体」= 系统字体链,**不是** minecraft:default)。
+     */
+    val systemChain: PlatformFont = SystemChainFont()
+
+    /** minecraft:default —— 原版位图字体(与系统链平权的独立条目) */
+    val vanillaDefault: PlatformFont =
+        VanillaBitmapFont(FontDescription.DEFAULT)
 
     /** minecraft:unifont —— 位图终端字体(Unicode 兜底;missing 方框由引擎兜底) */
     val uniFontTerminal: PlatformFont =
@@ -259,7 +270,7 @@ internal object BuiltinFonts {
     val illagerAlt: PlatformFont = VanillaBitmapFont(FontDescription.Resource(Identifier.withDefaultNamespace("illageralt")))
 
     fun registerAll() {
-        listOf(fusionPixel, fusionPixelMono, defaultChain, uniFontTerminal, alt, illagerAlt)
+        listOf(fusionPixel, fusionPixelMono, systemChain, vanillaDefault, uniFontTerminal, alt, illagerAlt)
             .forEach { FontRegistry.register(it) }
     }
 }
@@ -311,30 +322,28 @@ private class FusionPixelFont(
 }
 
 /**
- * minecraft:default:stb 就绪 → 矢量链通道;否则位图通道。
- * 度量 = 混合源(链内逐码点,缺字退原版 splitter —— 与位图内联渲染宽度同源)。
+ * 系统矢量字体链(P2-B5 定案):stb 渲染器的默认字体 = 系统字体链
+ * (微软雅黑等),与原版位图 minecraft:default 是**两个平权字体**。
+ * 缺字回退 minecraft:default 位图(终端)。
  */
-private class DefaultChainFont : PlatformFont {
+private class SystemChainFont : PlatformFont {
 
-    private val stbReady: Boolean
-        get() = TextRenderConfig.enabled && TrueTypeFontManager.isReady
-
-    override val id: FontDescription get() = FontDescription.DEFAULT
-    override val channel: FontChannel get() = if (stbReady) FontChannel.STB_VECTOR else FontChannel.MC_BITMAP
+    override val id: FontDescription get() = BuiltinFonts.systemFontId
+    override val channel: FontChannel get() = FontChannel.STB_VECTOR
 
     /** stb 链加载 em(未就绪时以原版行高为准) */
     override val providerEmPx: Float
         get() = TrueTypeFontManager.regularChain().firstOrNull()?.baseSizePx
             ?: VanillaRunMetrics.lineHeight
 
-    override val defaultSizeSp: Float
-        get() = if (stbReady) SYSTEM_STB_DEFAULT_SIZE_SP else VANILLA_DEFAULT_SIZE_SP
+    /** 系统字体默认字号(A6 现值定案:16sp) */
+    override val defaultSizeSp: Float get() = 16f
 
     override fun covers(codepoint: Int): Boolean =
         TrueTypeFontManager.regularChain().any { it.hasGlyph(codepoint) }
 
-    /** 缺字回退 unifont(位图终端;Unicode 覆盖远超 stb 链) */
-    override val fallbackId: FontDescription get() = BuiltinFonts.uniFontTerminal.id
+    /** 缺字回退 minecraft:default 位图(unifont 终端覆盖) */
+    override val fallbackId: FontDescription get() = BuiltinFonts.vanillaDefault.id
 
     override fun metricsAt(emPx: Float): RunMetrics {
         // 混合源按目标 em 统一缩放(链内 ×em/chainEm,原版回退 ×em/9)——
@@ -349,14 +358,6 @@ private class DefaultChainFont : PlatformFont {
 
     override fun lineHeightAt(emPx: Float): Float = metricsAt(emPx).lineHeight
     override fun baselineFromTopAt(emPx: Float): Float = metricsAt(emPx).baselineFromTop
-
-    companion object {
-        /** 系统 stb 链默认字号(用户定案现值;随字体携带,非全局常量) */
-        const val SYSTEM_STB_DEFAULT_SIZE_SP = 16f
-
-        /** 原版位图默认字号(行高 9 的 2 倍历史语义) */
-        const val VANILLA_DEFAULT_SIZE_SP = 18f
-    }
 }
 
 /** 原版资源字体(alt/unifont 等):位图通道,fallbackId=null 即链终局 */
@@ -366,7 +367,7 @@ private class VanillaBitmapFont(
 
     override val channel: FontChannel get() = FontChannel.MC_BITMAP
     override val providerEmPx: Float get() = VanillaRunMetrics.lineHeight // 9 网格
-    override val defaultSizeSp: Float get() = DefaultChainFont.VANILLA_DEFAULT_SIZE_SP
+    override val defaultSizeSp: Float get() = 18f
 
     /** 终端字体视为全覆盖(缺失码点由引擎画方框);其余资源字体同样交原版解析 */
     override fun covers(codepoint: Int): Boolean = true

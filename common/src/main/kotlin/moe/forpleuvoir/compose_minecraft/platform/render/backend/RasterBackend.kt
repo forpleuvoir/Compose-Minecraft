@@ -182,7 +182,7 @@ internal class RasterBackend(
      *   阴影与 GUI 端一致未绘制;[TextRenderBackend.VANILLA] 定向 run 跳过。
      */
     override fun drawText(cmd: DrawTextCommand) {
-        if (cmd.backend == TextRenderBackend.VANILLA || !TextRenderConfig.enabled) return
+        if (cmd.backend == TextRenderBackend.VANILLA) return
         val binding = cmd.font ?: moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.resolveNative(cmd.style)
         if (binding.font.channel != moe.forpleuvoir.compose_minecraft.platform.render.text.FontChannel.STB_VECTOR) return
         val chain = TrueTypeFontManager.regularChain()

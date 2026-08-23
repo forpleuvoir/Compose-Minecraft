@@ -64,7 +64,6 @@ val LocalDefaultFontSize = staticCompositionLocalOf<TextUnit> { TextUnit.Unspeci
 
 /**
  * 解析生效默认字体(P3):像素模式下 LocalDefaultFont 的冻结默认(fusion_pixel)
- * 生效;stb 系统字体模式([TextRenderConfig.usePixelDefaultFont] = false)下,
  * 该哨兵值映射回 minecraft:default(自研 stb 渲染器的输入)。业务显式
  * provide 的字体始终优先。
  */
@@ -85,7 +84,7 @@ fun resolveDefaultFontSize(): TextUnit =
 /**
  * 文本渲染后端定向选择(T.TT P2):子树级强制原版位图渲染。
  *
- * - 默认 [TextRenderBackend.DEFAULT]:跟随全局开关(TextRenderConfig.enabled);
+ * - 默认 [TextRenderBackend.DEFAULT]:按解析字体的通道分流;
  * - 提供 [TextRenderBackend.VANILLA]:该子树内文本强制原版位图字形渲染;
  * - 无「强制启用」档:启用是平台级决策,不暴露给子树。
  *

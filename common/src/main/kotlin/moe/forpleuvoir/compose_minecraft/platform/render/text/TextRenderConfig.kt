@@ -8,7 +8,7 @@ import moe.forpleuvoir.compose_minecraft.mc
 /**
  * 文本渲染后端定向选择(T.TT,设计文档 §3.1.1)。
  *
- * - [DEFAULT]:跟随全局开关([TextRenderConfig.enabled])分流;
+ * - [DEFAULT]:由字体解析结果的通道决定分流(A2);
  * - [VANILLA]:强制原版 MC 位图字体渲染(定向回退,组合期经
  *   `LocalTextRenderBackend` 覆盖 —— 该 CompositionLocal 属 P2)。
  *
@@ -57,13 +57,6 @@ object TextRenderConfig {
      * providerEm/defaultSize 由此派生(A6)—— 不再承担全局基准职责。
      */
     var pixelFontEmSp: Float by mutableStateOf(12f)
-
-    /**
-     * 全局开关:开启且字体就绪时 Compose 文本走自研 TTF 管线(默认启用)。
-     *
-     * P2-B5:仅作为 DefaultFontChain 的 stb 就绪总闸(通道策略内聚于该字体);
-     */
-    var enabled: Boolean by mutableStateOf(true)
 
     /** 常规体字体文件列表(D1 开放设计),按优先级排序 */
     val fontSources: MutableList<FontSource> = mutableListOf()
