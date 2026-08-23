@@ -69,16 +69,15 @@ val LocalDefaultFontSize = staticCompositionLocalOf<TextUnit> { TextUnit.Unspeci
  */
 @Composable
 fun resolveDefaultFont(): FontDescription {
-    val provided = LocalDefaultFont.current
-    return if (!TextRenderConfig.usePixelDefaultFont && provided == MinecraftFonts.FusionPixel) {
-        MinecraftFonts.Default
-    } else provided
+    // P2-B5:哨兵映射随双模式开关消亡 —— 业务 Provider 即最终语义,
+    // 「默认字体是谁」由 FontResolver.defaultFontId 唯一决定。
+    return LocalDefaultFont.current
 }
 
 /** 解析生效默认字号(sp):跟随 [TextRenderConfig.effectiveDefaultFontSizeSp] 实时值 */
 @Composable
 fun resolveDefaultFontSize(): TextUnit =
-    TextRenderConfig.effectiveDefaultFontSizeSp.sp
+    moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFont().defaultSizeSp.sp
 
 /**
  * 文本渲染后端定向选择(T.TT P2):子树级强制原版位图渲染。

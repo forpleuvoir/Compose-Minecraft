@@ -52,12 +52,16 @@ data class FontSource(
 object TextRenderConfig {
 
     /**
+     * 内置 Fusion Pixel 的设计网格 em(sp):advance/行高按原生网格计算,
+     * 与 FreeType 渲染端(provider size 同值)逐像素一致。仅该字体的
+     * providerEm/defaultSize 由此派生(A6)—— 不再承担全局基准职责。
+     */
+    var pixelFontEmSp: Float by mutableStateOf(12f)
+
+    /**
      * 全局开关:开启且字体就绪时 Compose 文本走自研 TTF 管线(默认启用)。
      *
-     * ⚠️ P3 像素化语义修正:[usePixelDefaultFont] = true 时本开关对
-     * **默认/fusion_pixel 的 run 不生效** —— 该类 run 必须经管线渲染才能与
-     * 像素度量同源,否则行盒/宽度错位;enabled 仅在 stb 模式(false)下作为
-     * 旧总闸使用。
+     * P2-B5:仅作为 DefaultFontChain 的 stb 就绪总闸(通道策略内聚于该字体);
      */
     var enabled: Boolean by mutableStateOf(true)
 
@@ -78,66 +82,6 @@ object TextRenderConfig {
      * 与原版一致;实测反馈:写死 18 会叠加成 1sp=2px)。
      */
     val baseFontSizePx: Float get() = mc.font.lineHeight.toFloat()
-
-    /**
-     * **像素默认字体的 em 基准(sp)**:平台全局默认字体已切换为内置
-     * Fusion Pixel(compose_minecraft:fusion_pixel,设计网格 12px,见
-     * `assets/compose_minecraft/font/fusion_pixel.json`)。
-     *
-     * - 1sp == 1px 不变;本值 = 字体设计网格,**默认字号取 12sp 时字形
-     *   网格与屏幕像素 1:1(锐利)**,放大建议取 12 的整数倍;
-     * - 字号→渲染缩放换算基准([moe.forpleuvoir.compose_minecraft.platform.ui.text.TextStyleMapper]
-     *   的 scale = sp / 本值)随之从原版行高 9 切到 12;
-     * - 度量链(TrueTypeFontManager 内置源)以同值作为字体加载 em。
-     */
-    var pixelFontEmSp: Float by mutableStateOf(12f)
-
-    /**
-     * 全局默认字号(sp)= 像素字体网格 ×2([pixelFontEmSp] × 2,默认 24sp)。
-     * ×2 为整数倍缩放,像素字形仍逐像素锐利;12sp 原生尺寸实测过小(用户反馈,
-     * 2026-08)。字号→渲染缩放换算(scale = sp / [pixelFontEmSp])下 24sp → 2x。
-     */
-    val pixelDefaultFontSizeSp: Float get() = pixelFontEmSp * 2f
-
-    /**
-     * 是否启用「像素默认字体」模式(P3,默认 true):
-     *
-     * - true:Compose 未显式指定字体的文本使用 compose_minecraft:fusion_pixel,
-     *   经原版 FreeType 管线按设计网格渲染;布局度量取像素字体 em
-     *   ([pixelFontEmSp]),缺字码点按码点退回原版字形;
-     * - false:回退旧行为 —— 默认字体 minecraft:default,[enabled] 开启时由
-     *   自研 stb 管线按系统字体链渲染(TrueType 文本对照测试屏使用此模式)。
-     *
-     * 注意:本开关只影响「默认文本走哪条渲染路径与度量」,不影响已显式指定
-     * 字体的 run 与原版自身渲染。
-     */
-    var usePixelDefaultFont: Boolean by mutableStateOf(true)
-
-    /**
-     * 生效默认字号(sp)—— 双模式统一入口:
-     * - 像素模式([usePixelDefaultFont])= [pixelDefaultFontSizeSp](24sp);
-     * - stb 模式 = 原版行高 × [defaultFontSizeLineMultiple](18sp,历史语义)。
-     * 所有「未显式指定字号」的消费点(BasicText/BasicTextField 等)必须经此取值,
-     * 禁止各自硬编码(历史上 9f/16f/18f 三处写死导致模式间尺寸错乱)。
-     */
-    val effectiveDefaultFontSizeSp: Float
-        get() = if (usePixelDefaultFont) pixelDefaultFontSizeSp
-        else mc.font.lineHeight * defaultFontSizeLineMultiple
-
-    /**
-     * 字号→渲染缩放的基准 px(sp ÷ 本值 = scale)—— 双模式统一入口:
-     * - 像素模式 = [pixelFontEmSp](12):24sp → 2x;
-     * - stb 模式 = mc.font.lineHeight(9):18sp → 2x(历史语义)。
-     */
-    val fontScaleBasePx: Float
-        get() = if (usePixelDefaultFont) pixelFontEmSp else mc.font.lineHeight.toFloat()
-
-    /**
-     * 默认字号 = 原版 Font.lineHeight × 本倍数(默认 2,即平台惯例的 18sp)。
-     * 与 [baseFontSizePx] 一样动态跟随行高;部分模组修改行高时自动适配。
-     */
-    @Volatile
-    var defaultFontSizeLineMultiple: Float = 2f
 
     /**
      * 混淆(§k)字形重掷间隔(ms),默认 16(约每帧一次,对齐原版每帧重掷的观感;

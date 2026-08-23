@@ -69,9 +69,9 @@ data class PlatformTextData(
     val ignored: List<String>,
 )
 
-/** 平台默认字号(sp):双模式统一([TextRenderConfig.effectiveDefaultFontSizeSp])。 */
-val MC_DEFAULT_FONT_SIZE_SP: Float
-    get() = TextRenderConfig.effectiveDefaultFontSizeSp
+/** 平台默认字号(sp):随当前默认字体的 defaultSizeSp(A6/I5,P2-B5) */
+fun platformDefaultFontSizeSp(): Float =
+    moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFont().defaultSizeSp
 
 /**
  * 字号 → **最终像素 em(emPx)** 唯一换算入口(P2-B3,A4 尺寸空间唯一):
@@ -146,7 +146,7 @@ fun TextStyle.toPlatformData(density: Density): PlatformTextData {
     // 字号:sp → 渲染缩放(公式同 TextUnit.toTextScale,见 T.19/T.26);Unspecified/em → 平台默认
     val fontSizeSp =
         if (span.fontSize.isUnspecified || span.fontSize.type != TextUnitType.Sp) {
-            MC_DEFAULT_FONT_SIZE_SP
+            platformDefaultFontSizeSp()
         } else {
             span.fontSize.value
         }

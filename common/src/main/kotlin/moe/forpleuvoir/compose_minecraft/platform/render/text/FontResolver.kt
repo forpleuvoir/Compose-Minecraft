@@ -162,12 +162,15 @@ object FontResolver {
     private val warnedMissing = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<FontDescription, Boolean>())
 
     /**
-     * 当前默认字体。过渡语义:像素模式 → fusion_pixel;stb 对照模式 →
-     * minecraft:default(与旧行为一致;P2 起为可写配置点)。
+     * 当前默认字体 id(P2-B5,A8 唯一配置点;dev 对照场景直接改写此值)。
      */
-    val defaultFontId: FontDescription
-        get() = if (TextRenderConfig.usePixelDefaultFont) BuiltinFonts.fusionPixel.id
-        else BuiltinFonts.defaultChain.id
+    var defaultFontId: FontDescription = BuiltinFonts.fusionPixel.id
+
+    /** 当前默认字体(注册表条目;缺失属启动期程序错误,fail-loud)。 */
+    fun defaultFont(): PlatformFont =
+        FontRegistry[defaultFontId]
+            ?: throw IllegalStateException("default font $defaultFontId not registered")
+
 
     /**
      * 解析指定字体在 [emPx](最终像素 em)下的绑定。
@@ -185,10 +188,6 @@ object FontResolver {
         }
         return resolveFont(font, emPx)
     }
-
-    private fun defaultFont(): PlatformFont =
-        FontRegistry[defaultFontId]
-            ?: throw IllegalStateException("default font $defaultFontId not registered")
 
     private fun resolveFont(font: PlatformFont, emPx: Float): ResolvedFont =
         pool.computeIfAbsent(BindingKey(font, emPx)) { ResolvedFont(font, emPx) }

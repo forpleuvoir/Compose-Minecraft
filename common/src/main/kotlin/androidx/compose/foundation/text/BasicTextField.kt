@@ -207,7 +207,7 @@ fun BasicTextField(
     scrollState: ScrollState = rememberScrollState(),
     // 平台适配点(T.26 → P3 像素化):输入框文本字号默认 = 双模式统一基准
     // (像素模式 24sp / stb 模式 18sp,见 TextRenderConfig.effectiveDefaultFontSizeSp)
-    fontSize: TextUnit = TextRenderConfig.effectiveDefaultFontSizeSp.sp,
+    fontSize: TextUnit = moe.forpleuvoir.compose_minecraft.platform.ui.text.platformDefaultFontSizeSp().sp,
     // Last parameter must not be a function unless it's intended to be commonly used as a trailing
     // lambda.
 ) {
@@ -260,7 +260,7 @@ internal fun BasicTextField(
     scrollState: ScrollState = rememberScrollState(),
     isPassword: Boolean = false,
     // 平台适配点(T.26 → P3 像素化):输入框文本字号默认 = 双模式统一基准
-    fontSize: TextUnit = TextRenderConfig.effectiveDefaultFontSizeSp.sp,
+    fontSize: TextUnit = moe.forpleuvoir.compose_minecraft.platform.ui.text.platformDefaultFontSizeSp().sp,
     // Last parameter must not be a function unless it's intended to be commonly used as a trailing
     // lambda.
 ) {

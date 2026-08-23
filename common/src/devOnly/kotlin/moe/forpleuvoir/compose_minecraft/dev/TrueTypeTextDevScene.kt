@@ -54,9 +54,11 @@ fun TrueTypeTextDevScene() {
     // 离开时恢复进入前的值(捕获与置位收拢在同一 DisposableEffect,避免
     // 组合期分步写入的时序隐患)
     DisposableEffect(Unit) {
-        val previous = TextRenderConfig.usePixelDefaultFont
-        TextRenderConfig.usePixelDefaultFont = false
-        onDispose { TextRenderConfig.usePixelDefaultFont = previous }
+        // P2-B5:「模式开关」消亡 —— 对照场景直接切换默认字体配置点
+        val previous = moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFontId
+        moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFontId =
+            net.minecraft.network.chat.FontDescription.DEFAULT
+        onDispose { moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFontId = previous }
     }
     // 首次组合注册 dev 字体源(幂等)
     remember {
