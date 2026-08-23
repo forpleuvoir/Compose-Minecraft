@@ -697,7 +697,8 @@ internal class MinecraftParagraph(
     override fun getLineTop(lineIndex: Int): Float = lineTop(lineIndex) * scale
 
     override fun getLineBaseline(lineIndex: Int): Float =
-        (lineTop(lineIndex) + lineBoxHeight(lineIndex) * 0.8f) * scale
+        // P2-B2 基线唯一(I4):真实字体基线 × 行内最大段系数,替代 0.8×行盒启发式
+        (lineTop(lineIndex) + layout.baselineFromTop * lineAt(lineIndex).scaleFactor) * scale
 
     override fun getLineBottom(lineIndex: Int): Float =
         (lineTop(lineIndex) + lineBoxHeight(lineIndex)) * scale
