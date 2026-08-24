@@ -20,14 +20,11 @@ import moe.forpleuvoir.compose_minecraft.platform.render.toScreenRectangle
 import moe.forpleuvoir.compose_minecraft.platform.render.util.BlendPipelines
 import moe.forpleuvoir.compose_minecraft.platform.render.util.MinecraftImageTextureCache
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontOriginal
-import moe.forpleuvoir.compose_minecraft.platform.ui.text.toComponent
 import net.minecraft.client.gui.render.TextureSetup
 import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.client.renderer.state.gui.BlitRenderState
 import net.minecraft.client.renderer.state.gui.ColoredRectangleRenderState
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState
-import net.minecraft.locale.Language
-import net.minecraft.network.chat.FontDescription
 import org.joml.Matrix3x2f
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -298,24 +295,6 @@ internal class GuiStateBackend : GeometryBackend {
             val text = cmd.text.substring(segStart, endIdx)
             val resolved = moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
                 .resolve(owner.font.id, primary.spec)
-            // [TT-F] 探针(临时):位图段 预留宽 vs mc.font 自算宽×k
-            if (ttLogKeys.add("F|" + text.take(6) + "|" + owner.font.id)) {
-                var rsvF = 0f
-                var jF = segStart
-                var pF = -1
-                while (jF < endIdx) {
-                    val c = cmd.text.codePointAt(jF)
-                    rsvF += primary.metrics.advance(c) + primary.metrics.kern(pF, c)
-                    pF = c; jF += Character.charCount(c)
-                }
-                val compF = net.minecraft.network.chat.Component.literal(text).setStyle(cmd.style.withFont(owner.font.id))
-                val visF = net.minecraft.locale.Language.getInstance().getVisualOrder(compF)
-                println("[TT-F] '" + text.take(6) + "' owner=" + owner.font.id +
-                    " k=" + (resolved.emPx / resolved.font.providerEmPx) +
-                    " resv=" + rsvF +
-                    " logical=" + mc.font.splitter.stringWidth(visF) +
-                    " visual=" + mc.font.splitter.stringWidth(visF))
-            }
             val segCmd = androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand(
                 matrix = cmd.matrix, clip = cmd.clip, text = text,
                 x = segX, y = cmd.y, style = cmd.style, alpha = cmd.alpha,
@@ -363,7 +342,6 @@ internal class GuiStateBackend : GeometryBackend {
         sink: GuiCommandSink,
         penStart: Float,
     ) {
-        val alphaByte = (cmd.alpha * 255f).roundToInt().coerceIn(0, 255)
         var penX = penStart
         var i = 0
         while (i < cmd.text.length) {

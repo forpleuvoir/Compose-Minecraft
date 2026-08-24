@@ -61,8 +61,9 @@ data class MeasureSpec(
 
 /**
  * 逐码点度量(emPx 绝对值;架构法则 A5「度量恒等于渲染」):
- * - [advance]:TTF 读 hmtx(`stbtt_GetCodepointHMetrics`)、位图读 splitter
- *   widthProvider —— 比例字体逐字符各测各宽,kern 逐对独立,无任何平均近似;
+ * - [advance]:**必须回答「渲染端实际绘制这个码点的宽度」** —— mc.font 通道
+ *   经归属链([owningGlyphOwner])取归属字形集宽度,stb 链取 hmtx;
+ *   比例字体逐字符各测各宽,kern 逐对独立,无任何平均近似;
  * - [lineHeight]/[baselineFromTop]:该 em 下的自然行盒与基线。
  */
 interface RunMetrics {
@@ -152,24 +153,11 @@ class ResolvedFont internal constructor(
      */
     fun ownerForChannel(codepoint: Int, allowStb: Boolean): GlyphOwner {
         val key = if (allowStb) codepoint else -codepoint.dec()
-        return ownerCache.computeIfAbsent(key) { ownerImpl(codepoint, allowStb) }
+        // 归属解析与通道无关(通道过滤由上游 bitmapPreferred 的 id 替换承担);
+        // allowStb 仅作为缓存键维度保留(VANILLA 定向查询与常规查询分开计)
+        return ownerCache.computeIfAbsent(key) { owningGlyphOwner(this.font, codepoint) }
     }
 
-    private fun ownerImpl(codepoint: Int, allowStb: Boolean): GlyphOwner {
-        var font = this.font
-        var visited = 0
-        while (visited++ < MAX_CHAIN_DEPTH) {
-            if (!isControlCodepoint(codepoint) && font.covers(codepoint)) return GlyphOwner(font, font.channel)
-            val next = font.fallbackId?.let { id -> FontRegistry[id] }
-            if (next == null) {
-                // 链尽(含终端位图字体):交原版位图渲染(missing 方框兜底)
-                return GlyphOwner(font, FontChannel.MC_BITMAP)
-            }
-            font = next
-        }
-        FONT_LOGGER.error("[ComposeMinecraft] fallback chain too deep at font={}, treating as bitmap", font.id)
-        return GlyphOwner(font, FontChannel.MC_BITMAP)
-    }
     /** 本字体是否覆盖整段文本(快速路径;控制字符视为不覆盖) */
     fun coversAll(text: String): Boolean {
         var i = 0
@@ -180,10 +168,33 @@ class ResolvedFont internal constructor(
         }
         return true
     }
+}
 
-    companion object {
-        private const val MAX_CHAIN_DEPTH = 8
+/** 链深上限:注册表回退链禁止成环(注册期校验),此值为防御性深度界 */
+private const val MAX_CHAIN_DEPTH = 8
+
+/**
+ * **归属链唯一实现**(font-system 修复 T.RF-H 升维):「一个码点由谁渲染」
+ * 的全部答案都从这里产生 —— 渲染端分段提交(GuiStateBackend.submitOwnedRun
+ * 经 [ResolvedFont.ownerForChannel])与测量端归属化计宽
+ * ([VanillaPipelineMetrics.advance])消费的是**同一个**解析结果,
+ * 不存在第二份链遍历。规则:从 [start] 起,首个覆盖非控制码点的字体;
+ * 控制码点无字形、任何字体不归属 → 必达终端位图(链尽同)。
+ */
+internal fun owningGlyphOwner(start: PlatformFont, codepoint: Int): GlyphOwner {
+    var font = start
+    var visited = 0
+    while (visited++ < MAX_CHAIN_DEPTH) {
+        if (!isControlCodepoint(codepoint) && font.covers(codepoint)) return GlyphOwner(font, font.channel)
+        val next = font.fallbackId?.let { id -> FontRegistry[id] }
+        if (next == null) {
+            // 链尽(含终端位图字体):交原版位图渲染(missing 方框兜底)
+            return GlyphOwner(font, FontChannel.MC_BITMAP)
+        }
+        font = next
     }
+    FONT_LOGGER.error("[ComposeMinecraft] fallback chain too deep at font={}, treating as bitmap", font.id)
+    return GlyphOwner(font, FontChannel.MC_BITMAP)
 }
 
 /** 字体注册表(唯一登记处;数据驱动,无特判)。 */
@@ -243,10 +254,9 @@ class CustomFreeTypeFont internal constructor(
 
     override fun metricsAt(spec: MeasureSpec): RunMetrics =
         FontMetrics.mcFont(
-            id,
+            this,
             spec.copy(style = spec.style ?: net.minecraft.network.chat.Style.EMPTY.withFont(id)),
             native = natural,
-            providerEmPx = 9f,
         )
 }
 
@@ -416,15 +426,14 @@ internal object FontMetrics {
 
     /** mc.font 渲染通道(MC_FREETYPE/MC_BITMAP):advance=splitter 样式化计宽 */
     fun mcFont(
-        id: FontDescription,
+        font: PlatformFont,
         spec: MeasureSpec,
         /** 网格原生态度量(禁止传入已按目标 em 缩放的值 —— 防双重缩放) */
         native: RunMetrics,
-        providerEmPx: Float,
     ): RunMetrics {
         val effSpec = if (spec.style != null) spec
-        else spec.copy(style = net.minecraft.network.chat.Style.EMPTY.withFont(id))
-        return VanillaPipelineMetrics.of(id, effSpec, native, providerEmPx)
+        else spec.copy(style = net.minecraft.network.chat.Style.EMPTY.withFont(font.id))
+        return VanillaPipelineMetrics.of(font, effSpec, native)
     }
 
     /** stb 矢量链通道:混合源按目标 em 缩放;链未就绪退原版(同比例) */
@@ -471,9 +480,8 @@ private class FusionPixelFont(
     override fun metricsAt(spec: MeasureSpec): RunMetrics =
         // native 必须是网格原生态;缩放与样式兜底统一在 FontMetrics
         FontMetrics.mcFont(
-            id, spec,
+            this, spec,
             native = mixed?.at(providerEmPx) ?: VanillaRunMetrics,
-            providerEmPx = providerEmPx,
         )
 }
 
@@ -521,30 +529,43 @@ private class VanillaBitmapFont(
     override val fallbackId: FontDescription? = null
 
     override fun metricsAt(spec: MeasureSpec): RunMetrics =
-        FontMetrics.mcFont(id, spec, native = VanillaRunMetrics, providerEmPx = 9f)
+        FontMetrics.mcFont(this, spec, native = VanillaRunMetrics)
 }
 
 /**
- * 原版管线权威度量(P2-B5 定案):advance **直接询问 mc.font.splitter**
- * 的样式化计宽(Font 构造同一宽度源:`该style字体字形.getAdvance(isBold)`)
- * —— 粗体加宽、provider 覆盖、未来任何样式效应自动携带,零隐性约定(A5);
- * 尺寸差异仅做 k=emPx/providerEm 同源缩放(与位图 pose 一致)。kern 恒 0(原版无字距)。
+ * 原版管线权威度量(P2-B5 定案;T.RF-H 归属化升维)。
+ *
+ * **advance 的唯一合法答案 =「渲染端真正画这个码点的字形集」的宽度**:
+ * - 归属:owningGlyphOwner 链解析 —— 与渲染端分段提交
+ *   (GuiStateBackend.submitOwnedRun → VanillaBitmapSubmitter)消费
+ *   **同一个**解析结果,两端不可能分叉(A5 度量≡渲染);
+ * - 宽度:以**归属字体 id** 询问 mc.font.splitter(粗体加宽、provider 覆盖、
+ *   未来任何样式效应自动携带,零隐性约定);
+ * - 缩放:`spec.emPx / 归属字体.providerEmPx`,与位图 pose 比 k 同源(I3)。
+ *
+ * 归属=自身时公式退化为自身字形集 × 自身网格比;行盒/基线/装饰按自身
+ * 自然度量 × 自身网格比(网格一律以字体自报 [PlatformFont.providerEmPx]
+ * 为准,不再有第二份硬编码值)。kern 恒 0(原版无字距)。
  */
 internal class VanillaPipelineMetrics private constructor(
-    private val id: net.minecraft.network.chat.FontDescription,
+    private val font: PlatformFont,
     private val spec: MeasureSpec,
     /** 行盒/基线来源(自然度量,与字符宽无关) */
     private val natural: RunMetrics,
-    private val ratio: Float,
 ) : RunMetrics {
+
+    /** 自身网格比(行盒/基线/装饰;advance 不用它 —— advance 按归属网格比) */
+    private val ratio: Float = spec.emPx / font.providerEmPx
+
     private val cache = java.util.concurrent.ConcurrentHashMap<Int, Float>()
 
     override fun advance(codepoint: Int): Float = cache.computeIfAbsent(codepoint) {
         val ch = String(Character.toChars(it))
-        val style = (spec.style ?: net.minecraft.network.chat.Style.EMPTY).withFont(id)
-        val w = moe.forpleuvoir.compose_minecraft.mc.font.splitter
-            .stringWidth(net.minecraft.network.chat.Component.literal(ch).setStyle(style))
-        w * ratio
+        val owner = owningGlyphOwner(font, codepoint).font
+        val style = (spec.style ?: net.minecraft.network.chat.Style.EMPTY).withFont(owner.id)
+        moe.forpleuvoir.compose_minecraft.mc.font.splitter
+            .stringWidth(net.minecraft.network.chat.Component.literal(ch).setStyle(style)) *
+            (spec.emPx / owner.providerEmPx)
     }
 
     override fun kern(prev: Int, next: Int): Float = 0f
@@ -556,14 +577,12 @@ internal class VanillaPipelineMetrics private constructor(
         private val pool =
             java.util.concurrent.ConcurrentHashMap<Pair<net.minecraft.network.chat.FontDescription, MeasureSpec>, VanillaPipelineMetrics>()
 
-        /** @param providerEmPx 该字体在 mc.font 中的网格 em(fusion=12 / 位图=9) */
         fun of(
-            id: net.minecraft.network.chat.FontDescription,
+            font: PlatformFont,
             spec: MeasureSpec,
             natural: RunMetrics,
-            providerEmPx: Float,
-        ): RunMetrics = pool.computeIfAbsent(id to spec) {
-            VanillaPipelineMetrics(id, spec, natural, spec.emPx / providerEmPx)
+        ): RunMetrics = pool.computeIfAbsent(font.id to spec) {
+            VanillaPipelineMetrics(font, spec, natural)
         }
     }
 }
