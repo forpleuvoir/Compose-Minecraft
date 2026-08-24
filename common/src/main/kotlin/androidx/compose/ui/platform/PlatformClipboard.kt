@@ -30,7 +30,12 @@ import net.minecraft.client.Minecraft
 internal object MinecraftClipboard {
     fun readText(): String? =
         runCatching {
-            mc.keyboardHandler.clipboard.ifEmpty { null }
+            // 行尾归一化:外部来源(IDE 等)常为 CRLF,孤立 CR 亦存在 ——
+            // \r 不是排版换行语义,留在内容里会被当作字形渲染(实测方框)
+            mc.keyboardHandler.clipboard
+                .replace("\r\n", "\n")
+                .replace('\r', '\n')
+                .ifEmpty { null }
         }.getOrNull()
 
     fun writeText(text: String) {

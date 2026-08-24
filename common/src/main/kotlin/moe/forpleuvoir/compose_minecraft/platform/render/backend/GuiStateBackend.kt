@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.MinecraftCanvas.*
 import moe.forpleuvoir.compose_minecraft.mc
+import net.minecraft.client.gui.navigation.ScreenRectangle
 import moe.forpleuvoir.compose_minecraft.platform.render.CustomDrawContext
 import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderPlugins
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.ColorEvaluator
@@ -237,44 +238,165 @@ internal class GuiStateBackend : GeometryBackend {
         val sink = sink ?: return
         val scissor = scissorFor(cmd)
         if (cmd.clip != null && scissor == null) return
-        // T.TT 文本渲染分流(设计文档 §3.1,唯一拦截点):
-        // - VANILLA:定向回退原版(组合期 LocalTextRenderBackend 盖章,P2);
-        // - DEFAULT:全局开关开启且字体就绪 → 自研 TrueType 管线
-        //   (TrueTypeTextWriter 拒绝的 run —— 缺字/未支持样式/渐变 —— 逐 run 回退);
-        // - 其余(开关关闭 / 字体不可用)→ 原版 sink.addText(D4,与现状一致)。
-        // P3 像素化路由不变量:像素模式(usePixelDefaultFont)下默认/fusion_pixel
-        // 的 run 必须由自研管线渲染(度量=PixelFont 同源),enabled 对其不生效;
-        // 非像素模式维持旧语义(enabled 关闭 → 全部原版)。
-        val goingVanilla = cmd.backend == TextRenderBackend.VANILLA ||
-            (!TextRenderConfig.enabled && !TextRenderConfig.usePixelDefaultFont) ||
-            !TrueTypeTextWriter.trySubmit(cmd, scissor?.toScreenRectangle(), sink)
-        // 文本路由观测([TextRenderConfig.debugTextBounds]):每个 run 的字体描述、
-        // 粗体与最终分流 —— 排查「粗体/回退/混排走错渲染器」类问题的第一手证据
+        // P2-B4(A2/A3):通道由命令携带的字体绑定唯一决定 —— 无模式开关、
+        // 无白名单特判。VANILLA 定向 = 全部位图通道渲染(归属 id 不变)。
+        val font = cmd.font ?: moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.resolveNative(cmd.style)
+        // 路由观测:同键(文本头+字体+通道)只打印一次,杜绝逐帧刷屏
         if (TextRenderConfig.debugTextBounds) {
-            println(
-                "[TT] '" + cmd.text.take(10) + "' font=" + cmd.style.fontOriginal +
-                    " bold=" + cmd.style.isBold + " backend=" + cmd.backend +
-                    " usePixel=" + TextRenderConfig.usePixelDefaultFont +
-                    " -> " + if (goingVanilla) "VANILLA" else "STB"
+            val k = cmd.text.take(8) + "|" + font.font.id + "|" + font.font.channel
+            if (ttLogKeys.add(k)) {
+                println(
+                    "[TT] '" + cmd.text.take(10) + "' font=" + cmd.style.fontOriginal +
+                        " bold=" + cmd.style.isBold +
+                        " em=" + font.emPx + " provEm=" + font.font.providerEmPx +
+                        " box=" + font.lineHeightPx + " base=" + font.baselineFromTopPx +
+                        " y=" + cmd.y +
+                        " channel=" + font.font.channel +
+                        " -> " + if (font.font.channel == moe.forpleuvoir.compose_minecraft.platform.render.text.FontChannel.STB_VECTOR) "STB" else "BITMAP/FREETYPE"
+                )
+            }
+        }
+        when {
+            cmd.backend == TextRenderBackend.VANILLA ->
+                submitOwnedRun(cmd, font, scissor, sink, allowStb = false)
+            font.font.channel == moe.forpleuvoir.compose_minecraft.platform.render.text.FontChannel.STB_VECTOR -> {
+                val scr = scissor?.toScreenRectangle()
+                if (!TrueTypeTextWriter.trySubmit(cmd, scr, sink, font)) {
+                    // 写器拒绝(极端情形):整段落位图终端兜底(D4)
+                    bitmapTerminalFallback(cmd, font, scr, sink)
+                } else if (TextRenderConfig.debugTextBounds) {
+                    drawDebugTextBounds(cmd, font, scissor, sink)
+                }
+            }
+            else -> submitOwnedRun(cmd, font, scissor, sink, allowStb = true)
+        }
+    }
+
+    /**
+     * 按码点归属([ResolvedFont.ownerOf],I6 全覆盖回退)切段提交:
+     * - STB_VECTOR 归属段 → 写器(携带归属绑定);
+     * - MC_FREETYPE / MC_BITMAP 归属段 → 位图助手(锚点/pose 比单点);
+     * - 推进一律用主绑定度量(与布局前缀和严格同源,I2)。
+     */
+    private fun submitOwnedRun(
+        cmd: DrawTextCommand,
+        primary: moe.forpleuvoir.compose_minecraft.platform.render.text.ResolvedFont,
+        scissor: Rect?,
+        sink: GuiCommandSink,
+        allowStb: Boolean,
+    ) {
+        val scr = scissor?.toScreenRectangle()
+        var i = 0
+        val n = cmd.text.length
+        var segStart = 0
+        var segX = cmd.x
+        var penX = 0f
+        var prevCp = -1
+        var cur: moe.forpleuvoir.compose_minecraft.platform.render.text.GlyphOwner? = null
+        fun flush(endIdx: Int) {
+            val owner = cur ?: return
+            val text = cmd.text.substring(segStart, endIdx)
+            val resolved = moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
+                .resolve(owner.font.id, primary.spec)
+            val segCmd = androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand(
+                matrix = cmd.matrix, clip = cmd.clip, text = text,
+                x = segX, y = cmd.y, style = cmd.style, alpha = cmd.alpha,
+                shader = cmd.shader, backend = cmd.backend, font = resolved,
             )
+            when {
+                allowStb && owner.channel == moe.forpleuvoir.compose_minecraft.platform.render.text.FontChannel.STB_VECTOR ->
+                    if (!TrueTypeTextWriter.trySubmit(segCmd, scr, sink, resolved)) {
+                        bitmapTerminalFallback(segCmd, resolved, scr, sink)
+                    }
+                cmd.shader != null -> splitGradientBitmapChars(segCmd, resolved, owner, scr, sink, penStart = segX)
+                else -> VanillaBitmapSubmitter.submitFor(
+                    cmd = segCmd, sink = sink, scissor = scr,
+                    text = text, font = resolved, fontId = owner.font.id,
+                    xBaseline = segX,
+                    yBaseline = cmd.y + resolved.baselineFromTopPx,
+                    colorArgb = solidArgb(cmd),
+                )
+            }
         }
-        // T.TT 诊断:TTF 模式下的回退 run 打印(行盒调试开关兼作回退诊断)
-        if (goingVanilla && TextRenderConfig.enabled && TextRenderConfig.debugTextBounds) {
-            println("[TT-FALLBACK] '${cmd.text.take(16)}' backend=${cmd.backend} hasShader=${cmd.shader != null}")
+        while (i < n) {
+            val cp = cmd.text.codePointAt(i)
+            val cc = Character.charCount(cp)
+            val owner = primary.ownerForChannel(cp, allowStb)
+            if (cur != null && owner != cur) {
+                flush(i)
+                segStart = i
+                segX = cmd.x + penX
+            }
+            cur = owner
+            penX += primary.metrics.advance(cp) + primary.metrics.kern(prevCp, cp)
+            prevCp = cp
+            i += cc
         }
-        if (!goingVanilla) {
-            if (TextRenderConfig.debugTextBounds) drawDebugTextBounds(cmd, scissor, sink)
-            return
+        flush(n)
+        if (TextRenderConfig.debugTextBounds) drawDebugTextBounds(cmd, primary, scissor, sink)
+    }
+
+    /** 渐变位图字符阶梯(原版 sink 一段一色限制;推进与布局同源) */
+    private fun splitGradientBitmapChars(
+        cmd: DrawTextCommand,
+        resolved: moe.forpleuvoir.compose_minecraft.platform.render.text.ResolvedFont,
+        owner: moe.forpleuvoir.compose_minecraft.platform.render.text.GlyphOwner,
+        scr: ScreenRectangle?,
+        sink: GuiCommandSink,
+        penStart: Float,
+    ) {
+        val alphaByte = (cmd.alpha * 255f).roundToInt().coerceIn(0, 255)
+        var penX = penStart
+        var i = 0
+        while (i < cmd.text.length) {
+            val cp = cmd.text.codePointAt(i)
+            val cc = Character.charCount(cp)
+            val ch = cmd.text.substring(i, i + cc)
+            val adv = resolved.metrics.advance(cp)
+            val color = ColorEvaluator.sampleGradient(
+                ColorEvaluator.gradientTAt(penX + adv / 2f, cmd.y + resolved.lineHeightPx / 2f, cmd.shader!!),
+                cmd.shader,
+                cmd.alpha,
+            )
+            VanillaBitmapSubmitter.submitFor(
+                cmd = cmd, sink = sink, scissor = scr,
+                text = ch, font = resolved, fontId = owner.font.id,
+                xBaseline = penX, yBaseline = cmd.y + resolved.baselineFromTopPx,
+                colorArgb = color,
+            )
+            penX += adv
+            i += cc
         }
-        // T.TT:原版路径的渐变文本 —— GuiTextRenderState 一段只能一个颜色,
-        // 整段采样会退化成纯色(实测反馈);按字符拆分、逐字符采样渐变色,
-        // 视觉呈阶梯渐变,与原版位图渲染器兼容。
-        if (cmd.shader != null) {
-            splitGradientText(cmd, scissor, sink)
-        } else {
-            submitSegmentedVanillaText(cmd, scissor, sink)
-        }
-        if (TextRenderConfig.debugTextBounds) drawDebugTextBounds(cmd, scissor, sink)
+    }
+
+    /** 写器拒绝时的位图终端整段兜底(D4) */
+    private fun bitmapTerminalFallback(
+        cmd: DrawTextCommand,
+        primary: moe.forpleuvoir.compose_minecraft.platform.render.text.ResolvedFont,
+        scr: ScreenRectangle?,
+        sink: GuiCommandSink,
+    ) {
+        val terminal = moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
+            .resolve(
+                moe.forpleuvoir.compose_minecraft.platform.render.text.BuiltinFonts.uniFontTerminal.id,
+                primary.spec,
+            )
+        VanillaBitmapSubmitter.submitFor(
+            cmd = cmd, sink = sink, scissor = scr,
+            text = cmd.text, font = terminal,
+            fontId = net.minecraft.network.chat.FontDescription.DEFAULT,
+            xBaseline = cmd.x, yBaseline = cmd.y + terminal.baselineFromTopPx,
+            colorArgb = solidArgb(cmd),
+        )
+    }
+
+    /** 样式色 × alpha → ARGB(与写器取色同一语义) */
+    private val ttLogKeys = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<String, Boolean>())
+
+    private fun solidArgb(cmd: DrawTextCommand): Int {
+        val alphaByte = (cmd.alpha * 255f).roundToInt().coerceIn(0, 255)
+        val baseColor = cmd.style.color?.value?.or(0xFF000000.toInt()) ?: 0xFFFFFFFF.toInt()
+        return (baseColor and 0x00FFFFFF) or (alphaByte shl 24)
     }
 
     /**
@@ -287,13 +409,13 @@ internal class GuiStateBackend : GeometryBackend {
      */
     private fun drawDebugTextBounds(
         cmd: DrawTextCommand,
+        font: moe.forpleuvoir.compose_minecraft.platform.render.text.ResolvedFont,
         scissor: Rect?,
         sink: GuiCommandSink,
     ) {
         MinecraftGuiText.ensureCompiled()
         val ms = max(0.05f, matrixScale(cmd.matrix))
-        // P1:度量按命令样式解析(唯一决策点 FontResolver)
-        val metrics = FontResolver.resolveNative(cmd.style).metrics
+        val metrics = font.metrics
         var width = 0f
         var i = 0
         while (i < cmd.text.length) {
@@ -334,144 +456,6 @@ internal class GuiStateBackend : GeometryBackend {
         quad(cmd.x + width - t, cmd.y, cmd.x + width, cmd.y + height, DBG_BOUNDS_COLOR)
         // 基线(红)
         quad(cmd.x, baseline - t, cmd.x + width, baseline, DBG_BASELINE_COLOR)
-    }
-
-    /**
-     * 原版路径的渐变文本:按码点拆分为单字符 [GuiTextRenderState],每个字符
-     * 以其中心点采样一次渐变色。字符推进用原版 splitter(与原版字形宽度同源),
-     * 避免与原版字形错位。
-     */
-    private fun splitGradientText(
-        cmd: DrawTextCommand,
-        scissor: Rect?,
-        sink: GuiCommandSink,
-    ) {
-        val font = mc.font
-        val splitter = font.splitter
-        val pose = cmd.matrix.toMatrix3x2f()
-        // P3 基线补偿:布局基线(像素字体自然行盒)− 原版硬编码锚点 7
-        // P1:度量按命令样式解析(唯一决策点 FontResolver)
-        val metricsSrc = FontResolver.resolveNative(cmd.style).metrics
-        val yBase = cmd.y + (metricsSrc.baselineFromTop - VANILLA_BASELINE_ANCHOR)
-        var penX = 0f
-        var i = 0
-        val n = cmd.text.length
-        while (i < n) {
-            val cp = cmd.text.codePointAt(i)
-            val cc = Character.charCount(cp)
-            val chText = cmd.text.substring(i, i + cc)
-            val advance = splitter.stringWidth(chText)
-            // 采样点:字符中心(x)/ 当前行高中点(y);sampleGradient 已含命令 alpha
-            val color = ColorEvaluator.sampleGradient(
-                ColorEvaluator.gradientTAt(cmd.x + penX + advance / 2f, cmd.y + metricsSrc.lineHeight / 2f, cmd.shader!!),
-                cmd.shader,
-                cmd.alpha,
-            )
-            // P3 像素化缺字回退:像素字体缺的字符换回 minecraft:default 字形
-            val segStyle = if (pixelFontCovers(cp)) cmd.style else cmd.style.withFont(FontDescription.DEFAULT)
-            sink.addText(
-                GuiTextRenderState(
-                    font,
-                    Language.getInstance().getVisualOrder(segStyle.toComponent(chText)),
-                    pose,
-                    (cmd.x + penX).roundToInt(),
-                    yBase.roundToInt(),
-                    color,
-                    0,
-                    false,
-                    false,
-                    scissor?.toScreenRectangle(),
-                )
-            )
-            penX += advance
-            i += cc
-        }
-    }
-
-    // ── P3 像素化缺字回退(命名资源字体无跨字体回退,提交层切段换字体)──────
-
-    /**
-     * 原版字形基线锚点:原版把所有字形基线硬编码在 `行顶 + 7`
-     * ([com.mojang.blaze3d.font.GlyphBitmap.getTop] = `7 - bearingTop`,
-     * 7 = 原版位图字体 ascent)。布局侧基线来自像素字体自然行盒
-     * (@pixelFontEmSp em ≈ 13px)—— 提交 y 必须补差值,否则整体上移 ≈6px
-     * (实测反馈:渲染位置往上偏移)。
-     */
-    private val VANILLA_BASELINE_ANCHOR = 7f
-
-    /** 像素字体码点覆盖缓存(true = fusion_pixel 有字形;false = 换原版字形) */
-    private val pixelCoverageCache = java.util.concurrent.ConcurrentHashMap<Int, Boolean>()
-
-    /**
-     * 像素字体是否覆盖该码点(P1:经注册表字体的覆盖判定 —— 与原版 FreeType
-     * 渲染端同读一份 glyf 表,判定一致;缓存避免逐帧查询)。
-     */
-    private fun pixelFontCovers(codepoint: Int): Boolean =
-        pixelCoverageCache.computeIfAbsent(codepoint) { BuiltinFonts.fusionPixel.covers(it) }
-
-    /**
-     * 按码点覆盖切段提交原版渲染:fusion_pixel 覆盖的段保持其字体描述;
-     * 未覆盖段(阿拉伯文/emoji 等)字体换回 [FontDescription.DEFAULT] ——
-     * 由 minecraft:default 字形渲染,实现「Compose 内像素字体 + 缺字退回原版」。
-     * 段内 x 偏移用命令样式的解析度量推进(与布局度量同源,含 kern)。
-     */
-    private fun submitSegmentedVanillaText(
-        cmd: DrawTextCommand,
-        scissor: Rect?,
-        sink: GuiCommandSink,
-    ) {
-        val alphaByte = (cmd.alpha * 255f).roundToInt().coerceIn(0, 255)
-        val baseColor = cmd.style.color?.value?.or(0xFF000000.toInt()) ?: 0xFFFFFFFF.toInt()
-        val argb = (baseColor and 0x00FFFFFF) or (alphaByte shl 24)
-        // P3 基线补偿:布局基线 − 原版硬编码锚点(见 VANILLA_BASELINE_ANCHOR 注释)
-        // P1:度量按命令样式解析(唯一决策点 FontResolver)
-        val metricsSrc = FontResolver.resolveNative(cmd.style).metrics
-        val yBase = cmd.y + (metricsSrc.baselineFromTop - VANILLA_BASELINE_ANCHOR)
-        val pose = cmd.matrix.toMatrix3x2f()
-        val scr = scissor?.toScreenRectangle()
-
-        var segStart = 0
-        fun flush(endIdx: Int, startPen: Float, covered: Boolean) {
-            if (endIdx <= segStart) return
-            val segText = cmd.text.substring(segStart, endIdx)
-            val segStyle = if (covered) cmd.style else cmd.style.withFont(FontDescription.DEFAULT)
-            sink.addText(
-                GuiTextRenderState(
-                    mc.font,
-                    Language.getInstance().getVisualOrder(segStyle.toComponent(segText)),
-                    pose,
-                    (cmd.x + startPen).roundToInt(),
-                    yBase.roundToInt(),
-                    argb,
-                    0,
-                    false,
-                    false,
-                    scr,
-                )
-            )
-        }
-
-        var i = 0
-        var pen = 0f
-        var segStartPen = 0f
-        var prev = -1
-        var cur: Boolean? = null
-        val n = cmd.text.length
-        while (i < n) {
-            val cp = cmd.text.codePointAt(i)
-            val cc = Character.charCount(cp)
-            val covered = pixelFontCovers(cp)
-            if (cur != null && covered != cur) {
-                flush(i, segStartPen, cur)
-                segStart = i
-                segStartPen = pen
-            }
-            cur = covered
-            pen += metricsSrc.advance(cp) + metricsSrc.kern(prev, cp)
-            prev = cp
-            i += cc
-        }
-        flush(n, segStartPen, cur ?: true)
     }
 
     override fun drawGradientRect(cmd: DrawGradientRectCommand) {

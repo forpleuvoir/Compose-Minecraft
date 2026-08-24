@@ -16,6 +16,7 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFont
 import androidx.compose.runtime.DisposableEffect
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalTextRenderBackend
@@ -41,7 +42,7 @@ import net.minecraft.network.chat.Style
 /**
  * TrueType 文本渲染对照测试(T.TT,第一步:管线 + 开关 + 度量同源 + 回退)。
  *
- * - 顶部开关切换原版位图渲染 / 自研 TrueType 渲染(全局 [TextRenderConfig.enabled]);
+ * - 顶部开关切换系统矢量链 / 原版位图 default(经 FontResolver.defaultFontId);
  * - 切换后整棵子树重建([key]):布局度量重新快照,宽度/行高按新来源计算;
  * - dev 字体:C:\Windows\Fonts\msyh.ttc(微软雅黑,仅 dev 验证用,
  *   D1 内置字体后续再定,不打包进发布 JAR);
@@ -53,11 +54,10 @@ fun TrueTypeTextDevScene() {
     // 本屏 = 自研 stb 渲染器对照(系统字体链):进入时切到 stb 模式,
     // 离开时恢复进入前的值(捕获与置位收拢在同一 DisposableEffect,避免
     // 组合期分步写入的时序隐患)
-    DisposableEffect(Unit) {
-        val previous = TextRenderConfig.usePixelDefaultFont
-        TextRenderConfig.usePixelDefaultFont = false
-        onDispose { TextRenderConfig.usePixelDefaultFont = previous }
-    }
+    // P2-B5:对照屏字体作用域 —— 不动全局配置,经 LocalDefaultFont 局部覆盖
+    // (离开作用域自动恢复);顶部开关只是切换本屏提供的字体 id。
+    val B = moe.forpleuvoir.compose_minecraft.platform.render.text.BuiltinFonts
+    var bitmapMode by remember { mutableStateOf(false) }
     // 首次组合注册 dev 字体源(幂等)
     remember {
         val devFont = "C:\\Windows\\Fonts\\msyh.ttc"
@@ -84,10 +84,21 @@ fun TrueTypeTextDevScene() {
         true
     }
 
-    // 初始选中状态跟随实际全局开关(而非假定 TTF)
-    var truetype by remember { mutableStateOf(TextRenderConfig.enabled) }
+    // 三档字体作用域:系统矢量链 / 原版位图 / 平台像素字体(数据驱动,无特判)
+    val fontModes = listOf(
+        B.systemChain.id to "TrueType 渲染",
+        B.vanillaDefault.id to "原版位图渲染",
+        B.fusionPixel.id to "像素字体",
+    )
+    var modeId by remember { mutableStateOf(B.systemChain.id) }
+    val truetype = modeId == B.systemChain.id
 
 
+
+
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalDefaultFont provides modeId
+    ) {
     Box(
         Modifier
             .fillMaxSize()
@@ -116,16 +127,13 @@ fun TrueTypeTextDevScene() {
 
             // ── 模式开关 ──
             Row(Modifier.padding(top = 8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                ModeButton(
-                    label = "原版位图渲染",
-                    selected = !truetype,
-                    onClick = { TextRenderConfig.enabled = false; truetype = false },
-                )
-                ModeButton(
-                    label = "TrueType 渲染",
-                    selected = truetype,
-                    onClick = { TextRenderConfig.enabled = true; truetype = true },
-                )
+                fontModes.forEach { (id, label) ->
+                    ModeButton(
+                        label = label,
+                        selected = modeId == id,
+                        onClick = { modeId = id },
+                    )
+                }
                 var boundsOn by remember { mutableStateOf(TextRenderConfig.debugTextBounds) }
                 ModeButton(
                     label = if (boundsOn) "行盒:开" else "行盒:关",
@@ -137,18 +145,27 @@ fun TrueTypeTextDevScene() {
                 )
             }
             BasicText(
-                if (truetype) {
-                    "当前:TTF 渲染器(平滑轮廓;仅显式资源字体/缺字 run 回退原版)。本界面外始终原版。"
-                } else {
-                    "当前:原版位图渲染器(8×8 像素风,放大有块状锯齿)"
+                when {
+                    modeId == B.systemChain.id ->
+                        "当前:TTF 渲染器 · 系统字体链(平滑轮廓;缺字回退原版)"
+                    modeId == B.fusionPixel.id ->
+                        "当前:像素字体(fusion_pixel,经原版 FreeType 按网格渲染;默认 24sp 锐利)"
+                    else ->
+                        "当前:原版位图渲染器(minecraft:default,放大有块状锯齿)"
                 },
                 style = Style.EMPTY
-                    .withColor(if (truetype) Color(0xFF80CBC4) else Color(0xFFFFCC80))
+                    .withColor(
+                        when {
+                            modeId == B.fusionPixel.id -> Color(0xFFFFB74D)
+                            truetype -> Color(0xFF80CBC4)
+                            else -> Color(0xFFFFCC80)
+                        }
+                    )
                     .toTextStyle(),
                 modifier = Modifier.padding(top = 4.dp),
             )
 
-            key(truetype) {
+            key(modeId) {
                 Column {
                     SectionLabelTt("① 中英混排(默认 16sp)")
                     BasicText(
@@ -194,7 +211,7 @@ fun TrueTypeTextDevScene() {
                             .append(Component.literal("普通段 ").withStyle(Style.EMPTY.withColor(Color.White)))
                             .append(Component.literal("红色段 ").withStyle(Style.EMPTY.withColor(Color(0xFFFF7043))))
                             .append(Component.literal("青色段").withStyle(Style.EMPTY.withColor(Color(0xFF4FC3F7)))),
-                        fontSize = 24.sp,
+                        fontSize = 18.sp,
                     )
                     BasicText(
                         component = Component.literal("粗体段(管线合成)").withStyle(Style.EMPTY.withBold(true)),
@@ -216,6 +233,8 @@ fun TrueTypeTextDevScene() {
                     BasicTextField(
                         state = input,
                         textStyle = Style.EMPTY.withColor(Color.White),
+                        // P2-B5:默认字号随字体(16sp),对照须显式同字号
+                        fontSize = 18.sp,
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(Color(0xFF232A4A))
@@ -237,7 +256,7 @@ fun TrueTypeTextDevScene() {
                     SectionLabelTt("⑪ 定向回退(LocalTextRenderBackend.VANILLA 子树)")
                     CompositionLocalProvider(LocalTextRenderBackend provides TextRenderBackend.VANILLA) {
                         BasicText(
-                            "本行强制原版位图渲染(VANILLA 子树)",
+                            "本行强制原版位图渲染(VANILLAVANILLAVANILLAVANILLA子嘟嘟嘟嘟嘟嘟哒哒哒哒哒哒对对对树)",
                             style = Style.EMPTY.withColor(Color.White).toTextStyle()
                                 .merge(TextStyle(fontSize = 18.sp)),
                             modifier = Modifier
@@ -323,7 +342,7 @@ fun TrueTypeTextDevScene() {
                     BasicText(
                         "说明:粗体走独立字重文件;移除 boldFontSources 后此行退化为膨胀合成。",
                         style = Style.EMPTY.withColor(Color(0xFF78909C)).toTextStyle()
-                            .merge(TextStyle(fontSize = 10.sp)),
+                            .merge(TextStyle(fontSize = 18.sp)),
                         modifier = Modifier.padding(top = 2.dp),
                     )
 
@@ -341,6 +360,7 @@ fun TrueTypeTextDevScene() {
                 }
             }
         }
+    }
     }
 }
 

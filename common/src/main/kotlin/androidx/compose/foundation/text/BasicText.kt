@@ -65,8 +65,10 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalTextRenderBackend
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFont
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.resolveDefaultFont
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.resolveDefaultFontSize
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.resolveDefaultFontSize
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultTextStyle
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontSizeToEmPx
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withDefaultFont
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.util.fastFilter
@@ -75,6 +77,7 @@ import androidx.compose.ui.util.fastMapIndexedNotNull
 import androidx.compose.ui.util.fastRoundToInt
 import kotlin.math.floor
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.flatten
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontOriginal
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.obfuscatedRaw
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toPlatformData
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toStyleSegments
@@ -250,7 +253,7 @@ fun BasicText(
     maxLines: Int = Int.MAX_VALUE,
     minLines: Int = 1,
     color: ColorProducer? = null,
-    fontSize: TextUnit = 18.sp,
+    fontSize: TextUnit = resolveDefaultFontSize(),
 ) {
     validateMinMaxLines(minLines = minLines, maxLines = maxLines)
 
@@ -263,7 +266,9 @@ fun BasicText(
     val defaultFont = resolveDefaultFont()
     val effectiveDefaultStyle =
         remember(defaultStyle, defaultFont) {
-            if (defaultStyle.font == null) defaultStyle.withFont(defaultFont) else defaultStyle
+            // ⚠️ 必须用 fontOriginal(可空原始值):MC Style.getFont() 未设置时
+            // 返回 DEFAULT 非 null —— 用 .font 判空会导致默认字体盖章永不生效
+            if (defaultStyle.fontOriginal == null) defaultStyle.withFont(defaultFont) else defaultStyle
         }
 
     // 平台适配点(T.3):展平为带自身样式的段;每段缺失属性用 defaultStyle 补缺(applyTo 语义)
@@ -963,6 +968,6 @@ internal fun TextUnit.toTextScale(density: Density): Float {
     require(type == TextUnitType.Sp) {
         "Platform (T.19): fontSize only supports sp units (MC has no native font size system, em cannot be resolved)"
     }
-    // sp → px → 缩放 = px / 双模式基准(像素模式 12 / stb 模式 9)
-    return value * density.density * density.fontScale / TextRenderConfig.fontScaleBasePx
+    // sp → px → 缩放:唯一换算入口(P2-B1 公式合一)
+    return density.fontSizeToEmPx(value)
 }

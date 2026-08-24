@@ -26,7 +26,11 @@ import androidx.compose.foundation.text.input.internal.selection.SelectionMoveme
 import androidx.compose.foundation.text.input.internal.selection.TextFieldPreparedSelectionState
 import androidx.compose.foundation.text.input.internal.selection.TextFieldSelectionState
 import androidx.compose.foundation.text.isTypedEvent
-import androidx.compose.foundation.text.platformDefaultKeyMapping
+import androidx.compose.foundation.text.defaultKeyMapping
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.foundation.text.showCharacterPalette
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.input.key.KeyEvent
@@ -53,7 +57,7 @@ internal val KeyEvent.isFromSoftKeyboard: Boolean get() = false
 internal abstract class TextFieldKeyEventHandler {
     private val preparedSelectionState = TextFieldPreparedSelectionState()
     private val deadKeyCombiner = DeadKeyCombiner()
-    private val keyMapping = platformDefaultKeyMapping
+    private val keyMapping = defaultKeyMapping
 
     /**
      * We hold a reference to the all key down events that we receive and consume so that we can
@@ -156,6 +160,19 @@ internal abstract class TextFieldKeyEventHandler {
                     false
                 }
             }
+        }
+
+        // P3 默认行为(P3 键位方案前置):多行字段按 Tab 插入 4 空格并消费事件
+        // —— 消费后 GLFW 字符回调不再投递 \t,杜绝“控制字符直接入文”;
+        // 单行放行(false)= 焦点系统接管。自定义经 TextFieldKeyScheme。
+        if (event.key == Key.Tab && !event.isShiftPressed && editable && !singleLine) {
+            textFieldState.replaceSelectedText(
+                newText = "    ",
+                clearComposition = true,
+                restartImeIfContentChanges = !event.isFromSoftKeyboard,
+            )
+            preparedSelectionState.resetCachedX()
+            return true
         }
 
         val command = keyMapping.map(event)

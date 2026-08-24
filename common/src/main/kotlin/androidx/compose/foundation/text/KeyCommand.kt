@@ -16,7 +16,7 @@
 
 package androidx.compose.foundation.text
 
-internal enum class KeyCommand(
+enum class KeyCommand(
     // Indicates, that this command is supposed to edit text so should be applied only to
     // editable text fields
     val editsText: Boolean

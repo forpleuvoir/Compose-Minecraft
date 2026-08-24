@@ -69,9 +69,19 @@ data class PlatformTextData(
     val ignored: List<String>,
 )
 
-/** 平台默认字号(sp):双模式统一([TextRenderConfig.effectiveDefaultFontSizeSp])。 */
-val MC_DEFAULT_FONT_SIZE_SP: Float
-    get() = TextRenderConfig.effectiveDefaultFontSizeSp
+/** 平台默认字号(sp):随当前默认字体的 defaultSizeSp(A6/I5,P2-B5) */
+fun platformDefaultFontSizeSp(): Float =
+    moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFont().defaultSizeSp
+
+/**
+ * 字号 → **最终像素 em(emPx)** 唯一换算入口(P2-B3,A4 尺寸空间唯一):
+ * `emPx = sp × density × fontScale`(1sp == 1px @density1,**无基准除法**)。
+ *
+ * 全部调用点(TextStyleMapper/toTextScale/autoSize)已收敛至此;
+ * 禁止再出现第二套字号公式(census-A 的教训)。
+ */
+internal fun Density.fontSizeToEmPx(sp: Float): Float =
+    sp * density * fontScale
 
 /**
  * [TextStyle] → [PlatformTextData]。仅在组合期调用(density 来自 [androidx.compose.ui.platform.LocalDensity])。
@@ -136,12 +146,12 @@ fun TextStyle.toPlatformData(density: Density): PlatformTextData {
     // 字号:sp → 渲染缩放(公式同 TextUnit.toTextScale,见 T.19/T.26);Unspecified/em → 平台默认
     val fontSizeSp =
         if (span.fontSize.isUnspecified || span.fontSize.type != TextUnitType.Sp) {
-            MC_DEFAULT_FONT_SIZE_SP
+            platformDefaultFontSizeSp()
         } else {
             span.fontSize.value
         }
-    // 字号缩放基准 = 双模式统一(像素 em 12 / stb 模式原版行高 9)
-    val scale = fontSizeSp * density.density * density.fontScale / TextRenderConfig.fontScaleBasePx
+    // 字号缩放 = 唯一换算入口(P2-B1 公式合一;像素 em 12 / stb 模式原版行高 9)
+    val scale = density.fontSizeToEmPx(fontSizeSp)
 
     return PlatformTextData(
         mcStyle = mcStyle,

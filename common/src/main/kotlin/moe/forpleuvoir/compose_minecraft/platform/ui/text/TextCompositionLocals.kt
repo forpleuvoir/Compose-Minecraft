@@ -16,6 +16,8 @@
 
 package moe.forpleuvoir.compose_minecraft.platform.ui.text
 
+import moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
+import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
 
 import androidx.compose.runtime.Composable
@@ -63,27 +65,38 @@ val LocalDefaultFontSize = staticCompositionLocalOf<TextUnit> { TextUnit.Unspeci
 
 /**
  * 解析生效默认字体(P3):像素模式下 LocalDefaultFont 的冻结默认(fusion_pixel)
- * 生效;stb 系统字体模式([TextRenderConfig.usePixelDefaultFont] = false)下,
  * 该哨兵值映射回 minecraft:default(自研 stb 渲染器的输入)。业务显式
  * provide 的字体始终优先。
  */
 @Composable
 fun resolveDefaultFont(): FontDescription {
-    val provided = LocalDefaultFont.current
-    return if (!TextRenderConfig.usePixelDefaultFont && provided == MinecraftFonts.FusionPixel) {
-        MinecraftFonts.Default
-    } else provided
+    // P2-B5:「默认字体是谁」由 FontResolver.defaultFontId 唯一决定。
+    // LocalDefaultFont 冻结默认(fusion_pixel)视为「未指定」→ 跟随 defaultFontId;
+    // 业务显式 Provider 的字体始终优先(对照屏切 defaultFontId 即生效)。
+    val provided0 = LocalDefaultFont.current
+    val provided = if (provided0 == MinecraftFonts.FusionPixel) FontResolver.defaultFontId else provided0
+    // 「退回即全部退回」(A2/A3):定向原版通道时,布局也必须按位图等价字体度量,
+    // 否则测量(stb hmtx)与渲染(原版字形)口径不同必然超盒。
+    return if (LocalTextRenderBackend.current == TextRenderBackend.VANILLA)
+        FontResolver.bitmapPreferred(provided) else provided
 }
 
 /** 解析生效默认字号(sp):跟随 [TextRenderConfig.effectiveDefaultFontSizeSp] 实时值 */
 @Composable
-fun resolveDefaultFontSize(): TextUnit =
-    TextRenderConfig.effectiveDefaultFontSizeSp.sp
+fun resolveDefaultFontSize(): TextUnit {
+    // A6:默认字号跟随「生效字体」(含 LocalDefaultFont 局部作用域),
+    // 而非全局默认字体 —— 对照屏局部切字体时尺寸同步切换。
+    val desc = resolveDefaultFont()
+    val sizeSp = moe.forpleuvoir.compose_minecraft.platform.render.text.FontRegistry[desc]
+        ?.defaultSizeSp
+        ?: moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFont().defaultSizeSp
+    return sizeSp.sp
+}
 
 /**
  * 文本渲染后端定向选择(T.TT P2):子树级强制原版位图渲染。
  *
- * - 默认 [TextRenderBackend.DEFAULT]:跟随全局开关(TextRenderConfig.enabled);
+ * - 默认 [TextRenderBackend.DEFAULT]:按解析字体的通道分流;
  * - 提供 [TextRenderBackend.VANILLA]:该子树内文本强制原版位图字形渲染;
  * - 无「强制启用」档:启用是平台级决策,不暴露给子树。
  *

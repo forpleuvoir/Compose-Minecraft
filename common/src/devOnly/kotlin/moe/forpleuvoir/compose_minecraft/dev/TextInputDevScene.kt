@@ -102,6 +102,23 @@ fun TextInputDevScene() {
                         "Shift+方向键选区;Ctrl+C/V/X 剪贴板;输入超出宽度时水平滚动",
                 style = Style.EMPTY.withColor(Color(0xFFB0BEC5)).toTextStyle(),
             )
+            // ── 换行诊断 A/B:同文案,纯文本 vs 多行输入框(连续串应字符硬切)──
+            Column(Modifier.padding(top = 12.dp)) {
+                BasicText("A 纯文本(对照):", color = { Color(0xFF80CBC4) })
+                BasicText(
+                    "System.out.println(\"helloworld\") System.out.println(\"hello world\") 0123456789ABCDEF",
+                    color = { Color.White },
+                    modifier = Modifier.width(220.dp),
+                )
+                BasicText("B 输入框(被测):", modifier = Modifier.padding(top = 6.dp))
+                val wrapProbe = rememberTextFieldState("System.out.println(\"helloworld\") System.out.println(\"hello world\") 0123456789ABCDEF")
+                BasicTextField(
+                    state = wrapProbe,
+                    textStyle = Style.EMPTY.withColor(Color.White),
+                    modifier = Modifier.width(220.dp),
+                )
+            }
+
             Row {
                 var editor by remember { mutableStateOf(true) }
                 var show by remember { mutableStateOf(true) }

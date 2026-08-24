@@ -164,6 +164,10 @@ internal val defaultKeyMapping: KeyMapping =
                             Key.NumPadDirectionUp -> KeyCommand.PREV_PARAGRAPH
                             Key.DirectionDown,
                             Key.NumPadDirectionDown -> KeyCommand.NEXT_PARAGRAPH
+                            Key.MoveHome,
+                                Key.NumPadMoveHome -> KeyCommand.HOME
+                            Key.MoveEnd,
+                                Key.NumPadMoveEnd -> KeyCommand.END
                             Key.H -> KeyCommand.DELETE_PREV_CHAR
                             Key.Delete -> KeyCommand.DELETE_NEXT_WORD
                             Key.Backslash -> KeyCommand.DESELECT

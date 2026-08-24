@@ -22,7 +22,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.MinecraftCanvas
-import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shader
 import androidx.compose.ui.graphics.Shadow
@@ -44,7 +43,9 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import kotlin.math.ceil
 import moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
+import moe.forpleuvoir.compose_minecraft.platform.render.text.ResolvedFont
 import moe.forpleuvoir.compose_minecraft.platform.render.text.RunMetrics
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontOriginal
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
@@ -60,16 +61,15 @@ import net.minecraft.network.chat.Style
 // - 富文本(AnnotatedString 多 SpanStyle)第一版不做,只支持统一 [Style]。
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** 一行文本的布局结果 */
+/** 一行文本的布局结果(P2-B3:行盒/基线 = 行内字符绑定字体的最大自然度量) */
 internal data class MinecraftTextLine(
     val start: Int,
     val end: Int,
     val width: Float,
-    /**
-     * 平台适配点(段级字号):行内最大字符渲染系数(max r),行盒高 = 9 × scaleFactor。
-     * 全 1 时与旧行为一致。换行符不计入。
-     */
-    val scaleFactor: Float = 1f,
+    /** 行盒高(px,最终像素空间;换行符不计入) */
+    val lineBoxPx: Float = 0f,
+    /** 行顶到基线(px,最终像素空间) */
+    val baselinePx: Float = 0f,
 )
 
 /**
@@ -116,24 +116,18 @@ internal class MinecraftTextLayout(
     val maxWidth: Float,
     /** 平台适配点(InlineContent):占位符排版原子(按声明序;布局时按 start 排序)。 */
     val placeholders: List<PlaceholderSpan> = emptyList(),
-    /** 平台适配点(段级字号):每 char 相对渲染系数(长度 = text.length;空 = 全 1)。 */
-    val charScales: FloatArray = FloatArray(0),
     /**
-     * 度量来源(P1):按本布局样式的字体解析结果传入。
-     * P2 尺寸空间统一后此参数升级为 ResolvedFont(render/text 包)直传。
+     * 每字符字体绑定(P2-B3,总设计 A3/I2):段级字号 = 该段独立 emPx 的
+     * ResolvedFont;度量恒等于该字符最终渲染所用字体。
      */
-    val metrics: RunMetrics,
+    internal val fonts: (Int) -> ResolvedFont,
 ) {
 
-    /** 字符渲染相对系数(段级字号;越界 = 1) */
-    private fun ratioAt(i: Int): Float = charScales.getOrElse(i) { 1f }
+    /** 基础绑定(charFonts[0];省略号等基础 run 使用) */
+    internal val baseFont: ResolvedFont get() = fontAt(0)
 
-    val lineHeight: Float
-        get() = metrics.lineHeight
-
-    /** 行顶到基线距离(T.TT):布局侧基线公式统一从这里取,替代 0.8×行盒启发式 */
-    internal val baselineFromTop: Float
-        get() = metrics.baselineFromTop
+    /** char index → 字体(越界钳制,防御空文本) */
+    internal fun fontAt(i: Int): ResolvedFont = fonts(i.coerceIn(0, (text.length - 1).coerceAtLeast(0)))
 
     /**
      * 累积字符浮点宽度(cumFloatWidths 数组第 i 项 = text 前 i 个字符的 advance 浮点和)。
@@ -157,9 +151,9 @@ internal class MinecraftTextLayout(
         while (i < n) {
             val cp = text.codePointAt(i)
             val cc = Character.charCount(cp)
-            // 段级字号:字符增量 × 该段相对系数(r = 段字号缩放 / 基础缩放);
-            // T.TT:字偶距并入增量(与绘制端 pen 推进同源,间距与系统渲染一致)
-            inc[i] = (metrics.advance(cp) + metrics.kern(prevCp, cp)) * ratioAt(i)
+            // P2-B3:字符增量 = 该字符绑定字体的 advance + kern(绝对 emPx,
+            // 与绘制端 pen 推进严格同源);字偶距由提供字形的字体计算
+            fonts(i).metrics.let { m -> inc[i] = m.advance(cp) + m.kern(prevCp, cp) }
             if (cc == 2) inc[i + 1] = 0f
             prevCp = cp
             i += cc
@@ -202,9 +196,9 @@ internal class MinecraftTextLayout(
     val width: Float
         get() = lines.maxOfOrNull { it.width } ?: 0f
 
-    /** 段落高度 */
+    /** 段落高度(各行盒高之和) */
     val height: Float
-        get() = lines.size * lineHeight
+        get() = lines.sumOf { it.lineBoxPx.toDouble() }.toFloat()
 
     /** 最宽单词宽度(MC 字形度量;占位符按原子计入) */
     val minIntrinsicWidth: Float = run {
@@ -359,12 +353,23 @@ internal class MinecraftTextLayout(
                 break
             }
         }
-        // 平台适配点(段级字号):行系数 = 行内字符最大 r(换行符不计),决定该行盒高
+        // P2-B3:行盒/基线 = 行内字符绑定字体的最大自然度量(换行符不计)
         return result.map { line ->
             val contentEnd = if (line.end > line.start && text[line.end - 1] == '\n') line.end - 1 else line.end
-            var factor = 1f
-            for (j in line.start until contentEnd) factor = maxOf(factor, ratioAt(j))
-            line.copy(scaleFactor = factor)
+            var box = 0f
+            var baseline = 0f
+            if (contentEnd > line.start) {
+                for (j in line.start until contentEnd) {
+                    val f = fontAt(j)
+                    box = maxOf(box, f.lineHeightPx)
+                    baseline = maxOf(baseline, f.baselineFromTopPx)
+                }
+            } else {
+                val f = fontAt(line.start)
+                box = f.lineHeightPx
+                baseline = f.baselineFromTopPx
+            }
+            line.copy(lineBoxPx = box, baselinePx = baseline)
         }
     }
 }
@@ -396,40 +401,51 @@ internal class MinecraftParagraphIntrinsics(
         PlaceholderSpan(
             start = range.start,
             end = range.end,
-            width = with(density) { range.item.width.toPx() } / scale,
-            height = with(density) { range.item.height.toPx() } / scale,
+            width = with(density) { range.item.width.toPx() },
+            height = with(density) { range.item.height.toPx() },
             verticalAlign = range.item.placeholderVerticalAlign,
         )
     }
 
-    internal val charScales: FloatArray = run {
-        // 无分段(String 路径等)= 空数组,ratioAt 兜底为 1;
-        // 有分段时默认 1f(未覆盖字符继承基础字号)—— 千万不能是 0 默认,
-        // 否则全部字符增量被乘 0、文本宽度归零(实测 TAG 子段落 w=0)
-        if (segments.isEmpty()) return@run FloatArray(0)
-        val arr = FloatArray(text.length) { 1f }
+    /**
+     * 基础字体绑定(P2-B3):按基础字号 emPx([scale])解析 —— 未显式指定
+     * 字体/字号的字符使用;段级字号字符使用各自的 [ResolvedFont](I1/I2)。
+     */
+    internal val resolvedFont: ResolvedFont =
+        FontResolver.resolve(
+            style.fontOriginal,
+            moe.forpleuvoir.compose_minecraft.platform.render.text.MeasureSpec(scale, style = style),
+        )
+
+    /**
+     * 每字符字体绑定(P2-B3,取代 charScales 相对系数体系):
+     * 段级字号 = 该段独立 emPx 的字体解析;未指定段字号的字符继承基础绑定。
+     */
+    internal val charFonts: List<ResolvedFont> = run {
+        if (segments.isEmpty()) return@run List(text.length) { resolvedFont }
+        val arr = arrayOfNulls<ResolvedFont>(text.length)
         var offset = 0
         for (seg in segments) {
-            // 段字号缩放公式与 foundation toTextScale 一致(sp × density × fontScale / MC 基准行高 9px),
-            // 再除以基础缩放得相对系数
-            val r = seg.fontSizeSp
-                ?.let { sp -> (sp * density.density * density.fontScale / TextRenderConfig.fontScaleBasePx) / scale }
-                ?: 1f
             val end = minOf(offset + seg.text.length, arr.size)
-            for (j in offset until end) arr[j] = r
+            val f = seg.fontSizeSp?.let { sp ->
+                FontResolver.resolve(
+                    seg.style.fontOriginal ?: style.fontOriginal,
+                    moe.forpleuvoir.compose_minecraft.platform.render.text.MeasureSpec(
+                        sp * density.density * density.fontScale,
+                        style = seg.style,
+                    ),
+                )
+            } ?: resolvedFont
+            for (j in offset until end) arr[j] = f
             offset += seg.text.length
         }
-        arr
+        List(arr.size) { arr[it] ?: resolvedFont }
     }
-
-    // P1:度量按本段落样式的字体解析(唯一决策点 FontResolver;总设计 I1/I2)
-    internal val resolvedMetrics: RunMetrics =
-        FontResolver.resolveNative(style).metrics
 
     private val layout = MinecraftTextLayout(
         text, Float.POSITIVE_INFINITY,
-        placeholderSpans, charScales, resolvedMetrics,
-    )
+        placeholderSpans,
+    ) { i -> charFonts[i] }
 
     override val minIntrinsicWidth: Float = layout.minIntrinsicWidth * scale
 
@@ -447,21 +463,15 @@ internal class MinecraftParagraph(
     private val constraints: Constraints,
 ) : Paragraph {
 
-    /** 平台适配点(T.10):文本缩放;1f = 原样。 */
-    private val scale: Float get() = intrinsics.scale
-
     private val layout: MinecraftTextLayout = run {
         // 平台适配点(T.10):缩放后可用宽度按 1/scale 换算(布局在缩放前空间度量,绘制时矩阵放大)
         val maxWidth =
-            if (constraints.hasBoundedWidth) {
-                if (scale > 0f) constraints.maxWidth.toFloat() / scale
-                else Float.POSITIVE_INFINITY
-            } else Float.POSITIVE_INFINITY
+            if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat()
+            else Float.POSITIVE_INFINITY
         MinecraftTextLayout(
             intrinsics.text, maxWidth,
-            intrinsics.placeholderSpans, intrinsics.charScales,
-            intrinsics.resolvedMetrics,
-        )
+            intrinsics.placeholderSpans,
+        ) { i -> intrinsics.charFonts[i] }
     }
 
     private val visibleLineCount: Int =
@@ -485,8 +495,8 @@ internal class MinecraftParagraph(
         var drawText = intrinsics.text.substring(line.start, line.end)
         if (drawText.endsWith('\n')) drawText = drawText.dropLast(1)
         if (drawText.isEmpty()) return@run null
-        // 平台适配点(T.TT):省略号宽度与布局度量同源(逐码点 advance)
-        val ellipsisWidth = ceil(layout.metrics.let { m ->
+        // 省略号宽度与布局度量同源(基础绑定逐码点 advance)
+        val ellipsisWidth = ceil(layout.baseFont.metrics.let { m ->
             var w = 0f
             var i = 0
             while (i < ellipsisSuffix.length) {
@@ -505,11 +515,11 @@ internal class MinecraftParagraph(
         drawText.substring(0, end)
     }
 
-    override val width: Float get() = layout.width * scale
+    override val width: Float get() = layout.width
 
-    /** 平台适配点(段级字号):行盒高(布局空间)= 行高 × 该行最大段系数 */
+    /** 行盒高(最终像素空间,P2-B3)= 该行绑定字体的最大自然行盒 */
     private fun lineBoxHeight(lineIndex: Int): Float =
-        layout.lineHeight * lineAt(lineIndex).scaleFactor
+        lineAt(lineIndex).lineBoxPx
 
     /** 行顶 y(布局空间)= 前序可见行盒高之和 */
     private fun lineTop(lineIndex: Int): Float {
@@ -518,20 +528,17 @@ internal class MinecraftParagraph(
         return acc
     }
 
-    override val height: Float get() = lineTop(visibleLineCount) * scale
+    override val height: Float get() = lineTop(visibleLineCount)
 
     override val minIntrinsicWidth: Float get() = intrinsics.minIntrinsicWidth
 
     override val maxIntrinsicWidth: Float get() = intrinsics.maxIntrinsicWidth
 
     override val firstBaseline: Float
-        get() = layout.baselineFromTop * lineAt(0).scaleFactor * scale
+        get() = lineAt(0).baselinePx
 
     override val lastBaseline: Float
-        get() = (
-            lineTop(visibleLineCount - 1) +
-                layout.baselineFromTop * lineAt(visibleLineCount - 1).scaleFactor
-            ) * scale
+        get() = lineTop(visibleLineCount - 1) + lineAt(visibleLineCount - 1).baselinePx
 
     override val didExceedMaxLines: Boolean
         get() = maxLines != DefaultMaxLines && layout.lines.size > maxLines
@@ -559,13 +566,13 @@ internal class MinecraftParagraph(
                 val x = layout.prefixWidth(lineStart, span.start)
                 // 平台适配点(段级字号):行顶按前序行盒高累计,对齐基准用该行真实基线
                 val box = lineBoxHeight(lineIndex)
-                val baseline = layout.baselineFromTop * lineAt(lineIndex).scaleFactor
+                val baseline = lineAt(lineIndex).baselinePx
                 val y = lineTop(lineIndex) + placeholderAlignY(span.height, span.verticalAlign, box, baseline)
                 Rect(
-                    left = x * scale,
-                    top = y * scale,
-                    right = (x + span.width) * scale,
-                    bottom = (y + span.height) * scale,
+                    left = x,
+                    top = y,
+                    right = x + span.width,
+                    bottom = y + span.height,
                 )
             }
         }
@@ -669,11 +676,11 @@ internal class MinecraftParagraph(
             if (lineEnd <= lineStart) continue
             val left = layout.prefixWidth(line.start, lineStart)
             val right = layout.prefixWidth(line.start, lineEnd)
-            val top = lineIndex * layout.lineHeight
-            val bottom = (lineIndex + 1) * layout.lineHeight
+            val top = lineTop(lineIndex)
+            val bottom = lineTop(lineIndex) + lineBoxHeight(lineIndex)
             // 平台适配点(T.26):坐标 API 统一 ×scale —— 布局在 1x 空间度量,绘制经矩阵
             // 放大;选区/光标/命中测试在放大空间工作,坐标必须与视觉一致
-            path.addRect(Rect(left * scale, top * scale, right * scale, bottom * scale))
+            path.addRect(Rect(left, top, right, bottom))
         }
         return path
     }
@@ -684,27 +691,25 @@ internal class MinecraftParagraph(
         val start = lineDrawStart(lineIndex, line)
         // T.5:前缀精确宽度(EditBox.getScreenX 同源)
         val x = layout.prefixWidth(start, offset.coerceIn(start, line.end))
-        // 平台适配点(段级字号):行顶按前序行盒高累计
         val top = lineTop(lineIndex)
-        // 平台适配点(T.26):坐标 ×scale(布局 1x 空间,视觉放大空间)
-        return Rect(x * scale, top * scale, x * scale, (top + lineBoxHeight(lineIndex)) * scale)
+        return Rect(x, top, x, top + lineBoxHeight(lineIndex))
     }
 
     override fun getLineLeft(lineIndex: Int): Float = 0f
 
-    override fun getLineRight(lineIndex: Int): Float = lineAt(lineIndex).width * scale
+    override fun getLineRight(lineIndex: Int): Float = lineAt(lineIndex).width
 
-    override fun getLineTop(lineIndex: Int): Float = lineTop(lineIndex) * scale
+    override fun getLineTop(lineIndex: Int): Float = lineTop(lineIndex)
 
     override fun getLineBaseline(lineIndex: Int): Float =
-        (lineTop(lineIndex) + lineBoxHeight(lineIndex) * 0.8f) * scale
+        lineTop(lineIndex) + lineAt(lineIndex).baselinePx
 
     override fun getLineBottom(lineIndex: Int): Float =
-        (lineTop(lineIndex) + lineBoxHeight(lineIndex)) * scale
+        lineTop(lineIndex) + lineBoxHeight(lineIndex)
 
-    override fun getLineHeight(lineIndex: Int): Float = lineBoxHeight(lineIndex) * scale
+    override fun getLineHeight(lineIndex: Int): Float = lineBoxHeight(lineIndex)
 
-    override fun getLineWidth(lineIndex: Int): Float = lineAt(lineIndex).width * scale
+    override fun getLineWidth(lineIndex: Int): Float = lineAt(lineIndex).width
 
     override fun getLineStart(lineIndex: Int): Int = lineAt(lineIndex).start
 
@@ -725,7 +730,7 @@ internal class MinecraftParagraph(
         val lineIndex = lineForOffset(offset)
         val line = lineAt(lineIndex)
         val start = lineDrawStart(lineIndex, line)
-        return layout.prefixWidth(start, offset.coerceIn(start, line.end)) * scale
+        return layout.prefixWidth(start, offset.coerceIn(start, line.end))
     }
 
     override fun getParagraphDirection(offset: Int): ResolvedTextDirection = intrinsics.textDirection
@@ -733,9 +738,8 @@ internal class MinecraftParagraph(
     override fun getBidiRunDirection(offset: Int): ResolvedTextDirection = intrinsics.textDirection
 
     override fun getLineForVerticalPosition(vertical: Float): Int {
-        // 平台适配点(T.26):y 为放大空间坐标,除以 scale;
         // 平台适配点(段级字号):行盒高可变,按前序行盒高累计定位
-        val yLayout = vertical / scale
+        val yLayout = vertical
         var acc = 0f
         for (i in layout.lines.indices) {
             val box = lineBoxHeight(i)
@@ -759,9 +763,8 @@ internal class MinecraftParagraph(
         } else {
             line.end
         }
-        // 平台适配点(段级字号):字符增量含相对系数,改用缩放后前缀宽度行走
-        //("累计宽度 ≤ x"语义与旧 plainSubstrByWidth 一致;系数全 1 时行为不变)
-        val xLayout = position.x / scale
+        //("累计宽度 ≤ x"语义与旧 plainSubstrByWidth 一致)
+        val xLayout = position.x
         var rel = 0
         for (o in start until lineEndExclusive) {
             if (layout.prefixWidth(start, o + 1) <= xLayout) {
@@ -855,15 +858,9 @@ internal class MinecraftParagraph(
                     "MinecraftParagraph.paint only supports MinecraftCanvas, actual: ${canvas::class.simpleName}"
                 )
             val effectiveAlpha = alpha
-            val scaled = scale != 1f
-            if (scaled) {
-                mc.save()
-                mc.scale(scale, scale)
-            }
             val lineCount = visibleLineCount
             var rowTop = 0f
-            try {
-                for (i in 0 until lineCount) {
+            for (i in 0 until lineCount) {
                     val line = layout.lines[i]
                     val start = lineDrawStart(i, line)
                     if (line.end > start) {
@@ -885,6 +882,7 @@ internal class MinecraftParagraph(
                                     style = intrinsics.style,
                                     alpha = effectiveAlpha,
                                     shader = shader,
+                                    font = layout.fontAt(piece.first),
                                 )
                             } else {
                                 // 平台适配点(段级字号):Brush 路径同样走分段(此前丢段样式/缩放)
@@ -892,8 +890,7 @@ internal class MinecraftParagraph(
                                     mc, pieceText, piece.first, rowTop, segs,
                                     intrinsics.style, effectiveAlpha,
                                     baseX = layout.prefixWidth(start, piece.first),
-                                    charScales = intrinsics.charScales,
-                                    fallbackRatio = line.scaleFactor,
+                                    line = line,
                                     shader = shader,
                                 )
                             }
@@ -902,17 +899,14 @@ internal class MinecraftParagraph(
                             drawStyledRun(
                                 mc, ellipsisSuffix,
                                 layout.prefixWidth(start, start + ellipsizedLastLine.length),
-                                rowTop,
-                                line.scaleFactor, intrinsics.style, effectiveAlpha, shader,
+                                rowTop + line.baselinePx - layout.baseFont.baselineFromTopPx,
+                                layout.baseFont, intrinsics.style, effectiveAlpha, shader,
                             )
                         }
                     }
-                    // 平台适配点(段级字号):行顶按该行盒高累计
-                    rowTop += line.scaleFactor * layout.lineHeight
+                    // 行顶按该行盒高累计(P2-B3)
+                    rowTop += line.lineBoxPx
                 }
-            } finally {
-                if (scaled) mc.restore()
-            }
         } else {
             val color = (brush as? SolidColor)?.value ?: Color.White
             paint(canvas, color, alpha)
@@ -925,83 +919,59 @@ internal class MinecraftParagraph(
                 "MinecraftParagraph.paint only supports MinecraftCanvas, actual: ${canvas::class.simpleName}"
             )
         // T.1/T.2:记录完整 MC 样式快照;paint 传入的 color 覆盖样式色
-        // (shadow/textDecoration 等 Compose 绘制参数已被 MC Style 能力取代,第一版忽略)
         val style = intrinsics.style.withColor(color.copy(alpha = color.alpha * alpha))
-        // 平台适配点(T.28):文本透明度 —— color.alpha(含 TextStyle.alpha 合成)与
-        // 绘制 alpha 相乘,经 recordTextDraw 的 alpha 参数传递(渲染端 text() 消费
-        // command.alpha;MC TextColor 无 alpha 通道,不走样式色)
         val effectiveAlpha = color.alpha * alpha
-        // 平台适配点(T.10):文本缩放 —— 对画布施加缩放,recordTextDraw 记录缩放矩阵,
-        // 渲染端 pose 变换字形顶点(MC GUI 渲染为 GPU 矩阵变换)。
-        // 平台适配点(T.33 修复):缩放必须用 save/restore 包裹 —— MinecraftCanvas.scale
-        // 是原地乘当前矩阵,若不恢复会污染画布矩阵,导致本文本之后的所有兄弟节点
-        // (背景/边框/后续文本)在放大后的错位矩阵上绘制(实测 autoSize 大 scale 文本
-        // 之后的内容全部错位/画到屏幕外)。节点级 willClip 的 save/restore 只恢复
-        // 节点进入时的状态,无法兜底 scale 污染(willClip=false 时节点不 save)。
-        val scaled = scale != 1f
-        if (scaled) {
-            mc.save()
-            mc.scale(scale, scale)
-        }
+        // P2-B3(A4 尺寸空间唯一):布局坐标即最终像素,不再施加画布缩放;
+        // 字号语义由每字符字体绑定(ResolvedFont.emPx)承载。
         val lineCount = visibleLineCount
         var rowTop = 0f
-        try {
-            for (i in 0 until lineCount) {
-                val line = layout.lines[i]
-                val start = lineDrawStart(i, line)
-                if (line.end > start) {
-                    // 平台适配点(T.6 修复):整行绘制 —— 原 displayPos/visibleWidth 水平截断已移除,
-                    // 多行文本每行完整渲染(水平滚动交还原版 ScrollState 模型)。
-                    // 行尾可能含 `\n`(computeLines 的 exclusive end 含换行符),绘制时去掉。
-                    val contentEnd = if (intrinsics.text[line.end - 1] == '\n') line.end - 1 else line.end
-                    // 平台适配点:Ellipsis —— 最后一个可见行替换为省略版本
-                    val appendEllipsis = ellipsizedLastLine != null && i == visibleLineCount - 1
-                    val drawLimit =
-                        if (appendEllipsis) start + ellipsizedLastLine.length else contentEnd
-                    // 平台适配点(InlineContent):占位符内部不绘制(空间已保留),按可见子区间分段绘制
-                    for (piece in visiblePieces(start, contentEnd, drawLimit)) {
-                        val pieceText = intrinsics.text.substring(piece.first, piece.last + 1)
-                        val pieceX = layout.prefixWidth(start, piece.first)
-                        val segments = intrinsics.segments
-                        if (segments.isEmpty()) {
-                            mc.recordTextDraw(
-                                text = pieceText,
-                                x = pieceX,
-                                y = rowTop,
-                                style = style,
-                                alpha = effectiveAlpha,
-                            )
-                        } else {
-                            recordSegmentedTextDraw(
-                                mc, pieceText, piece.first, rowTop, segments, style, effectiveAlpha,
-                                baseX = pieceX,
-                                charScales = intrinsics.charScales,
-                                fallbackRatio = line.scaleFactor,
-                            )
-                        }
-                    }
-                    if (appendEllipsis) {
-                        drawStyledRun(
-                            mc, ellipsisSuffix,
-                            layout.prefixWidth(start, start + ellipsizedLastLine.length),
-                            rowTop,
-                            line.scaleFactor, style, effectiveAlpha, shader = null,
+        for (i in 0 until lineCount) {
+            val line = layout.lines[i]
+            val start = lineDrawStart(i, line)
+            if (line.end > start) {
+                // T.6:整行绘制;行尾可能含 \n(exclusive end),绘制时去掉
+                val contentEnd = if (intrinsics.text[line.end - 1] == '\n') line.end - 1 else line.end
+                val appendEllipsis = ellipsizedLastLine != null && i == visibleLineCount - 1
+                val drawLimit =
+                    if (appendEllipsis) start + ellipsizedLastLine.length else contentEnd
+                // InlineContent:占位符内部不绘制,按可见子区间分段绘制
+                for (piece in visiblePieces(start, contentEnd, drawLimit)) {
+                    val pieceText = intrinsics.text.substring(piece.first, piece.last + 1)
+                    val pieceX = layout.prefixWidth(start, piece.first)
+                    val segments = intrinsics.segments
+                    if (segments.isEmpty()) {
+                        mc.recordTextDraw(
+                            text = pieceText,
+                            x = pieceX,
+                            y = rowTop,
+                            style = style,
+                            alpha = effectiveAlpha,
+                            font = layout.fontAt(piece.first),
+                        )
+                    } else {
+                        recordSegmentedTextDraw(
+                            mc, pieceText, piece.first, rowTop, segments, style, effectiveAlpha,
+                            baseX = pieceX,
+                            line = line,
                         )
                     }
                 }
-                rowTop += line.scaleFactor * layout.lineHeight
+                if (appendEllipsis) {
+                    drawStyledRun(
+                        mc, ellipsisSuffix,
+                        layout.prefixWidth(start, start + ellipsizedLastLine.length),
+                        rowTop + line.baselinePx - layout.baseFont.baselineFromTopPx,
+                        layout.baseFont, style, effectiveAlpha, shader = null,
+                    )
+                }
             }
-        } finally {
-            if (scaled) {
-                mc.restore()
-            }
+            rowTop += line.lineBoxPx
         }
     }
 
     /**
-     * 平台适配点(T.3):按 [StyleSegment] 边界把行内文本 [drawText](绝对起点 [rowStart])切分,
-     * 每段用段样式(缺失属性已由 defaultStyle 合并)绘制;段外文本用 [fallbackStyle]。
-     * 段样式含合并后的颜色,不再被调用方 color 覆盖。
+     * 按 [StyleSegment] 边界把行内文本切分绘制(P2-B3 绑定式):
+     * 所有段共享行基线;段原点 = 行基线 − 段字体基线(行顶语义,渲染端内部加锚点)。
      */
     private fun recordSegmentedTextDraw(
         mc: MinecraftCanvas,
@@ -1011,26 +981,15 @@ internal class MinecraftParagraph(
         segments: List<StyleSegment>,
         fallbackStyle: Style,
         alpha: Float,
-        /**
-         * 行内绘制起点 x(1x 布局单位)。整行绘制时为 0;InlineContent 分段(piece)绘制时
-         * = 该 piece 的行内偏移 —— 段内各子段的 x 在 [baseX] 上累积,否则所有 piece
-         * 都会叠在行首(实测 ⑬:piece 文本互相重叠)。
-         */
+        /** 行内绘制起点 x(最终像素);InlineContent piece 时为该 piece 的行内偏移 */
         baseX: Float = 0f,
-        /** 平台适配点(段级字号):每 char 相对渲染系数(与 [segments] 覆盖同一文本)。 */
-        charScales: FloatArray = FloatArray(0),
-        /** 兜底段(无 span 覆盖的尾部)的渲染系数 */
-        fallbackRatio: Float = 1f,
-        /** Brush 绘制路径透传(分段路径此前不支持 shader,Brush+富文本会丢渐变语义) */
+        /** 所属行:共享基线对齐的行盒/基线来自该行绑定字体 */
+        line: MinecraftTextLine,
+        /** Brush 路径透传 */
         shader: Shader? = null,
     ) {
         val rowEnd = rowStart + drawText.length
-        // 平台适配点(段级字号):基线对齐 —— 行基线(相对行顶)= 真实基线 × 行最大系数;
-        // 段绘制原点 y = 行基线 − 真实基线 × 段系数,使所有段共享同一基线。
-        // (T.TT:基线取自度量来源 [RunMetrics.baselineFromTop],替代 0.8×行盒启发式;
-        // 此前直接从行顶起画是"顶部对齐",实测 ⑭:小字吊在行顶、大字向下延伸。)
-        val baseline = layout.baselineFromTop
-        val lineBaselineDelta = baseline * fallbackRatio
+        val lineBaselineAbs = rowTop + line.baselinePx
         var cursor = rowStart
         var segOffset = 0
         for (seg in segments) {
@@ -1041,58 +1000,41 @@ internal class MinecraftParagraph(
             val clipStart = maxOf(segStart, rowStart)
             val clipEnd = minOf(segEnd, rowEnd)
             if (clipEnd > clipStart) {
-                // 平台适配点(T.29 修复):行内段 x 偏移 = 该行 [rowStart, clipStart) 的
-                // MC 字形宽度(**1x 单位**,layout.prefixWidth 不乘 scale)。渲染端
-                // GuiTextRenderState 的 x/y 是 prepareText 文本空间坐标,字形顶点
-                // 再乘 pose(含字号 scale)缩放 —— 传 ×scale 值会被二次缩放,
-                // 同行多段间隔翻倍、尾段被推出屏幕。
                 val xPx = baseX + layout.prefixWidth(rowStart, clipStart)
-                val ratio = charScales.getOrElse(clipStart) { 1f }
+                val f = layout.fontAt(clipStart)
                 drawStyledRun(
                     mc,
                     intrinsics.text.substring(clipStart, clipEnd),
-                    xPx, rowTop + lineBaselineDelta - baseline * ratio,
-                    ratio, seg.style, alpha, shader,
+                    xPx, lineBaselineAbs - f.baselineFromTopPx,
+                    f, seg.style, alpha, shader,
                 )
                 cursor = clipEnd
             }
         }
-        // 段未覆盖到的尾部(理论上不应发生,防御性兜底)
         if (cursor < rowEnd) {
             val xPx = baseX + layout.prefixWidth(rowStart, cursor)
+            val f = layout.fontAt(cursor)
             drawStyledRun(
                 mc,
                 intrinsics.text.substring(cursor, rowEnd),
-                xPx, rowTop + lineBaselineDelta - baseline * fallbackRatio,
-                fallbackRatio, fallbackStyle, alpha, shader,
+                xPx, lineBaselineAbs - f.baselineFromTopPx,
+                f, fallbackStyle, alpha, shader,
             )
         }
     }
 
-    /**
-     * 记录一段指定渲染系数的文本:ratio ≈ 1 直接记录;否则 translate 到运行原点后
-     * 局部 scale —— 字形顶点随矩阵放大。传入的 [y] 应为"该段基线对齐后的绘制原点"
-     * (见 [recordSegmentedTextDraw] 的基线对齐注释)。
-     */
+    /** 记录一段指定字体绑定的文本(最终像素坐标;P2-B3 无矩阵缩放包裹) */
     private fun drawStyledRun(
         mc: MinecraftCanvas,
         text: String,
         x: Float,
         y: Float,
-        ratio: Float,
+        font: ResolvedFont,
         style: Style,
         alpha: Float,
         shader: Shader?,
     ) {
-        if (ratio == 1f) {
-            mc.recordTextDraw(text = text, x = x, y = y, style = style, alpha = alpha, shader = shader)
-        } else {
-            mc.save()
-            mc.translate(x, y)
-            mc.scale(ratio, ratio)
-            mc.recordTextDraw(text = text, x = 0f, y = 0f, style = style, alpha = alpha, shader = shader)
-            mc.restore()
-        }
+        mc.recordTextDraw(text = text, x = x, y = y, style = style, alpha = alpha, shader = shader, font = font)
     }
 }
 
