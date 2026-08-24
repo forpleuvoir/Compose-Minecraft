@@ -178,14 +178,62 @@ object FontRegistry {
 
     private val fonts = HashMap<FontDescription, PlatformFont>()
 
+    /**
+     * 注册(替换语义):同 id 重注册覆盖旧条目 —— 支持自定义字体资源重载后
+     * 的重建场景;旧 [ResolvedFont] 绑定随旧布局自然淘汰,无需主动清理。
+     */
     @Synchronized
     fun register(font: PlatformFont) {
-        val prev = fonts.put(font.id, font)
-        require(prev == null || prev === font) { "duplicate font registration: ${font.id}" }
+        fonts[font.id] = font
+    }
+
+    /** 注销(自定义字体卸载;未注册为空操作)。 */
+    @Synchronized
+    fun unregister(id: FontDescription) {
+        fonts.remove(id)
     }
 
     @Synchronized
     operator fun get(id: FontDescription): PlatformFont? = fonts[id]
+}
+
+/**
+ * 注册字体文件(P3,P3 定案接入统一字体体系):经 mc.font(FreeType)渲染,
+ * advance 直接询问 splitter 样式化计宽(TTF/OTF 一律权威同源);
+ * 自然行盒/基线由注册时的 FreeType face 度量折算到网格。
+ */
+class CustomFreeTypeFont internal constructor(
+    override val id: FontDescription,
+    override val defaultSizeSp: Float = 18f,
+) : PlatformFont {
+
+    /** FreeType face 折算到网格(ascent/upm×grid);注册时更新 */
+    internal var naturalLineHeight: Float = VanillaRunMetrics.lineHeight
+    internal var naturalBaseline: Float = VanillaRunMetrics.baselineFromTop
+
+    override val channel: FontChannel get() = FontChannel.MC_FREETYPE
+
+    /** 与原版注入参数一致(TrueTypeGlyphProvider size=9) */
+    override val providerEmPx: Float get() = 9f
+
+    /** FontSet 注册时已并入默认字体 provider 链,缺字由引擎回退,视为全覆盖 */
+    override fun covers(codepoint: Int): Boolean = true
+
+    override val fallbackId: FontDescription? = null
+
+    private val natural: RunMetrics = object : RunMetrics {
+        override fun advance(codepoint: Int): Float = 0f // advance 全走权威计宽,此值不参与
+        override val lineHeight: Float get() = this@CustomFreeTypeFont.naturalLineHeight
+        override val baselineFromTop: Float get() = this@CustomFreeTypeFont.naturalBaseline
+    }
+
+    override fun metricsAt(spec: MeasureSpec): RunMetrics =
+        FontMetrics.mcFont(
+            id,
+            spec.copy(style = spec.style ?: net.minecraft.network.chat.Style.EMPTY.withFont(id)),
+            native = natural,
+            providerEmPx = 9f,
+        )
 }
 
 /**
@@ -488,6 +536,14 @@ internal class VanillaPipelineMetrics private constructor(
         }
     }
 }
+
+/**
+ * 原版装饰几何(P2 收口):下划线/删除线厚度与阴影偏移 = 行高的九分比、
+ * 下限 1px —— 锚点对齐原版 Font(y+9 / y+4.5);网格行高动态取
+ * mc.font.lineHeight(部分模组会修改),不写死。
+ */
+inline val RunMetrics.vanillaDecorThickness: Float
+    get() = maxOf(1f, lineHeight / moe.forpleuvoir.compose_minecraft.mc.font.lineHeight)
 
 /** 原版位图度量(@9 网格原生 em;单例) */
 internal object VanillaRunMetrics : RunMetrics {

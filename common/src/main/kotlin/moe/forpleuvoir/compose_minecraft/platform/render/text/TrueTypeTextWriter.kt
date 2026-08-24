@@ -104,7 +104,7 @@ internal object TrueTypeTextWriter {
         // alpha==0 的阴影色按不透明处理;渐变 run 的阴影取阴影原色。装饰线暂不带阴影。
         val shadowRaw = style.shadowColor
         val hasShadow = shadowRaw != null
-        val shadowOffset = if (hasShadow) max(1f, metrics.lineHeight / 9f) else 0f
+        val shadowOffset = if (hasShadow) metrics.vanillaDecorThickness else 0f
         val shadowArgb: Int = if (shadowRaw != null) {
             val base = if ((shadowRaw ushr 24) == 0) shadowRaw or 0xFF000000.toInt() else shadowRaw
             (((base ushr 24) * alphaByte / 255) shl 24) or (base and 0x00FFFFFF)
@@ -211,6 +211,16 @@ internal object TrueTypeTextWriter {
                 val right = left + glyph.widthLocal
                 val bottom = top + glyph.heightLocal
                 val color = colorAt(left + glyph.widthLocal * 0.5f, top + glyph.heightLocal * 0.5f)
+                // 阴影:同字形偏移一份阴影色,先于主字形入批(与原版逐字符
+                // 「先影子后本体」的遮盖顺序一致);渐变 run 取阴影原色
+                if (hasShadow) {
+                    val so = shadowOffset
+                    batch(glyph.page).addGlyphQuad(
+                        snap(left + so, rasterScale), snap(top + so, rasterScale),
+                        snap(right + so, rasterScale), snap(bottom + so, rasterScale),
+                        baselineY, italic, glyph.u0, glyph.v0, glyph.u1, glyph.v1, shadowArgb,
+                    )
+                }
                 batch(glyph.page).addGlyphQuad(
                     left, top, right, bottom,
                     baselineY, italic, glyph.u0, glyph.v0, glyph.u1, glyph.v1, color,
@@ -228,7 +238,7 @@ internal object TrueTypeTextWriter {
         if (penX > cmd.x && (style.isUnderlined || style.isStrikethrough)) {
             val (page, whiteU, whiteV) = GlyphAtlas.whiteTexelUV()
             val decorBatch = batch(page)
-            val thickness = max(1f, metrics.lineHeight / 9f)
+            val thickness = metrics.vanillaDecorThickness
             val decorColor = colorAt((cmd.x + penX) * 0.5f, baselineY)
             if (style.isUnderlined) {
                 val top = cmd.y + metrics.lineHeight - thickness

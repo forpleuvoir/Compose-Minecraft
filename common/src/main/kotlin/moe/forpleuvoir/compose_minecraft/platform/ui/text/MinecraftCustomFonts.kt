@@ -77,6 +77,7 @@ object MinecraftCustomFonts {
         val path: Path,
         val provider: GlyphProvider,
         val fontSet: FontSet,
+        val platform: moe.forpleuvoir.compose_minecraft.platform.render.text.CustomFreeTypeFont,
     )
 
     private val entries = ConcurrentHashMap<Identifier, Entry>()
@@ -234,7 +235,21 @@ object MinecraftCustomFonts {
                     setOf(),
                 )
                 accessor.fontSets()[identifier] = fontSet
-                entries[identifier] = Entry(identifier, path, provider, fontSet)
+                // P3:同步接入平台字体体系(度量=splitter 权威计宽,行盒=FreeType 自然值)
+                val info = runCatching { readFontInfo(path).metrics }.getOrNull()
+                val platform = (moe.forpleuvoir.compose_minecraft.platform.render.text.FontRegistry[net.minecraft.network.chat.FontDescription.Resource(identifier)]
+                    as? moe.forpleuvoir.compose_minecraft.platform.render.text.CustomFreeTypeFont)
+                    ?: moe.forpleuvoir.compose_minecraft.platform.render.text.CustomFreeTypeFont(
+                        net.minecraft.network.chat.FontDescription.Resource(identifier),
+                    ).also { moe.forpleuvoir.compose_minecraft.platform.render.text.FontRegistry.register(it) }
+                info?.let { m ->
+                    if (m.unitsPerEm > 0) {
+                        val g = 9f / m.unitsPerEm
+                        platform.naturalLineHeight = (m.ascender - m.descender) * g
+                        platform.naturalBaseline = m.ascender * g
+                    }
+                }
+                entries[identifier] = Entry(identifier, path, provider, fontSet, platform)
                 true
             } catch (t: Throwable) {
                 runCatching { provider?.close() }
@@ -262,6 +277,7 @@ object MinecraftCustomFonts {
     /** 卸载已注册字体(从 FontManager 移除并关闭 provider)。 */
     fun unregisterCustomFont(identifier: Identifier) {
         fontManagerAccessor?.fontSets()?.remove(identifier)
+        moe.forpleuvoir.compose_minecraft.platform.render.text.FontRegistry.unregister(net.minecraft.network.chat.FontDescription.Resource(identifier))
         entries.remove(identifier)?.let { runCatching { it.provider.close() } }
     }
 

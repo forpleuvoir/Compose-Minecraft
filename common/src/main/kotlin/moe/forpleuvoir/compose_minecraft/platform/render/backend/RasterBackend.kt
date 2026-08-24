@@ -26,6 +26,7 @@ import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TrueTypeFontManager
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TrueTypeTextWriter
+import moe.forpleuvoir.compose_minecraft.platform.render.text.vanillaDecorThickness
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.RasterGradientSampler
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.toArgbInt
 import kotlin.math.max
@@ -273,7 +274,7 @@ internal class RasterBackend(
 
         // 装饰线(下划线/删除线):几何/颜色采样点对齐 TrueTypeTextWriter
         if (penX > cmd.x && (style.isUnderlined || style.isStrikethrough)) {
-            val thickness = max(1f, metrics.lineHeight / 9f)
+            val thickness = metrics.vanillaDecorThickness
             val decorColor = colorAt((cmd.x + penX) * 0.5f, baselineY)
             if (style.isUnderlined) {
                 fillDecorRect(

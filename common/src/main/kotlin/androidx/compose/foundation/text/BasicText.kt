@@ -65,6 +65,7 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalTextRenderBackend
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFont
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.resolveDefaultFont
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.resolveDefaultFontSize
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.resolveDefaultFontSize
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontSizeToEmPx
@@ -252,7 +253,7 @@ fun BasicText(
     maxLines: Int = Int.MAX_VALUE,
     minLines: Int = 1,
     color: ColorProducer? = null,
-    fontSize: TextUnit = 18.sp,
+    fontSize: TextUnit = resolveDefaultFontSize(),
 ) {
     validateMinMaxLines(minLines = minLines, maxLines = maxLines)
 

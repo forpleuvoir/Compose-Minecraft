@@ -84,13 +84,20 @@ fun TrueTypeTextDevScene() {
         true
     }
 
-    val truetype = !bitmapMode
+    // 三档字体作用域:系统矢量链 / 原版位图 / 平台像素字体(数据驱动,无特判)
+    val fontModes = listOf(
+        B.systemChain.id to "TrueType 渲染",
+        B.vanillaDefault.id to "原版位图渲染",
+        B.fusionPixel.id to "像素字体",
+    )
+    var modeId by remember { mutableStateOf(B.systemChain.id) }
+    val truetype = modeId == B.systemChain.id
 
 
 
 
     androidx.compose.runtime.CompositionLocalProvider(
-        LocalDefaultFont provides (if (bitmapMode) B.vanillaDefault.id else B.systemChain.id)
+        LocalDefaultFont provides modeId
     ) {
     Box(
         Modifier
@@ -120,16 +127,13 @@ fun TrueTypeTextDevScene() {
 
             // ── 模式开关 ──
             Row(Modifier.padding(top = 8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                ModeButton(
-                    label = "原版位图渲染",
-                    selected = !truetype,
-                    onClick = { bitmapMode = true },
-                )
-                ModeButton(
-                    label = "TrueType 渲染",
-                    selected = truetype,
-                    onClick = { bitmapMode = false },
-                )
+                fontModes.forEach { (id, label) ->
+                    ModeButton(
+                        label = label,
+                        selected = modeId == id,
+                        onClick = { modeId = id },
+                    )
+                }
                 var boundsOn by remember { mutableStateOf(TextRenderConfig.debugTextBounds) }
                 ModeButton(
                     label = if (boundsOn) "行盒:开" else "行盒:关",
@@ -141,18 +145,27 @@ fun TrueTypeTextDevScene() {
                 )
             }
             BasicText(
-                if (truetype) {
-                    "当前:TTF 渲染器(平滑轮廓;仅显式资源字体/缺字 run 回退原版)。本界面外始终原版。"
-                } else {
-                    "当前:原版位图渲染器(8×8 像素风,放大有块状锯齿)"
+                when {
+                    modeId == B.systemChain.id ->
+                        "当前:TTF 渲染器 · 系统字体链(平滑轮廓;缺字回退原版)"
+                    modeId == B.fusionPixel.id ->
+                        "当前:像素字体(fusion_pixel,经原版 FreeType 按网格渲染;默认 24sp 锐利)"
+                    else ->
+                        "当前:原版位图渲染器(minecraft:default,放大有块状锯齿)"
                 },
                 style = Style.EMPTY
-                    .withColor(if (truetype) Color(0xFF80CBC4) else Color(0xFFFFCC80))
+                    .withColor(
+                        when {
+                            modeId == B.fusionPixel.id -> Color(0xFFFFB74D)
+                            truetype -> Color(0xFF80CBC4)
+                            else -> Color(0xFFFFCC80)
+                        }
+                    )
                     .toTextStyle(),
                 modifier = Modifier.padding(top = 4.dp),
             )
 
-            key(truetype) {
+            key(modeId) {
                 Column {
                     SectionLabelTt("① 中英混排(默认 16sp)")
                     BasicText(
