@@ -33,7 +33,8 @@ internal class TrueTypeMetricsSource(
     }
 
     private fun ownerFont(codepoint: Int): TrueTypeFont? =
-        chain.firstOrNull { coverage?.invoke(it, codepoint) ?: it.hasGlyph(codepoint) }
+        if (isControlCodepoint(codepoint)) null
+        else chain.firstOrNull { coverage?.invoke(it, codepoint) ?: it.hasGlyph(codepoint) }
 
     private fun chainAdvance(font: TrueTypeFont, cp: Int): Float =
         font.codepointAdvance(cp)
@@ -50,6 +51,7 @@ internal class TrueTypeMetricsSource(
 
         override fun kern(prev: Int, next: Int): Float =
             kernCache.computeIfAbsent((prev.toLong() shl 32) or next.toLong()) {
+                if (isControlCodepoint(next)) return@computeIfAbsent 0f
                 val owner = chain.firstOrNull { f ->
                     coverage?.invoke(f, next) ?: f.hasGlyph(next)
                 } ?: return@computeIfAbsent 0f

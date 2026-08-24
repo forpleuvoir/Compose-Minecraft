@@ -163,8 +163,9 @@ internal object TrueTypeTextWriter {
             // 字形获取(缺字回退链):粗体 run 先沿粗体链、再沿常规链;
             // 全链缺字 → 该字符交原版字形内联渲染(见 flushVanilla)。
             // 膨胀合成仅用于落在常规链上的粗体字形;真粗体链字形不膨胀
-            val renderFont = boldChainFonts.firstOrNull { it.hasGlyph(drawCp) }
-                ?: regularChain.firstOrNull { it.hasGlyph(drawCp) }
+            val renderFont = if (isControlCodepoint(drawCp)) null else
+                boldChainFonts.firstOrNull { it.hasGlyph(drawCp) }
+                    ?: regularChain.firstOrNull { it.hasGlyph(drawCp) }
             if (renderFont == null) {
                 if (vanillaStart < 0) vanillaStart = penX
                 vanillaText.appendCodePoint(cp)

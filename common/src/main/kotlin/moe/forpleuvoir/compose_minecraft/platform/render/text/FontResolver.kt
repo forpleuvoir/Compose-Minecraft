@@ -157,7 +157,7 @@ class ResolvedFont internal constructor(
         var visited = 0
         while (visited++ < MAX_CHAIN_DEPTH) {
             val channelOk = allowStb || font.channel != FontChannel.STB_VECTOR
-            if (channelOk && font.covers(codepoint)) return GlyphOwner(font, font.channel)
+            if (!isControlCodepoint(codepoint) && font.covers(codepoint)) return GlyphOwner(font, font.channel)
             val next = font.fallbackId?.let { id -> FontRegistry[id] }
             if (next == null) {
                 // 链尽(含终端位图字体):交原版位图渲染(missing 方框兜底)
@@ -378,6 +378,9 @@ object BuiltinFonts {
     }
 }
 
+/** 控制字符无字形:任何矢量字体不归属,一律回退原版测量/渲染 */
+internal fun isControlCodepoint(cp: Int): Boolean = cp in 0x00..0x1F || cp == 0x7F
+
 /**
  * 度量工厂(P2-B5 去特判收口):目标 em 缩放、样式兜底、回退口径
  * 只在此实现一次;PlatformFont 实现只声明原生数据。
@@ -424,7 +427,7 @@ private class FusionPixelFont(
                 chain = listOf(f),
                 vanillaFallback = VanillaRunMetrics,
                 chainEmPx = providerEmPx,
-                coverage = { t, cp -> cp == ' '.code || t.hasGlyph(cp) },
+                coverage = { t, cp -> !isControlCodepoint(cp) && (cp == ' '.code || t.hasGlyph(cp)) },
             )
         }
     }
