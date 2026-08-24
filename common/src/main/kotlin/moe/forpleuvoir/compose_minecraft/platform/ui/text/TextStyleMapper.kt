@@ -16,7 +16,7 @@
 
 package moe.forpleuvoir.compose_minecraft.platform.ui.text
 
-import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
+import moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.isUnspecified
 import net.minecraft.network.chat.FontDescription
 import net.minecraft.network.chat.Style
 import net.minecraft.network.chat.TextColor
+import com.mojang.logging.LogUtils
 
 /**
  * Compose [TextStyle] → 平台渲染参数映射(T.28 文本 TextStyle 化)。
@@ -56,6 +57,13 @@ import net.minecraft.network.chat.TextColor
  * - textDecoration 含 Underline/LineThrough → underlined/strikethrough;
  * - 其余字段忽略(见 [PlatformTextData.ignored])。
  */
+/** 映射层共享日志(忽略字段告警等) */
+private val FONT_LOGGER = LogUtils.getLogger()
+
+/** 已告警过的忽略字段(进程内每字段一次,防组合期刷屏) */
+private val IGNORED_FIELD_WARNED =
+    java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<String, Boolean>())
+
 data class PlatformTextData(
     /** 映射到 MC `Style` 的属性(color/bold/italic/underline/strikethrough)。 */
     val mcStyle: Style,
@@ -113,6 +121,13 @@ fun TextStyle.toPlatformData(density: Density): PlatformTextData {
         // clickEvent/hoverEvent/insertion/font),已映射进 mcStyle;仅 blendRadius 忽略
         if (span.platformStyle?.blendRadius != null) add("platformSpanStyle.blendRadius")
         if (platformStyle != null) add("platformStyle")
+    }
+    // fail-loud(font-system 重构 T.RF-F):被忽略字段逐字段去重告警一次,
+    // 消除「静默失效」—— 业务样式写了却不生效时日志可见,而非无声吞掉
+    ignored.forEach { name ->
+        if (IGNORED_FIELD_WARNED.add(name)) {
+            FONT_LOGGER.warn("[ComposeMinecraft] 文本样式字段 '{}' 平台不支持,已忽略", name)
+        }
     }
 
     var mcStyle: Style = Style.EMPTY

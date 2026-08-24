@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright 2021 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -141,9 +141,13 @@ internal class PlatformFontFamilyTypefaceAdapter internal constructor() : FontFa
         onAsyncCompletion: (TypefaceResult.Immutable) -> Unit,
         createDefaultTypeface: (TypefaceRequest) -> Any,
     ): TypefaceResult? {
-        // Minecraft 平台第一版:所有字体族统一使用 Minecraft 默认字体
+        // Minecraft 平台:Compose 层字体族/字重选择由自有字体体系
+        // (moe...render.text.FontResolver 注册表)承担,所有具名族折叠为
+        // 哨兵 Typeface。必须直返实例、禁止经 createDefaultTypeface 回到
+        // resolve 链 —— 后者对 fontFamily=null 会再次命中本分支构成自指
+        // 递归(runCached 锁外计算无在途守卫,无法打断 → StackOverflow)。
         if (typefaceRequest.fontFamily is FontListFontFamily) return null
-        return TypefaceResult.Immutable(createDefaultTypeface(typefaceRequest))
+        return TypefaceResult.Immutable(MinecraftDefaultTypeface)
     }
 }
 

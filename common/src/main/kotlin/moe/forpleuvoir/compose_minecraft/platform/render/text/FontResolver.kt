@@ -1,7 +1,6 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.text
 
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.mojang.logging.LogUtils
 import moe.forpleuvoir.compose_minecraft.mc
@@ -160,7 +159,6 @@ class ResolvedFont internal constructor(
         var font = this.font
         var visited = 0
         while (visited++ < MAX_CHAIN_DEPTH) {
-            val channelOk = allowStb || font.channel != FontChannel.STB_VECTOR
             if (!isControlCodepoint(codepoint) && font.covers(codepoint)) return GlyphOwner(font, font.channel)
             val next = font.fallbackId?.let { id -> FontRegistry[id] }
             if (next == null) {
@@ -305,14 +303,12 @@ object FontResolver {
         resolve(style.fontOriginal, spec.copy(bold = style.boldRaw == true))
 
     /**
-     * 按「整串」解析(P3 定案「退回即全部退回」的度量同源化):
-     * 主字体无法全覆盖(存在缺字回退字符)时,**整个 run** 改解析为沿链首个
-     * 位图通道等价字体 —— 测量(mc.font 整串计宽)与渲染完全同源,
-     * 杜绝逐码点累加在阿拉伯连写/代理对等场景下的原理性偏差。
+     * 按「run」解析(font-system 重构 T.RF-E:删除无消费的 text 参数):
+     * 返回主字体绑定;不覆盖的字符由布局/渲染两侧经同一 [ResolvedFont.ownerForChannel]
+     * 链落至回退字体并使用该字体自己的度量(P3「逐字符归属」定案 —— 历史
+     * 「整串退回」入口已废弃,KDoc 同步更正)。
      */
-    fun resolveForRun(id: FontDescription?, spec: MeasureSpec, text: String): ResolvedFont {
-        // P3 修正(逐字符归属):返回主字体绑定;不覆盖的字符由布局/渲染两侧
-        // 经同一 ownerForChannel 链落至回退字体并使用该字体自己的度量。
+    fun resolveForRun(id: FontDescription?, spec: MeasureSpec): ResolvedFont {
         return resolveFont(
             id?.let { FontRegistry[it] } ?: defaultFont(),
             spec,
