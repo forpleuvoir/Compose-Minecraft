@@ -104,7 +104,7 @@ internal object TrueTypeTextWriter {
         // alpha==0 的阴影色按不透明处理;渐变 run 的阴影取阴影原色。装饰线暂不带阴影。
         val shadowRaw = style.shadowColor
         val hasShadow = shadowRaw != null
-        val shadowOffset = if (hasShadow) metrics.vanillaDecorThickness else 0f
+        val shadowOffset = if (hasShadow) metrics.decorThicknessPx else 0f
         val shadowArgb: Int = if (shadowRaw != null) {
             val base = if ((shadowRaw ushr 24) == 0) shadowRaw or 0xFF000000.toInt() else shadowRaw
             (((base ushr 24) * alphaByte / 255) shl 24) or (base and 0x00FFFFFF)
@@ -239,7 +239,7 @@ internal object TrueTypeTextWriter {
         if (penX > cmd.x && (style.isUnderlined || style.isStrikethrough)) {
             val (page, whiteU, whiteV) = GlyphAtlas.whiteTexelUV()
             val decorBatch = batch(page)
-            val thickness = metrics.vanillaDecorThickness
+            val thickness = metrics.decorThicknessPx
             val decorColor = colorAt((cmd.x + penX) * 0.5f, baselineY)
             if (style.isUnderlined) {
                 val top = cmd.y + metrics.lineHeight - thickness

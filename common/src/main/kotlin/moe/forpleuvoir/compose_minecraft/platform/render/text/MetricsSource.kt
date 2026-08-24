@@ -67,6 +67,8 @@ internal class TrueTypeMetricsSource(
 
         override val baselineFromTop: Float
             get() = chain.firstOrNull()?.ascentPx ?: vanillaFallback.baselineFromTop
+        override val decorThicknessPx: Float
+            get() = vanillaFallback.decorThicknessPx
     }
 
     /** 目标 em 视图:链内数值 ×target/chainEm;原版回退数值 ×target/vanillaEm */
@@ -82,5 +84,6 @@ internal class TrueTypeMetricsSource(
 
         override val lineHeight: Float get() = plain.lineHeight * kc
         override val baselineFromTop: Float get() = plain.baselineFromTop * kc
+        override val decorThicknessPx: Float get() = plain.decorThicknessPx * kc
     }
 }

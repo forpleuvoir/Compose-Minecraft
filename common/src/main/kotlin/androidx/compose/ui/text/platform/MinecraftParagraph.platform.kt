@@ -412,9 +412,10 @@ internal class MinecraftParagraphIntrinsics(
      * 字体/字号的字符使用;段级字号字符使用各自的 [ResolvedFont](I1/I2)。
      */
     internal val resolvedFont: ResolvedFont =
-        FontResolver.resolve(
+        FontResolver.resolveForRun(
             style.fontOriginal,
             moe.forpleuvoir.compose_minecraft.platform.render.text.MeasureSpec(scale, style = style),
+            text,
         )
 
     /**
@@ -428,12 +429,13 @@ internal class MinecraftParagraphIntrinsics(
         for (seg in segments) {
             val end = minOf(offset + seg.text.length, arr.size)
             val f = seg.fontSizeSp?.let { sp ->
-                FontResolver.resolve(
+                FontResolver.resolveForRun(
                     seg.style.fontOriginal ?: style.fontOriginal,
                     moe.forpleuvoir.compose_minecraft.platform.render.text.MeasureSpec(
                         sp * density.density * density.fontScale,
                         style = seg.style,
                     ),
+                    seg.text,
                 )
             } ?: resolvedFont
             for (j in offset until end) arr[j] = f

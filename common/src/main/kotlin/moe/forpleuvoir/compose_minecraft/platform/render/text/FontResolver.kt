@@ -75,6 +75,9 @@ interface RunMetrics {
 
     /** 行顶到基线距离(px,正值;基线唯一来源,I4) */
     val baselineFromTop: Float
+
+    /** 装饰线厚度/阴影偏移(px,字体自身设计的原生值;随目标 em 统一缩放) */
+    val decorThicknessPx: Float
 }
 
 /** 内部桥接:按比例缩放另一份度量(advance/kern/行盒线性于 em) */
@@ -86,6 +89,7 @@ internal class ScaledRunMetrics(
     override fun kern(prev: Int, next: Int): Float = base.kern(prev, next) * ratio
     override val lineHeight: Float get() = base.lineHeight * ratio
     override val baselineFromTop: Float get() = base.baselineFromTop * ratio
+    override val decorThicknessPx: Float get() = base.decorThicknessPx * ratio
 }
 
 /**
@@ -168,6 +172,17 @@ class ResolvedFont internal constructor(
         FONT_LOGGER.error("[ComposeMinecraft] fallback chain too deep at font={}, treating as bitmap", font.id)
         return GlyphOwner(font, FontChannel.MC_BITMAP)
     }
+    /** 本字体是否覆盖整段文本(快速路径;控制字符视为不覆盖) */
+    fun coversAll(text: String): Boolean {
+        var i = 0
+        while (i < text.length) {
+            val cp = text.codePointAt(i)
+            if (isControlCodepoint(cp) || !font.covers(cp)) return false
+            i += Character.charCount(cp)
+        }
+        return true
+    }
+
     companion object {
         private const val MAX_CHAIN_DEPTH = 8
     }
@@ -225,6 +240,7 @@ class CustomFreeTypeFont internal constructor(
         override fun advance(codepoint: Int): Float = 0f // advance 全走权威计宽,此值不参与
         override val lineHeight: Float get() = this@CustomFreeTypeFont.naturalLineHeight
         override val baselineFromTop: Float get() = this@CustomFreeTypeFont.naturalBaseline
+        override val decorThicknessPx: Float get() = 1f
     }
 
     override fun metricsAt(spec: MeasureSpec): RunMetrics =
@@ -287,6 +303,21 @@ object FontResolver {
     /** 按 style 解析(null fontOriginal = 默认字体;规格取自样式) */
     fun resolve(style: Style, spec: MeasureSpec): ResolvedFont =
         resolve(style.fontOriginal, spec.copy(bold = style.boldRaw == true))
+
+    /**
+     * 按「整串」解析(P3 定案「退回即全部退回」的度量同源化):
+     * 主字体无法全覆盖(存在缺字回退字符)时,**整个 run** 改解析为沿链首个
+     * 位图通道等价字体 —— 测量(mc.font 整串计宽)与渲染完全同源,
+     * 杜绝逐码点累加在阿拉伯连写/代理对等场景下的原理性偏差。
+     */
+    fun resolveForRun(id: FontDescription?, spec: MeasureSpec, text: String): ResolvedFont {
+        // P3 修正(逐字符归属):返回主字体绑定;不覆盖的字符由布局/渲染两侧
+        // 经同一 ownerForChannel 链落至回退字体并使用该字体自己的度量。
+        return resolveFont(
+            id?.let { FontRegistry[it] } ?: defaultFont(),
+            spec,
+        )
+    }
 
     /**
      * P1 过渡入口:按字体的原生参考 em([PlatformFont.providerEmPx])解析 ——
@@ -523,6 +554,7 @@ internal class VanillaPipelineMetrics private constructor(
     override fun kern(prev: Int, next: Int): Float = 0f
     override val lineHeight: Float get() = natural.lineHeight * ratio
     override val baselineFromTop: Float get() = natural.baselineFromTop * ratio
+    override val decorThicknessPx: Float get() = natural.decorThicknessPx * ratio
 
     companion object {
         private val pool =
@@ -545,13 +577,11 @@ internal class VanillaPipelineMetrics private constructor(
  * 下限 1px —— 锚点对齐原版 Font(y+9 / y+4.5);网格行高动态取
  * mc.font.lineHeight(部分模组会修改),不写死。
  */
-inline val RunMetrics.vanillaDecorThickness: Float
-    get() = maxOf(1f, lineHeight / moe.forpleuvoir.compose_minecraft.mc.font.lineHeight)
 
-/** 原版位图度量(@9 网格原生 em;单例) */
+/** 原版位图度量(mc.font 自身;网格原生值) */
 internal object VanillaRunMetrics : RunMetrics {
 
-    /** 历史布局基线约定:0.8 × 9px 行盒(P2 换字体自然度量后删除) */
+    /** 原版设计基线(0.8 × 设计行高,历史布局约定) */
     private const val VANILLA_LAYOUT_BASELINE = 7.2f
 
     override fun advance(codepoint: Int): Float =
@@ -561,4 +591,7 @@ internal object VanillaRunMetrics : RunMetrics {
         get() = mc.font.lineHeight.toFloat()
 
     override val baselineFromTop: Float = VANILLA_LAYOUT_BASELINE
+
+    /** 原版装饰几何:设计上就是 1 网格像素 */
+    override val decorThicknessPx: Float = 1f
 }
