@@ -167,7 +167,7 @@ internal abstract class TextFieldKeyEventHandler {
         // 单行放行(false)= 焦点系统接管。自定义经 TextFieldKeyScheme。
         if (event.key == Key.Tab && !event.isShiftPressed && editable && !singleLine) {
             textFieldState.replaceSelectedText(
-                newText = "    ",
+                newText = moe.forpleuvoir.compose_minecraft.platform.ui.text.TextFieldKeyScheme.tabReplacement,
                 clearComposition = true,
                 restartImeIfContentChanges = !event.isFromSoftKeyboard,
             )
@@ -236,7 +236,7 @@ internal abstract class TextFieldKeyEventHandler {
                     KeyCommand.TAB -> {
                         if (!singleLine) {
                             textFieldState.replaceSelectedText(
-                                newText = "\t",
+                                newText = moe.forpleuvoir.compose_minecraft.platform.ui.text.TextFieldKeyScheme.tabReplacement,
                                 clearComposition = true,
                                 restartImeIfContentChanges = !event.isFromSoftKeyboard,
                             )

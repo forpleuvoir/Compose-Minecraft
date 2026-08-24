@@ -117,7 +117,7 @@ class TrueTypeFont private constructor(
      */
     fun codepointAdvance(codepoint: Int): Float = when (codepoint) {
         '\n'.code, '\r'.code -> 0f
-        '\t'.code -> 4f * spaceAdvance()
+        // \t 控制字符:无字形,由控制字符规则走原版回退(不在字体层特判)
         else -> MemoryStack.stackPush().use { stack ->
             val advance = stack.mallocInt(1)
             val lsb = stack.mallocInt(1)
@@ -133,7 +133,7 @@ class TrueTypeFont private constructor(
             val lsb = stack.mallocInt(1)
             stbtt_GetCodepointHMetrics(info, left, kern, lsb) // 占位读,防未初始化语义混淆
             kern.clear()
-            val kv = org.lwjgl.stb.STBTruetype.stbtt_GetCodepointKernAdvance(info, left, right)
+            val kv = stbtt_GetCodepointKernAdvance(info, left, right)
             kv * baseScale
         }
 

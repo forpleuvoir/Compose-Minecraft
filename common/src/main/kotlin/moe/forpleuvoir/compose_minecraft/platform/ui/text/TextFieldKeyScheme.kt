@@ -29,6 +29,10 @@ class TextFieldKeyScheme(
     }
 
     companion object {
+        /** 多行字段按 Tab 插入的替换文本(全局默认策略;默认 4 空格,可自定义) */
+        @JvmField
+        var tabReplacement: String = "    "
+
         /** 代码编辑器示例:Tab 输入 4 空格 */
         fun tabAsSpaces(count: Int = 4) = TextFieldKeyScheme(
             typedOverride = { _, _ -> TypedEdit.Insert(" ".repeat(count)) },
