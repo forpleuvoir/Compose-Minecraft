@@ -305,12 +305,20 @@ internal class GuiStateBackend : GeometryBackend {
                     if (!TrueTypeTextWriter.trySubmit(segCmd, scr, sink, resolved)) {
                         bitmapTerminalFallback(segCmd, resolved, scr, sink)
                     }
-                cmd.shader != null -> splitGradientBitmapChars(segCmd, resolved, owner, scr, sink, penStart = segX)
+                cmd.shader != null -> splitGradientBitmapChars(
+                    segCmd, resolved, owner, scr, sink,
+                    penStart = segX,
+                    lineBaselineY = cmd.y + primary.baselineFromTopPx,
+                )
                 else -> VanillaBitmapSubmitter.submitFor(
                     cmd = segCmd, sink = sink, scissor = scr,
                     text = text, font = resolved, fontId = owner.font.id,
                     xBaseline = segX,
-                    yBaseline = cmd.y + resolved.baselineFromTopPx,
+                    // 回退段锚点 = 行基线(T.RF-I):submit 的 y 语义即最终基线
+                    //(内部 −7 网格补偿唯一一份);与 TrueTypeTextWriter.flushVanilla
+                    // 的 P3 补偿同一规则 —— 回退字形必须压在 primary 行基线上,
+                    // 否则非位图主字体下回退段整体上浮(视觉"顶部对齐")
+                    yBaseline = cmd.y + primary.baselineFromTopPx,
                     colorArgb = solidArgb(cmd),
                 )
             }
@@ -341,6 +349,8 @@ internal class GuiStateBackend : GeometryBackend {
         scr: ScreenRectangle?,
         sink: GuiCommandSink,
         penStart: Float,
+        /** 行基线 y(T.RF-I):回退段锚点唯一来源,语义同 flush() 注释 */
+        lineBaselineY: Float,
     ) {
         var penX = penStart
         var i = 0
@@ -357,7 +367,7 @@ internal class GuiStateBackend : GeometryBackend {
             VanillaBitmapSubmitter.submitFor(
                 cmd = cmd, sink = sink, scissor = scr,
                 text = ch, font = resolved, fontId = owner.font.id,
-                xBaseline = penX, yBaseline = cmd.y + resolved.baselineFromTopPx,
+                xBaseline = penX, yBaseline = lineBaselineY,
                 colorArgb = color,
             )
             penX += adv
@@ -381,7 +391,7 @@ internal class GuiStateBackend : GeometryBackend {
             cmd = cmd, sink = sink, scissor = scr,
             text = cmd.text, font = terminal,
             fontId = net.minecraft.network.chat.FontDescription.DEFAULT,
-            xBaseline = cmd.x, yBaseline = cmd.y + terminal.baselineFromTopPx,
+            xBaseline = cmd.x, yBaseline = cmd.y + primary.baselineFromTopPx,
             colorArgb = solidArgb(cmd),
         )
     }
