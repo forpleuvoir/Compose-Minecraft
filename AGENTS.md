@@ -73,34 +73,18 @@ Agent 的 IDE 工具集中以 `mcp__idea__*` 前缀暴露。**所有代码阅读
 - **场景密度可配置(T.26)**:默认 1f(1dp == 1 像素,场景尺寸 = 窗口像素,T.24
   1:1 渲染),经 `ComposeScreen.open(density = …)` / 构造传入,>1f 放大 UI
   (官方桌面 density 语义,文本字号同步放大);
-- **文字**:MC Font 度量统一,行高 9px 固定;`BasicText(style: TextStyle)` 以 Compose
-  [TextStyle] 为 API(T.28)—— 语义经 `TextStyleMapper.toPlatformData` 映射到平台:
-  color/alpha/fontSize(**sp 经渲染矩阵缩放,18sp = 2x 平台基准字号,9sp = 1x 原生像素**,
-  仅 sp)/fontWeight(≥600 加粗)/fontStyle(斜体)/textDecoration(下划线/删除线)生效;
-  [PlatformSpanStyle] 承载 MC 原版 Style 全部渲染特性(obfuscated/shadowColor/
-  clickEvent/hoverEvent/insertion/font);letterSpacing/background/lineHeight/textAlign
-  等平台无法表达字段文档化忽略([PlatformTextData.ignored]);`BasicText(autoSize=…)`
-  自动缩放(T.20,二分搜索最大适配字号,默认 12–112sp);`BasicTextField(fontSize)` 输入框
-  字号(T.26,默认 18sp = 2x,光标/选区/命中坐标随 scale 换算);
-  `BasicText(text: AnnotatedString)` 富文本段级混排(T.29,该重载已提升 public):
-  spanStyles 经 `TextStyleMapper.toStyleSegments` 全覆盖切分 → `StyleSegment` 段样式
-  增量叠加 base MC Style(段级 color/bold/italic/decoration/PlatformSpanStyle 生效;
-  **段级字号已实现**:span fontSize(sp)→ 段内相对渲染系数折进布局增量,换行按缩放后
-  宽度判定,行盒高取行内最大段,绘制经局部 translate/scale 矩阵,命中测试走缩放前缀
-  宽度行走;em 不支持);行内段 x 用 1x `prefixWidth`(渲染端 pose 会再缩放,传 ×scale
-  值会间隔翻倍);
-  **默认字体/默认样式/默认字号 CompositionLocal**(T.30/T.32):`LocalDefaultFont`
-  (默认 `MinecraftFonts.Default` = minecraft:default)、`LocalDefaultTextStyle`
-  (默认 `TextStyle.Default`)、`LocalDefaultFontSize`(默认 18sp,未显式 fontSize 时
-  兜底,显式优先)—— 业务可 Provider 覆盖,`BasicText` 未指定 style/fontSize 时生效;
-  **自定义字体注册**(T.32):`MinecraftCustomFonts`(platform/ui/text/):FreeType 加载
-  任意 ttf/otf/ttc 字体文件注册进 FontManager(3 个 accessor mixin:
-  FontManagerAccessor 暴露 fontSets / FontSetAccessor 暴露 allProviders 实现缺字回滚
-  默认字体 / MinecraftAccessor 暴露 fontManager),oversample=4 高清晰度,
-  `ensureAlive()` 资源重载自愈(ComposeGuiRenderer 每帧调用);便捷接口
-  `rememberCustomFont(path)`(组合退出自动注销);`systemFontDir()/listSystemFonts()`
-  枚举系统字体目录(辅助入口);`LocalDefaultFont provides rememberCustomFont(path)` 或
-  `PlatformSpanStyle(font = …)` 切换渲染;
+- **文字**:统一字体体系(P2 重构定案)——`PlatformFont` 注册表
+  (fusion_pixel=24sp / 系统矢量链 msyh=16sp / 原版位图=18sp,默认字号随字体);
+  `FontResolver.resolveForRun` 单点解析,`ResolvedFont` 绑定随命令走(A3);
+  尺寸空间唯一:`emPx = sp × density × fontScale`(1sp==1px@density1,无基准除法);
+  mc.font 渲染通道(fusion FreeType / 位图族)advance 一律向 `mc.font.splitter`
+  按样式实测(**粗体偏移/provider 覆盖自动携带**);stb 链用自身 hmtx;
+  控制字符(`\t`/`\n` 等)`isControlCodepoint` 不归属矢量字体,度量渲染同走原版;
+  多行字段 Tab=4 空格(按键路径消费),Ctrl+←→ 词跳/Ctrl+Home·End 文档跳;
+  装饰线厚度 = 字体自报 `decorThicknessPx`(禁止跨字体/行高派生宽度);
+  剪贴板读取已归一化 CRLF→LF;自定义字体经 `CustomFreeTypeFont` 接入同一体系;
+  已知边界:阿拉伯语连写整形未做(回退字符按原版逐字形占位);
+  `TextFieldKeyScheme`(键→处理 lambda)类型就绪,字段参数接线为后续项;
 - **发布 JAR 内嵌完整 Compose 运行时**(约 4000+ 个 `androidx.compose.*` 类),
   消费者无需引入任何 Compose/Skiko 依赖。
 

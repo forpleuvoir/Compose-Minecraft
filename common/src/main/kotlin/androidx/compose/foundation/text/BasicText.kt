@@ -238,7 +238,7 @@ fun BasicText(
  * @param minLines 最小可见行数。
  * @param color 覆盖文本颜色的颜色生产者(覆盖所有段)。
  * @param fontSize 平台适配点(T.19):字体大小,经渲染矩阵缩放实现(布局尺寸与字形
- *   矩阵同步缩放);仅支持 sp 单位。缩放基准见 [TextRenderConfig.fontScaleBasePx](T.26 → P3 双模式),
+ *   矩阵同步缩放);仅支持 sp 单位。emPx = sp × density × fontScale(P2-B3 绝对像素空间),
  *   **18sp = 2x 平台基准字号**(整数放大),9sp = 1x 原生像素;
  *   默认 18sp 与 [androidx.compose.foundation.text.input.BasicTextField] 默认一致。
  */
@@ -959,7 +959,7 @@ internal fun BackgroundTextMeasurement(
  * 平台适配点(T.19):TextUnit(sp) → 文本渲染缩放。
  *
  * MC 无原生字号系统,文字大小经渲染矩阵缩放实现(T.10 的 scale 链路)。
- * 缩放基准 = [TextRenderConfig.fontScaleBasePx](像素模式 12px / stb 模式 9px)
+ * 换算 = fontSizeToEmPx 唯一入口(1sp == 1px @density1)
  * (MC 平台基准字号;16sp ≈ 1.78x 非整数缩放、非自然字号,尽量避免);
  * 仅支持 sp 单位 —— em 需要基准字号链(TextStyle 已随平台移除),无法解析。
  */

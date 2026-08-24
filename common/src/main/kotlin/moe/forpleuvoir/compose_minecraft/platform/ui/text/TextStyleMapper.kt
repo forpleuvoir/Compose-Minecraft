@@ -49,8 +49,8 @@ import net.minecraft.network.chat.TextColor
  * 映射规则:
  * - color → MC `TextColor`(只取 RGB,alpha 分量走渲染 alpha);
  * - alpha → 独立渲染 alpha(与图层 alpha 相乘);
- * - fontSize(sp)→ 缩放:value × density × fontScale / fontScaleBasePx(双模式基准,
- *   见 [TextRenderConfig.fontScaleBasePx]);Unspecified → 平台默认;
+ * - fontSize(sp)→ emPx:value × density × fontScale(fontSizeToEmPx 唯一入口);
+ *   Unspecified → 当前生效字体的 defaultSizeSp(A6);
  * - fontWeight ≥ 600 → bold(MC 只有布尔);
  * - fontStyle == Italic → italic;
  * - textDecoration 含 Underline/LineThrough → underlined/strikethrough;
