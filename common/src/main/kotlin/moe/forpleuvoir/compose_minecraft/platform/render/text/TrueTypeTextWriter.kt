@@ -38,13 +38,8 @@ internal object TrueTypeTextWriter {
     /** 位图最小光栅化系数:避免亚像素字号光栅化出糊图(极端缩小场景仍可读) */
     internal const val MIN_RASTER_SCALE = 0.25f
 
-    /** 拒绝原因观测([TextRenderConfig.debugTextBounds] 开启时打印) */
-    private fun reject(cmd: DrawTextCommand, reason: String): Boolean {
-        if (TextRenderConfig.debugTextBounds) {
-            println("[TT] reject '" + cmd.text.take(10) + "' font=" + cmd.style.fontOriginal + " reason=" + reason)
-        }
-        return false
-    }
+    /** 写器拒绝便捷返回(拒绝路径统一返回 false,交由调用方回退原版) */
+    private fun reject(cmd: DrawTextCommand, reason: String): Boolean = false
 
     /**
      * 尝试用自研管线绘制一条文本命令。返回 true 表示已提交;
@@ -189,17 +184,6 @@ internal object TrueTypeTextWriter {
                 continue
             }
 
-            if (charIndex == 1 && TextRenderConfig.debugTextBounds) {
-                // [TT-S] 临时探针:首字形实测链路值(定位后移除)
-                println(
-                    "[TT-S] '" + cmd.text.take(6) + "' em=" + binding.emPx +
-                        " mScale=" + rasterScale + " sizePx=" + sizePx +
-                        " div=" + (sizePx / renderFont.baseSizePx) +
-                        " wLocal=" + glyph.widthLocal + " hLocal=" + glyph.heightLocal +
-                        " baseY=" + baselineY + " y=" + cmd.y +
-                        " topLocal=" + glyph.bearingTopLocal
-                )
-            }
             if (glyph.hasBitmap) {
                 // stb yoff 为屏幕 y-down 约定(负值 = 位图顶在基线上方),直接加到基线上
                 val leftRaw = penX + glyph.bearingXLocal

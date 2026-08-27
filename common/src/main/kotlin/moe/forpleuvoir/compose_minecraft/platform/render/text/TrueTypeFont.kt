@@ -104,11 +104,6 @@ class TrueTypeFont private constructor(
             ascentPx = ascentUnits * baseScale
             descentPx = -descentUnits * baseScale
             lineHeightPx = ceil(ascentPx + descentPx)
-            println(
-                "[TT-FONT] vertical metrics source=${metrics?.source ?: "hhea"} " +
-                    "ascent=${ascentUnits} descent=${descentUnits} upm=$upm -> " +
-                    "lineHeightPx=$lineHeightPx (em=$baseSizePx)"
-            )
         }
     }
 
