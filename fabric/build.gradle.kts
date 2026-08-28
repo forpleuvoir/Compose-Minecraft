@@ -66,10 +66,8 @@ dependencies {
     includeInternal(api(libs.androidxAnnotation.asCoordinates()) { composeExclude() })
     includeInternal(api(libs.androidxCollection.asCoordinates()) { composeExclude() })
 
-    // 显式打入 atomicfu/coroutines,与 common 编译版本保持一致
-    includeInternal(api(libs.atomicfu.asCoordinates()) { composeExclude() })
-    includeInternal(api(libs.kotlinxCoroutinesCore.asCoordinates()) { composeExclude() })
-
+    // kotlinx-coroutines-core / atomicfu 不随 mod 打包:运行时由 fabric-language-kotlin
+    // 提供(见上方 composeExclude 注释),编译类路径由 common 的 api 依赖传递提供。
     includeInternal(api(libs.lifecycleRuntimeCompose.asCoordinates()) { composeExclude() })
     includeInternal(api(libs.lifecycleViewmodel.asCoordinates()) { composeExclude() })
     includeInternal(api(libs.lifecycleViewmodelSavedstate.asCoordinates()) { composeExclude() })

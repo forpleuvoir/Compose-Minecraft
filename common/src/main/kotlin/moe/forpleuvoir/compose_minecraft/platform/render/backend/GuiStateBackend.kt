@@ -20,14 +20,11 @@ import moe.forpleuvoir.compose_minecraft.platform.render.toScreenRectangle
 import moe.forpleuvoir.compose_minecraft.platform.render.util.BlendPipelines
 import moe.forpleuvoir.compose_minecraft.platform.render.util.MinecraftImageTextureCache
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontOriginal
-import moe.forpleuvoir.compose_minecraft.platform.ui.text.toComponent
 import net.minecraft.client.gui.render.TextureSetup
 import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.client.renderer.state.gui.BlitRenderState
 import net.minecraft.client.renderer.state.gui.ColoredRectangleRenderState
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState
-import net.minecraft.locale.Language
-import net.minecraft.network.chat.FontDescription
 import org.joml.Matrix3x2f
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -241,21 +238,6 @@ internal class GuiStateBackend : GeometryBackend {
         // P2-B4(A2/A3):通道由命令携带的字体绑定唯一决定 —— 无模式开关、
         // 无白名单特判。VANILLA 定向 = 全部位图通道渲染(归属 id 不变)。
         val font = cmd.font ?: moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.resolveNative(cmd.style)
-        // 路由观测:同键(文本头+字体+通道)只打印一次,杜绝逐帧刷屏
-        if (TextRenderConfig.debugTextBounds) {
-            val k = cmd.text.take(8) + "|" + font.font.id + "|" + font.font.channel
-            if (ttLogKeys.add(k)) {
-                println(
-                    "[TT] '" + cmd.text.take(10) + "' font=" + cmd.style.fontOriginal +
-                        " bold=" + cmd.style.isBold +
-                        " em=" + font.emPx + " provEm=" + font.font.providerEmPx +
-                        " box=" + font.lineHeightPx + " base=" + font.baselineFromTopPx +
-                        " y=" + cmd.y +
-                        " channel=" + font.font.channel +
-                        " -> " + if (font.font.channel == moe.forpleuvoir.compose_minecraft.platform.render.text.FontChannel.STB_VECTOR) "STB" else "BITMAP/FREETYPE"
-                )
-            }
-        }
         when {
             cmd.backend == TextRenderBackend.VANILLA ->
                 submitOwnedRun(cmd, font, scissor, sink, allowStb = false)
@@ -298,24 +280,6 @@ internal class GuiStateBackend : GeometryBackend {
             val text = cmd.text.substring(segStart, endIdx)
             val resolved = moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
                 .resolve(owner.font.id, primary.spec)
-            // [TT-F] 探针(临时):位图段 预留宽 vs mc.font 自算宽×k
-            if (ttLogKeys.add("F|" + text.take(6) + "|" + owner.font.id)) {
-                var rsvF = 0f
-                var jF = segStart
-                var pF = -1
-                while (jF < endIdx) {
-                    val c = cmd.text.codePointAt(jF)
-                    rsvF += primary.metrics.advance(c) + primary.metrics.kern(pF, c)
-                    pF = c; jF += Character.charCount(c)
-                }
-                val compF = net.minecraft.network.chat.Component.literal(text).setStyle(cmd.style.withFont(owner.font.id))
-                val visF = net.minecraft.locale.Language.getInstance().getVisualOrder(compF)
-                println("[TT-F] '" + text.take(6) + "' owner=" + owner.font.id +
-                    " k=" + (resolved.emPx / resolved.font.providerEmPx) +
-                    " resv=" + rsvF +
-                    " logical=" + mc.font.splitter.stringWidth(visF) +
-                    " visual=" + mc.font.splitter.stringWidth(visF))
-            }
             val segCmd = androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand(
                 matrix = cmd.matrix, clip = cmd.clip, text = text,
                 x = segX, y = cmd.y, style = cmd.style, alpha = cmd.alpha,
@@ -326,12 +290,20 @@ internal class GuiStateBackend : GeometryBackend {
                     if (!TrueTypeTextWriter.trySubmit(segCmd, scr, sink, resolved)) {
                         bitmapTerminalFallback(segCmd, resolved, scr, sink)
                     }
-                cmd.shader != null -> splitGradientBitmapChars(segCmd, resolved, owner, scr, sink, penStart = segX)
+                cmd.shader != null -> splitGradientBitmapChars(
+                    segCmd, resolved, owner, scr, sink,
+                    penStart = segX,
+                    lineBaselineY = cmd.y + primary.baselineFromTopPx,
+                )
                 else -> VanillaBitmapSubmitter.submitFor(
                     cmd = segCmd, sink = sink, scissor = scr,
                     text = text, font = resolved, fontId = owner.font.id,
                     xBaseline = segX,
-                    yBaseline = cmd.y + resolved.baselineFromTopPx,
+                    // 回退段锚点 = 行基线(T.RF-I):submit 的 y 语义即最终基线
+                    //(内部 −7 网格补偿唯一一份);与 TrueTypeTextWriter.flushVanilla
+                    // 的 P3 补偿同一规则 —— 回退字形必须压在 primary 行基线上,
+                    // 否则非位图主字体下回退段整体上浮(视觉"顶部对齐")
+                    yBaseline = cmd.y + primary.baselineFromTopPx,
                     colorArgb = solidArgb(cmd),
                 )
             }
@@ -362,8 +334,9 @@ internal class GuiStateBackend : GeometryBackend {
         scr: ScreenRectangle?,
         sink: GuiCommandSink,
         penStart: Float,
+        /** 行基线 y(T.RF-I):回退段锚点唯一来源,语义同 flush() 注释 */
+        lineBaselineY: Float,
     ) {
-        val alphaByte = (cmd.alpha * 255f).roundToInt().coerceIn(0, 255)
         var penX = penStart
         var i = 0
         while (i < cmd.text.length) {
@@ -379,7 +352,7 @@ internal class GuiStateBackend : GeometryBackend {
             VanillaBitmapSubmitter.submitFor(
                 cmd = cmd, sink = sink, scissor = scr,
                 text = ch, font = resolved, fontId = owner.font.id,
-                xBaseline = penX, yBaseline = cmd.y + resolved.baselineFromTopPx,
+                xBaseline = penX, yBaseline = lineBaselineY,
                 colorArgb = color,
             )
             penX += adv
@@ -403,14 +376,12 @@ internal class GuiStateBackend : GeometryBackend {
             cmd = cmd, sink = sink, scissor = scr,
             text = cmd.text, font = terminal,
             fontId = net.minecraft.network.chat.FontDescription.DEFAULT,
-            xBaseline = cmd.x, yBaseline = cmd.y + terminal.baselineFromTopPx,
+            xBaseline = cmd.x, yBaseline = cmd.y + primary.baselineFromTopPx,
             colorArgb = solidArgb(cmd),
         )
     }
 
     /** 样式色 × alpha → ARGB(与写器取色同一语义) */
-    private val ttLogKeys = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<String, Boolean>())
-
     private fun solidArgb(cmd: DrawTextCommand): Int {
         val alphaByte = (cmd.alpha * 255f).roundToInt().coerceIn(0, 255)
         val baseColor = cmd.style.color?.value?.or(0xFF000000.toInt()) ?: 0xFFFFFFFF.toInt()

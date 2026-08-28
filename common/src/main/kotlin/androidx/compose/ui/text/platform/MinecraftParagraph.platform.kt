@@ -44,7 +44,6 @@ import androidx.compose.ui.unit.Density
 import kotlin.math.ceil
 import moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
 import moe.forpleuvoir.compose_minecraft.platform.render.text.ResolvedFont
-import moe.forpleuvoir.compose_minecraft.platform.render.text.RunMetrics
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontOriginal
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
@@ -266,85 +265,26 @@ internal class MinecraftTextLayout(
             return result
         }
         val wrap = maxWidth.isFinite() && maxWidth > 0
+        // UAX #14 断点表(font-system 重构 T.RF-B):整串一次构建,懒加载 ——
+        // 仅存在受限宽度分段时才付 BreakIterator 的 O(n) 成本
+        var breakOffsets: IntArray? = null
         var segStart = 0
         while (segStart < text.length) {
             val nl = text.indexOf('\n', segStart)
-            // 平台适配点(T.11 修复):行尾含换行符 —— 官方 getLineEnd 语义(exclusive end,
-            // 对含 `\n` 的行返回换行符之后的位置)。原实现 end = nl(不含 `\n`),
-            // 导致行边界不连续、选区跨行时漏行/坐标错。
+            // 行尾含换行符(exclusive end,官方 getLineEnd 语义,T.11)
             val segEnd = if (nl == -1) text.length else nl + 1
             if (segStart >= segEnd) {
                 result.add(MinecraftTextLine(segStart, segEnd, 0f))
-            } else if (wrap) {
-                var start = segStart
-                while (start < segEnd) {
-                    var end = start
-                    var lastSpace = -1
-                    // 前缀宽度用 MC 字形度量判定换行(行尾 `\n` 不计入换行判定与行宽)
-                    val contentEnd = if (nl == -1) segEnd else nl
-                    // 平台适配点(T.12 修复):单字符宽度超过 maxWidth 时,原内层 while
-                    // 不推进(end == start),外层 start 也原地踏步 -> 无限添加空行 -> OOM。
-                    // 防御:单字符强制占一行并推进。
-                    if (start < contentEnd) {
-                        // 平台适配点(InlineContent):占位符宽度超过行宽 → 独占一行(同款防御)
-                        val startSpan = spanStartingAt(start)
-                        if (startSpan != null && startSpan.width > maxWidth) {
-                            result.add(MinecraftTextLine(start, startSpan.end, startSpan.width))
-                            start = startSpan.end
-                            continue
-                        }
-                        val chWidth = substringWidth(start, start + 1)
-                        if (chWidth > maxWidth) {
-                            result.add(
-                                MinecraftTextLine(
-                                    start, start + 1,
-                                    chWidth,
-                                )
-                            )
-                            start++
-                            continue
-                        }
-                    }
-                    // 性能(T.34):substringWidth 为 O(1) 数组查表,替代原 O(n) font.width(substring)
-                    while (end < contentEnd) {
-                        // 平台适配点(InlineContent):占位符是原子不可断单元 —— 整段一起判定换行
-                        val span = spanStartingAt(end)
-                        if (span != null) {
-                            val atomEnd = minOf(span.end, contentEnd)
-                            if (atomEnd != span.end) {
-                                // 防御:占位符区间跨行段(官方不会出现)—— 消费到行段尾,避免死循环
-                                end = atomEnd
-                                continue
-                            }
-                            if (substringWidth(start, atomEnd) <= maxWidth) {
-                                end = atomEnd
-                                continue
-                            }
-                            break // 放不下:本行在此结束,占位符整体去下一行
-                        }
-                        if (substringWidth(start, end + 1) > maxWidth) break
-                        if (text[end] == ' ') lastSpace = end
-                        end++
-                        // 防御:推进后落入占位符内部(异常截断等罕见情形),跳到段尾
-                        spanCoveringInterior(end)?.let { end = minOf(it.end, contentEnd) }
-                    }
-                    if (end == contentEnd) {
-                        result.add(
-                            MinecraftTextLine(start, segEnd, substringWidth(start, contentEnd))
-                        )
-                        start = segEnd
-                    } else {
-                        val lineEnd = if (lastSpace > start) lastSpace else end
-                        result.add(
-                            MinecraftTextLine(start, lineEnd, substringWidth(start, lineEnd))
-                        )
-                        start = if (lastSpace > start) lastSpace + 1 else end
-                    }
-                }
-            } else {
+            } else if (!wrap) {
                 result.add(
-                    MinecraftTextLine(segStart, segEnd, substringWidth(segStart, if (nl == -1) segEnd else nl))
+                    MinecraftTextLine(
+                        segStart, segEnd,
+                        substringWidth(segStart, if (nl == -1) segEnd else nl),
+                    )
                 )
+            } else {
+                if (breakOffsets == null) breakOffsets = collectLineBreakOffsets()
+                appendWrappedLines(result, segStart, segEnd, nl, breakOffsets)
             }
             if (nl == -1) break
             segStart = nl + 1
@@ -370,6 +310,120 @@ internal class MinecraftTextLayout(
                 baseline = f.baselineFromTopPx
             }
             line.copy(lineBoxPx = box, baselinePx = baseline)
+        }
+    }
+
+    /** UAX #14 行断点(getLineInstance):CJK 可逐字断行、闭括号/句读不悬行首。 */
+    private fun collectLineBreakOffsets(): IntArray {
+        val iterator = java.text.BreakIterator.getLineInstance()
+        iterator.setText(text)
+        val offsets = ArrayList<Int>(text.length / 4 + 1)
+        var p = iterator.first()
+        while (p != java.text.BreakIterator.DONE) {
+            offsets.add(p)
+            p = iterator.next()
+        }
+        return offsets.toIntArray()
+    }
+
+    /**
+     * 单个 `\n` 分段内的贪心换行填充(font-system 重构,T.RF-B):
+     * - 断点候选 = UAX #14 边界 ∪ 占位符原子端点(原子整体判定,不可截半);
+     * - 在不超过 maxWidth 的最后一个候选处切行;软切行的行尾空白随断点吞并
+     *   (迭代器边界在空白段之后 —— 与官方 Skia 视觉一致,且不产生行首空白);
+     * - 无任何候选可入本行时按字符硬切、至少推进 1(T.12 防推进死循环);
+     * - 宽度查询全部走 [substringWidth] 前缀和 O(1)(T.34 语义保留)。
+     */
+    private fun appendWrappedLines(
+        result: MutableList<MinecraftTextLine>,
+        segStart: Int,
+        segEnd: Int,
+        nl: Int,
+        breaks: IntArray,
+    ) {
+        val contentEnd = if (nl == -1) segEnd else nl
+        if (contentEnd <= segStart) {
+            // 空白分段(如孤立 `\n`):记零宽空行(与原实现一致)
+            result.add(MinecraftTextLine(segStart, segEnd, 0f))
+            return
+        }
+        // 本分段内的候选切点(breaks 升序;取 (segStart, contentEnd] 区间,
+        // 落在占位符内部的迭代器边界随原子消费一并丢弃)
+        val candidates = ArrayList<Int>()
+        var bi = breaks.binarySearch(segStart + 1).let { if (it >= 0) it else -it - 1 }
+        var cur = segStart
+        while (cur < contentEnd) {
+            val span = spanStartingAt(cur)
+            if (span != null) {
+                val atomEnd = minOf(span.end, contentEnd)
+                candidates.add(atomEnd)
+                cur = atomEnd
+                while (bi < breaks.size && breaks[bi] <= cur) bi++ // 原子内部边界无效
+                continue
+            }
+            // 普通文本单元:吃到下一占位符起点或分段尾
+            var unitEnd = contentEnd
+            for (s in sortedSpans) {
+                if (s.start > cur) {
+                    unitEnd = minOf(s.start, contentEnd)
+                    break
+                }
+            }
+            while (bi < breaks.size && breaks[bi] <= unitEnd) {
+                if (breaks[bi] > cur) candidates.add(breaks[bi])
+                bi++
+            }
+            if (candidates.lastOrNull() != unitEnd) candidates.add(unitEnd)
+            cur = unitEnd
+        }
+        // 贪心装填:每行吃下「不超过 maxWidth 的最后一个候选切点」
+        var start = segStart
+        var ci = 0
+        while (start < contentEnd) {
+            // 占位符宽于行宽 → 独占一行(强制推进防御,同 T.12)
+            val startSpan = spanStartingAt(start)
+            if (startSpan != null && startSpan.width > maxWidth) {
+                result.add(MinecraftTextLine(start, startSpan.end, startSpan.width))
+                start = startSpan.end
+                while (ci < candidates.size && candidates[ci] <= start) ci++
+                continue
+            }
+            var lastFit = start
+            while (ci < candidates.size && candidates[ci] <= contentEnd) {
+                if (substringWidth(start, candidates[ci]) <= maxWidth) {
+                    lastFit = candidates[ci]
+                    ci++
+                } else break
+            }
+            when {
+                lastFit == contentEnd -> {
+                    // 余下内容整段放得下:本分段收尾(行区间含行尾 `\n`,宽度不计)
+                    result.add(MinecraftTextLine(start, segEnd, substringWidth(start, contentEnd)))
+                    start = segEnd
+                }
+                lastFit > start -> {
+                    // 软切:吞并行尾空白(不越入占位符内部);空白行直接跳过不占盒
+                    var lineEnd = lastFit
+                    while (lineEnd > start &&
+                        text[lineEnd - 1] == ' ' &&
+                        spanCoveringInterior(lineEnd - 1) == null
+                    ) lineEnd--
+                    if (lineEnd > start) {
+                        result.add(MinecraftTextLine(start, lineEnd, substringWidth(start, lineEnd)))
+                    }
+                    start = lastFit
+                }
+                else -> {
+                    // 首个候选即超宽:按字符硬切(至少推进 1 字符,T.12)
+                    var k = 1
+                    while (start + k < contentEnd &&
+                        substringWidth(start, start + k + 1) <= maxWidth
+                    ) k++
+                    result.add(MinecraftTextLine(start, start + k, substringWidth(start, start + k)))
+                    start += k
+                    while (ci < candidates.size && candidates[ci] <= start) ci++
+                }
+            }
         }
     }
 }
@@ -415,7 +469,6 @@ internal class MinecraftParagraphIntrinsics(
         FontResolver.resolveForRun(
             style.fontOriginal,
             moe.forpleuvoir.compose_minecraft.platform.render.text.MeasureSpec(scale, style = style),
-            text,
         )
 
     /**
@@ -435,7 +488,6 @@ internal class MinecraftParagraphIntrinsics(
                         sp * density.density * density.fontScale,
                         style = seg.style,
                     ),
-                    seg.text,
                 )
             } ?: resolvedFont
             for (j in offset until end) arr[j] = f
@@ -782,7 +834,15 @@ internal class MinecraftParagraph(
         rect: Rect,
         granularity: androidx.compose.ui.text.TextGranularity,
         inclusionStrategy: androidx.compose.ui.text.TextInclusionStrategy,
-    ): TextRange = TextRange(0, intrinsics.text.length)
+    ): TextRange {
+        // 对照官方桌面语义(font-system 重构 T.RF-D):CMP 1.11 的
+        // SkiaParagraph.getRangeForRect 同样未实现(TODO CMP-1255,返回
+        // TextRange.Zero)。此前自研占位返回全串范围会让框选退化为「全选」,
+        // 与官方契约(KDoc:「无命中文本时返回 TextRange.Zero」)不符 ——
+        // 对齐官方零结果;MultiParagraph 层会跳过零结果段落,SelectionContainer
+        // 行为与官方桌面一致。待上游实现后跟随移植。
+        return TextRange.Zero
+    }
 
     override fun getBoundingBox(offset: Int): Rect = getCursorRect(offset)
 
@@ -810,15 +870,29 @@ internal class MinecraftParagraph(
         if (offset < 0 || offset >= text.length) {
             return TextRange(offset.coerceIn(0, text.length))
         }
-        val c = text[offset]
-        if (!c.isWordChar()) {
-            // 非单词字符(空格/标点):只包含该字符本身
-            return TextRange(offset, (offset + 1).coerceAtMost(text.length))
+        // 词界语义对照官方桌面(SkiaParagraph.skiko.kt getWordBoundary,font-system
+        // 重构 T.RF-C):空白偏移 → 空域或前字符的词;其余交给 ICU BreakIterator
+        //(getWordInstance,UAX #29)—— 替代旧 isLetterOrDigit 手写规则,
+        // 双击选词在中日韩/复合词场景与官方一致。
+        val iterator = java.text.BreakIterator.getWordInstance()
+        iterator.setText(text)
+        if (text[offset].isWhitespace()) {
+            if (offset > 0 && !text[offset - 1].isWhitespace()) {
+                return wordRangeAround(iterator, offset - 1)
+            }
+            return TextRange(offset, offset)
         }
-        var start = offset
-        while (start > 0 && text[start - 1].isWordChar()) start--
-        var end = offset
-        while (end < text.length && text[end].isWordChar()) end++
+        return wordRangeAround(iterator, offset)
+    }
+
+    /** 包含 [pos] 的词区间([pos-? , ?+)):`preceding`/`following` 括界,DONE 兜底。 */
+    private fun wordRangeAround(iterator: java.text.BreakIterator, pos: Int): TextRange {
+        val endB = iterator.following(pos)
+        val startB = iterator.preceding(pos)
+        val end = (if (endB == java.text.BreakIterator.DONE) iterator.last() else endB)
+            .coerceIn(0, intrinsics.text.length)
+        val start = (if (startB == java.text.BreakIterator.DONE) 0 else startB)
+            .coerceIn(0, intrinsics.text.length)
         return TextRange(start, end)
     }
 
@@ -1039,8 +1113,6 @@ internal class MinecraftParagraph(
         mc.recordTextDraw(text = text, x = x, y = y, style = style, alpha = alpha, shader = shader, font = font)
     }
 }
-
-private fun Char.isWordChar(): Boolean = isLetterOrDigit() || this == '_'
 
 internal fun ActualParagraph(
     text: String,

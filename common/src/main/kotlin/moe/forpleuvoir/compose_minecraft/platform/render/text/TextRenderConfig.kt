@@ -42,11 +42,11 @@ data class FontSource(
 /**
  * 自研 TrueType 文本渲染管线全局配置(T.TT,设计文档 §3.4)。
  *
- * - [enabled] 默认 **false**(D3/D4:验证稳定后再翻默认;关闭时文本链路
- *   与现状逐字节一致 —— 度量走原版 splitter、绘制走 `sink.addText`);
  * - [fontSources] 按优先级排序,全部失败 → 回退原版(D4);
+ * - STB 矢量链是否就绪由 TrueTypeFontManager 的加载结果决定,无独立总开关
+ *   (历史 KDoc 的 `[enabled]` 开关从未落地,font-system 重构 T.RF-G 清理)。
  *
- * 配置在运行时可变;[enabled]/[fontSources] 变化对**新建布局**生效
+ * 配置在运行时可变;[fontSources] 变化对**新建布局**生效
  * (MinecraftTextLayout 构造时快照度量来源),已建场景需重建后切换。
  */
 object TextRenderConfig {

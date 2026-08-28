@@ -18,7 +18,6 @@ package moe.forpleuvoir.compose_minecraft.platform.ui.text
 
 import moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
-import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -81,7 +80,7 @@ fun resolveDefaultFont(): FontDescription {
         FontResolver.bitmapPreferred(provided) else provided
 }
 
-/** 解析生效默认字号(sp):跟随 [TextRenderConfig.effectiveDefaultFontSizeSp] 实时值 */
+/** 解析生效默认字号(sp):跟随「生效字体」的 defaultSizeSp(font-system 重构 T.RF-G 更正失效引用) */
 @Composable
 fun resolveDefaultFontSize(): TextUnit {
     // A6:默认字号跟随「生效字体」(含 LocalDefaultFont 局部作用域),
