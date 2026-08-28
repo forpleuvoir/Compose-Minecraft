@@ -19,6 +19,7 @@ package androidx.compose.ui.scene
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocal
 import androidx.compose.runtime.CompositionLocalContext
+import androidx.compose.runtime.ProvidedValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -96,6 +97,17 @@ sealed interface ComposeScene : AutoCloseable {
      * `null` if no composition locals should be provided.
      */
     var compositionLocalContext: CompositionLocalContext?
+
+    /**
+     * Platform adaptation point: additional top-level composition locals provided by the
+     * caller, which will be provided for the Composable content set by [setContent] on top
+     * of the platform-default locals (`ProvideCommonCompositionLocals`).
+     *
+     * The getter is invoked inside the composition, so it may read compose state
+     * (e.g. [androidx.compose.runtime.mutableStateOf]) to update the provided locals
+     * dynamically without recreating the scene.
+     */
+    var compositionLocals: () -> List<ProvidedValue<*>>
 
     /**
      * The interface to manages focus within a [ComposeScene].

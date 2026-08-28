@@ -32,6 +32,7 @@ import androidx.compose.ui.node.RootNodeOwner
 internal fun RootNodeOwner.setContent(
     parent: CompositionContext,
     getCompositionLocalContext: () -> CompositionLocalContext? = { null },
+    compositionLocals: () -> List<ProvidedValue<*>> = { emptyList() },
     content: @Composable () -> Unit
 ): Composition {
     val composition = Composition(DefaultUiApplier(owner.root), parent)
@@ -39,6 +40,7 @@ internal fun RootNodeOwner.setContent(
         getCompositionLocalContext().provide {
             ProvideCommonCompositionLocals(
                 owner = owner,
+                values = compositionLocals().toTypedArray(),
                 content = content
             )
         }

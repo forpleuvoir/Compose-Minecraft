@@ -16,6 +16,33 @@ subprojects {
 }
 
 tasks {
+    register("publishModToSnapshotsRepository") {
+        description = "推送到本地仓库"
+        dependsOn(
+            ":common:publishModPublicationToSnapshotsRepository",
+            ":fabric:publishModPublicationToSnapshotsRepository",
+            ":neoforge:publishModPublicationToSnapshotsRepository"
+        )
+    }
+
+    register("publishModToReleasesRepository") {
+        description = "推送到发布仓库"
+        dependsOn(
+            ":common:publishModPublicationToReleasesRepository",
+            ":fabric:publishModPublicationToReleasesRepository",
+            ":neoforge:publishModPublicationToReleasesRepository"
+        )
+    }
+
+    register("publishModToLocalRepository") {
+        description = "推送到快照仓库"
+        dependsOn(
+            ":common:publishModPublicationToMavenLocal",
+            ":fabric:publishModPublicationToMavenLocal",
+            ":neoforge:publishModPublicationToMavenLocal"
+        )
+    }
+
     register<Copy>("buildAllModJar") {
         description = "构建 fabric + neoforge 的模组 Jar"
         dependsOn(":fabric:jar", ":neoforge:jar")

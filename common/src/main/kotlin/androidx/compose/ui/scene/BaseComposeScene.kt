@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composition
 import androidx.compose.runtime.CompositionContext
 import androidx.compose.runtime.CompositionLocalContext
 import androidx.compose.runtime.MonotonicFrameClock
+import androidx.compose.runtime.ProvidedValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -108,6 +109,8 @@ internal abstract class BaseComposeScene(
     }
 
     override var compositionLocalContext: CompositionLocalContext? by mutableStateOf(null)
+
+    override var compositionLocals: () -> List<ProvidedValue<*>> = { emptyList() }
 
     /**
      * The last known position of pointer cursor position or `null` if cursor is not inside a scene.

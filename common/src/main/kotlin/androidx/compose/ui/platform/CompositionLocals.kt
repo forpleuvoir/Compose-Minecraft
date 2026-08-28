@@ -186,6 +186,7 @@ val LocalCursorBlinkEnabled: ProvidableCompositionLocal<Boolean> = staticComposi
 @Composable
 internal fun ProvideCommonCompositionLocals(
     owner: Owner,
+    vararg values: ProvidedValue<*>,
     content: @Composable () -> Unit,
 ) {
     CompositionLocalProvider(
@@ -207,8 +208,9 @@ internal fun ProvideCommonCompositionLocals(
         LocalGraphicsContext provides owner.graphicsContext,
         LocalRetainedValuesStore provides owner.retainedValuesStore,
         LocalProvidableLocaleList provides owner.localeList,
-        content = content,
-    )
+    ) {
+        CompositionLocalProvider(values = values, content = content)
+    }
 }
 
 private fun noLocalProvidedFor(name: String): Nothing {

@@ -17,29 +17,13 @@
 package androidx.compose.foundation.text.input.internal
 
 import androidx.collection.MutableLongSet
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.text.DeadKeyCombiner
-import androidx.compose.foundation.text.KeyCommand
-import androidx.compose.foundation.text.appendCodePointX
-import androidx.compose.foundation.text.cancelsTextSelection
+import androidx.compose.foundation.text.*
 import androidx.compose.foundation.text.input.internal.selection.SelectionMovementDeletionContext
 import androidx.compose.foundation.text.input.internal.selection.TextFieldPreparedSelectionState
 import androidx.compose.foundation.text.input.internal.selection.TextFieldSelectionState
-import androidx.compose.foundation.text.isTypedEvent
-import androidx.compose.foundation.text.defaultKeyMapping
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.isAltPressed
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.isShiftPressed
-import androidx.compose.foundation.text.showCharacterPalette
 import androidx.compose.ui.focus.FocusManager
-import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.key.utf16CodePoint
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.SoftwareKeyboardController
-import kotlin.jvm.JvmInline
 
 /** Factory function to create a platform specific [TextFieldKeyEventHandler]. */
 internal fun createTextFieldKeyEventHandler(): TextFieldKeyEventHandler = object : TextFieldKeyEventHandler() {}
@@ -133,7 +117,6 @@ internal abstract class TextFieldKeyEventHandler {
         return consumed
     }
 
-    @OptIn(ExperimentalFoundationApi::class)
     private fun processKeyDownEvent(
         event: KeyEvent,
         textFieldState: TransformedTextFieldState,

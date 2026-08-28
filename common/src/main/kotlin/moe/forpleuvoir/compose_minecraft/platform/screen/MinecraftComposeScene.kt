@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.IntSize
 import com.mojang.blaze3d.platform.cursor.CursorType
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
+import moe.forpleuvoir.compose_minecraft.platform.CompositionLocalRegistry
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposeGuiRenderer
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.MinecraftRenderContext
@@ -167,7 +168,12 @@ class MinecraftComposeScene(
         platformContext = platformContext,
         // MC 每帧都会调用 render(),无需额外 invalidate 调度
         invalidate = {},
-    )
+    ).apply {
+        // 平台开放点:注入全局 CompositionLocal 注册器提供的顶层 locals(动态)。
+        // getter 在组合内读取 CompositionLocalRegistry.values(mutableStateOf),
+        // 注册/注销/清空即时触发重组生效,无需重建场景。
+        compositionLocals = { CompositionLocalRegistry.values }
+    }
 
     /** 设置场景内容(同 [ComposeScene.setContent]) */
     fun setContent(content: @Composable () -> Unit) {

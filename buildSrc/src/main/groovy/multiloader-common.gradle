@@ -1,5 +1,6 @@
 plugins {
     id 'java-library'
+    id 'maven-publish'
     id "org.jetbrains.kotlin.jvm"
     id "org.jetbrains.kotlin.plugin.compose"
 }
@@ -85,4 +86,34 @@ processResources {
     }
 
     inputs.properties(expandProps)
+}
+
+publishing {
+    publications {
+        "mod"(MavenPublication) {
+            artifactId = base.archivesName.get()
+            from components.java
+        }
+    }
+    //https://reposilite.com/guide/gradle
+    repositories {
+        mavenLocal()
+        maven {
+            name = "releases"
+            url = "https://maven.forpleuvoir.moe/releases"
+            credentials(PasswordCredentials)
+            authentication {
+                basic(BasicAuthentication)
+            }
+        }
+        maven {
+            name = "snapshots"
+            url = "https://maven.forpleuvoir.moe/snapshots"
+            credentials(PasswordCredentials)
+            authentication {
+                basic(BasicAuthentication)
+            }
+        }
+    }
+
 }

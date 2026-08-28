@@ -217,6 +217,7 @@ private class CanvasLayersComposeSceneImpl(
         return mainOwner.setContent(
             compositionContext,
             { compositionLocalContext },
+            compositionLocals = compositionLocals,
             content = content
         )
     }
@@ -624,7 +625,8 @@ private class CanvasLayersComposeSceneImpl(
                      * issues. See https://github.com/JetBrains/compose-multiplatform/issues/4558
                      */
                     null
-                }
+                },
+                compositionLocals = this@CanvasLayersComposeSceneImpl.compositionLocals,
             ) {
                 owner.setRootModifier(background)
                 content()
