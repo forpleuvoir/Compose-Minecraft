@@ -33,7 +33,9 @@ This mod is licensed under the Apache License 2.0, see the LICENSE file.
    - androidx.annotation、androidx.collection
    - androidx.lifecycle (runtime-compose / viewmodel / viewmodel-savedstate)
    - androidx.savedstate、androidx.navigationevent
-   - org.jetbrains.kotlinx:atomicfu
+   - org.jetbrains.kotlinx:atomicfu — 仅随 NeoForge 发布 JAR 内嵌
+     (Kotlin for Forge 不提供);Fabric 发布 JAR 不内嵌,由
+     fabric-language-kotlin 运行时提供
    - kotlinx.coroutines 由 Kotlin for Forge / Fabric Kotlin 运行时提供,
      不随本 Mod 内嵌
 
@@ -43,3 +45,21 @@ This mod is licensed under the Apache License 2.0, see the LICENSE file.
      不包含任何 Minecraft 代码与资源;
    - Kotlin 标准库 / Kotlin for Forge / Fabric Kotlin / Fabric API:
      由各自 Loader 环境提供。
+
+5. Bundled font resources
+-----------------------------------------------------------------
+   The mod ships the following font files under
+   assets/compose_minecraft/font/:
+
+   - fusion-pixel-12px-monospaced-zh_hans.ttf
+   - fusion-pixel-12px-proportional-zh_hans.ttf
+
+   Fusion Pixel (https://github.com/TakWolf/fusion-pixel-font) is an
+   open-source Pan-CJK pixel font, Copyright (c) 2022 TakWolf
+   (https://takwolf.com), licensed under the SIL Open Font License,
+   Version 1.1:
+   https://github.com/TakWolf/fusion-pixel-font/blob/master/LICENSE-OFL
+
+   Glyph rasterization in the vector font pipeline uses the
+   stb_truetype API (org.lwjgl.stb), which is provided by the
+   Minecraft/LWJGL runtime and is not bundled with the mod.
