@@ -25,7 +25,18 @@ package androidx.compose.ui.input.pointer
  * `PlatformContext.setPointerIcon` 据此映射到 MC 原版光标
  * (`com.mojang.blaze3d.platform.cursor.CursorTypes`)。
  */
-internal enum class MinecraftPointerIconKind { Default, Crosshair, Text, Hand }
+internal enum class MinecraftPointerIconKind {
+    Default,
+    Crosshair,
+    Text,
+    Hand,
+    ResizeNS,
+    ResizeEW,
+    ResizeNWSE,
+    ResizeNESW,
+    ResizeAll,
+    NotAllowed
+}
 
 /**
  * Minecraft 平台指针图标实现(替代原 AWT Cursor 实现)。

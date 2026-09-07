@@ -13,5 +13,8 @@
     "GuiRendererMixin",
     "MinecraftAccessor",
     "StyleAccessor"
+  ],
+  "client": [
+    "MinecraftMixin"
   ]
 }

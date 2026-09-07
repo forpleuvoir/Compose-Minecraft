@@ -13,6 +13,7 @@ import com.mojang.blaze3d.platform.cursor.CursorType
 import com.mojang.blaze3d.platform.cursor.CursorTypes
 import kotlinx.coroutines.awaitCancellation
 import moe.forpleuvoir.compose_minecraft.platform.textinput.MinecraftTextInputService
+import org.lwjgl.glfw.GLFW
 
 /**
  * Minecraft 平台的 [PlatformContext] 实现(自 [MinecraftComposeScene] 内联匿名对象迁移)。
@@ -42,6 +43,9 @@ open class MinecraftPlatformContext(
 ) : PlatformContext.Empty() {
 
     companion object {
+        val RESIZE_NWSE = CursorType.createStandardCursor(GLFW.GLFW_RESIZE_NWSE_CURSOR, "resize_nwse", CursorType.DEFAULT)
+        val RESIZE_NESW = CursorType.createStandardCursor(GLFW.GLFW_RESIZE_NESW_CURSOR, "resize_nesw", CursorType.DEFAULT)
+
         /**
          * Compose [PointerIcon] → MC 原版 [CursorType] 映射(I9 指针图标):
          * - Default → 标准箭头;Crosshair → 十字;Text → I 形(文本);Hand → 手型;
@@ -49,10 +53,16 @@ open class MinecraftPlatformContext(
          */
         fun toMinecraftCursorType(pointerIcon: PointerIcon): CursorType =
             when ((pointerIcon as? MinecraftPointerIcon)?.kind) {
-                MinecraftPointerIconKind.Crosshair -> CursorTypes.CROSSHAIR
-                MinecraftPointerIconKind.Text      -> CursorTypes.IBEAM
-                MinecraftPointerIconKind.Hand      -> CursorTypes.POINTING_HAND
-                else                               -> CursorTypes.ARROW
+                MinecraftPointerIconKind.Crosshair  -> CursorTypes.CROSSHAIR
+                MinecraftPointerIconKind.Text       -> CursorTypes.IBEAM
+                MinecraftPointerIconKind.Hand       -> CursorTypes.POINTING_HAND
+                MinecraftPointerIconKind.ResizeNS   -> CursorTypes.RESIZE_NS
+                MinecraftPointerIconKind.ResizeNWSE -> RESIZE_NWSE
+                MinecraftPointerIconKind.ResizeEW   -> CursorTypes.RESIZE_EW
+                MinecraftPointerIconKind.ResizeNESW -> RESIZE_NESW
+                MinecraftPointerIconKind.ResizeAll  -> CursorTypes.RESIZE_ALL
+                MinecraftPointerIconKind.NotAllowed -> CursorTypes.NOT_ALLOWED
+                else                                -> CursorTypes.ARROW
             }
     }
 

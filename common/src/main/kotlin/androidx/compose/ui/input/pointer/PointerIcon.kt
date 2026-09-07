@@ -58,12 +58,20 @@ interface PointerIcon {
 
         /** Commonly used to indicate to a user that an element is clickable. */
         val Hand = pointerIconHand
+
+        val ResizeNS = pointerIconResizeNS
+
+        val ResizeNWSE = pointerIconResizeNWSE
+
+        val ResizeEw = pointerIconResizeEW
+
+        val ResizeNESW = pointerIconResizeNESW
+
+        val ResizeAll = pointerIconResizeAll
+
+        val NotAllowed = pointerIconNotAllowed
     }
 }
-
-
-
-
 
 
 internal interface PointerIconService {
@@ -90,7 +98,7 @@ internal interface PointerIconService {
 @Stable
 fun Modifier.pointerHoverIcon(icon: PointerIcon, overrideDescendants: Boolean = false) =
     this then
-        PointerHoverIconModifierElement(icon = icon, overrideDescendants = overrideDescendants)
+            PointerHoverIconModifierElement(icon = icon, overrideDescendants = overrideDescendants)
 
 internal data class PointerHoverIconModifierElement(
     val icon: PointerIcon,
@@ -154,11 +162,11 @@ fun Modifier.stylusHoverIcon(
     touchBoundsExpansion: DpTouchBoundsExpansion? = null,
 ) =
     this then
-        StylusHoverIconModifierElement(
-            icon = icon,
-            overrideDescendants = overrideDescendants,
-            touchBoundsExpansion = touchBoundsExpansion,
-        )
+            StylusHoverIconModifierElement(
+                icon = icon,
+                overrideDescendants = overrideDescendants,
+                touchBoundsExpansion = touchBoundsExpansion,
+            )
 
 internal data class StylusHoverIconModifierElement(
     val icon: PointerIcon,
@@ -425,3 +433,9 @@ internal val pointerIconDefault: PointerIcon = MinecraftPointerIcon(MinecraftPoi
 internal val pointerIconCrosshair: PointerIcon = MinecraftPointerIcon(MinecraftPointerIconKind.Crosshair)
 internal val pointerIconText: PointerIcon = MinecraftPointerIcon(MinecraftPointerIconKind.Text)
 internal val pointerIconHand: PointerIcon = MinecraftPointerIcon(MinecraftPointerIconKind.Hand)
+internal val pointerIconResizeNS: PointerIcon = MinecraftPointerIcon(MinecraftPointerIconKind.ResizeNS)
+internal val pointerIconResizeNWSE: PointerIcon = MinecraftPointerIcon(MinecraftPointerIconKind.ResizeNWSE)
+internal val pointerIconResizeEW: PointerIcon = MinecraftPointerIcon(MinecraftPointerIconKind.ResizeEW)
+internal val pointerIconResizeNESW: PointerIcon = MinecraftPointerIcon(MinecraftPointerIconKind.ResizeNESW)
+internal val pointerIconResizeAll: PointerIcon = MinecraftPointerIcon(MinecraftPointerIconKind.ResizeAll)
+internal val pointerIconNotAllowed: PointerIcon = MinecraftPointerIcon(MinecraftPointerIconKind.NotAllowed)

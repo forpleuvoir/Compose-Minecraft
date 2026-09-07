@@ -126,7 +126,7 @@ fun TextStyle.toPlatformData(density: Density): PlatformTextData {
     // 消除「静默失效」—— 业务样式写了却不生效时日志可见,而非无声吞掉
     ignored.forEach { name ->
         if (IGNORED_FIELD_WARNED.add(name)) {
-            FONT_LOGGER.warn("[ComposeMinecraft] 文本样式字段 '{}' 平台不支持,已忽略", name)
+            FONT_LOGGER.warn("[ComposeMinecraft] Text style field '{}' platform not supported, ignored.", name)
         }
     }
 
