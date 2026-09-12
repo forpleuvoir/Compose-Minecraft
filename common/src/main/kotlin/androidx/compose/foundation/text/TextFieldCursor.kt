@@ -72,7 +72,8 @@ internal fun Modifier.cursor(
                         val cursorRect =
                             state.layoutResult?.value?.getCursorRect(transformedOffset)
                                 ?: Rect(0f, 0f, 0f, 0f)
-                        // 平台适配点(T.7):MC EditBox 风格竖条光标 —— 1px 宽,
+                        // 平台适配点(T.7):MC EditBox 风格竖条光标 —— x = 光标前缀宽度,
+                        // 宽度 = DefaultCursorThickness(2.dp 折算像素),
                         // y = 行顶 - 1 到 行底 + 1(TextCursorUtils.extractInsertCursor 同源);
                         // 颜色 = cursorBrush 纯色,未指定时退回布局样式色(同 EditBox 光标取文本色)
                         val cursorColor =
@@ -83,8 +84,8 @@ internal fun Modifier.cursor(
                                 ?: Color.Black
                         drawRect(
                             color = cursorColor,
-                            topLeft = Offset(cursorRect.left - 1f, cursorRect.top - 1f),
-                            size = Size(1f, (cursorRect.bottom - cursorRect.top) + 2f),
+                            topLeft = Offset(cursorRect.left, cursorRect.top - 1f),
+                            size = Size(DefaultCursorThickness.toPx(), (cursorRect.bottom - cursorRect.top) + 2f),
                             alpha = cursorAlphaValue,
                         )
                     }

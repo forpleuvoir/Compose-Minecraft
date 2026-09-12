@@ -116,17 +116,20 @@ internal class MinecraftTextLayout(
     /** 平台适配点(InlineContent):占位符排版原子(按声明序;布局时按 start 排序)。 */
     val placeholders: List<PlaceholderSpan> = emptyList(),
     /**
-     * 每字符字体绑定(P2-B3,总设计 A3/I2):段级字号 = 该段独立 emPx 的
+     * 基础字体绑定(P2-B3,总设计 A3/I2):段级字号缺省、省略号等基础 run,以及
+     * **空文本占位行**的度量来源 —— 空文本无字符索引可取,故由调用方显式传入。
+     */
+    internal val baseFont: ResolvedFont,
+    /**
+     * 每字符字体绑定:段级字号 = 该段独立 emPx 的
      * ResolvedFont;度量恒等于该字符最终渲染所用字体。
      */
     internal val fonts: (Int) -> ResolvedFont,
 ) {
 
-    /** 基础绑定(charFonts[0];省略号等基础 run 使用) */
-    internal val baseFont: ResolvedFont get() = fontAt(0)
-
-    /** char index → 字体(越界钳制,防御空文本) */
-    internal fun fontAt(i: Int): ResolvedFont = fonts(i.coerceIn(0, (text.length - 1).coerceAtLeast(0)))
+    /** char index → 字体(越界钳制;空文本回退 [baseFont]) */
+    internal fun fontAt(i: Int): ResolvedFont =
+        if (text.isEmpty()) baseFont else fonts(i.coerceIn(0, text.length - 1))
 
     /**
      * 累积字符浮点宽度(cumFloatWidths 数组第 i 项 = text 前 i 个字符的 advance 浮点和)。
@@ -261,7 +264,16 @@ internal class MinecraftTextLayout(
     private fun computeLines(): List<MinecraftTextLine> {
         val result = ArrayList<MinecraftTextLine>()
         if (text.isEmpty()) {
-            result.add(MinecraftTextLine(0, 0, 0f))
+            // 空文本也要有行盒:光标高度(getCursorRect)/行高 API 取自此行,缺则光标塌成 0 高
+            result.add(
+                MinecraftTextLine(
+                    start = 0,
+                    end = 0,
+                    width = 0f,
+                    lineBoxPx = baseFont.lineHeightPx,
+                    baselinePx = baseFont.baselineFromTopPx,
+                )
+            )
             return result
         }
         val wrap = maxWidth.isFinite() && maxWidth > 0
@@ -499,6 +511,7 @@ internal class MinecraftParagraphIntrinsics(
     private val layout = MinecraftTextLayout(
         text, Float.POSITIVE_INFINITY,
         placeholderSpans,
+        baseFont = resolvedFont,
     ) { i -> charFonts[i] }
 
     override val minIntrinsicWidth: Float = layout.minIntrinsicWidth * scale
@@ -525,6 +538,7 @@ internal class MinecraftParagraph(
         MinecraftTextLayout(
             intrinsics.text, maxWidth,
             intrinsics.placeholderSpans,
+            baseFont = intrinsics.resolvedFont,
         ) { i -> intrinsics.charFonts[i] }
     }
 

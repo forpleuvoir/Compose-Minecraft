@@ -728,8 +728,10 @@ internal fun TextFieldCoreModifierNode.drawCursor(
     textFieldSelectionState: TextFieldSelectionState,
 ) {
     // 平台适配点(T.7):MC EditBox 风格竖条光标。
-    // - 1px 竖条,x = 光标前缀宽度 - 1,y = 行顶 - 1 到 行底 + 1
-    //   (对应 MC TextCursorUtils.extractInsertCursor 的 fill(x, y-1, x+1, y+lineHeight));
+    // - 宽度取光标矩形宽(SelectionState 按 DefaultCursorThickness = 2.dp 折算像素,
+    //   并把左右钳制在布局范围内);x = 光标前缀宽度;
+    // - y = 行顶 - 1 到 行底 + 1(对应 MC TextCursorUtils.extractInsertCursor 的
+    //   fill(x, y-1, x+1, y+lineHeight),保留上下各出 1px 的观感);
     // - 颜色 = cursorBrush 纯色(BasicTextField 默认即文本色,同 EditBox 光标颜色);
     // - 闪烁沿用 CursorAnimationState,周期调为 MC 的 300ms(TextCursorUtils)。
     val cursorAlphaValue = cursorAnimation?.cursorAlpha ?: 0f
@@ -740,10 +742,8 @@ internal fun TextFieldCoreModifierNode.drawCursor(
     with(scope) {
         drawRect(
             color = color,
-            // 平台适配点(T.11 修复):行首(left=0)时光标 x 钳制到 0 ——
-            // 原 left-1 在行首为 -1,落在可视区外被裁剪,行首光标不渲染。
-            topLeft = Offset((cursorRect.left - 1f).coerceAtLeast(0f), cursorRect.top - 1f),
-            size = Size(1f, cursorRect.height + 2f),
+            topLeft = Offset(cursorRect.left, cursorRect.top - 1f),
+            size = Size(cursorRect.width, cursorRect.height + 2f),
             alpha = cursorAlphaValue,
         )
     }
