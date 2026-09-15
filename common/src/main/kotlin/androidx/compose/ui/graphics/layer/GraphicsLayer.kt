@@ -413,8 +413,13 @@ class GraphicsLayer internal constructor() {
         block: DrawScope.() -> Unit,
     ) {
         this.size = size
-        val image = MinecraftImageBitmap(size.width, size.height)
-        val canvas = MinecraftCanvas(image)
+        // 复用同尺寸的录制画布与其像素缓冲:录制阶段只把绘制命令记进画布,像素缓冲仅
+        // [toImageBitmap] 才读,故跨帧复用不会串内容;否则每帧都要分配一个 w×h 的 IntArray
+        // (动画期间按窗口像素算轻松几百 KB/帧) —— 这是弹层过渡掉帧的主要来源。
+        val canvas = recordingCanvas
+            ?.takeIf { (it.image?.width == size.width) && (it.image.height == size.height) }
+            ?: MinecraftCanvas(MinecraftImageBitmap(size.width, size.height))
+        canvas.clearCommands()
         recordingCanvas = canvas
         // 平台适配点(T.36 视口剔除):clip=true 的图层(如 clipToBounds / verticalScroll
         // 的 scroll 容器)需在录制画布也施加局部裁剪(0,0,size)。否则嵌套图层(外层

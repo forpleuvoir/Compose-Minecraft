@@ -871,6 +871,13 @@ internal class MinecraftCanvas internal constructor(
     /** 清空上一帧记录 */
     internal fun clearCommands() {
         drawCommands.clear()
+        // 复用录制画布时,上一次录制遗留的矩阵/裁剪必须一并清掉:
+        // GraphicsLayer.record 的 clip=true 分支会往裁剪栈压一层且不回弹,
+        // 栈底元素也可能被 translate/scale 直接改写。
+        matrixStack.clear()
+        matrixStack.addLast(Matrix())
+        clipStack.clear()
+        clipStack.addLast(null)
     }
 
     /** 记录一段文本绘制(阶段 C 由 MinecraftRenderContext 用 Minecraft 字体渲染) */
