@@ -19,14 +19,14 @@ import kotlin.math.sqrt
  * 颜色滤镜([applyColorFilter],T.21 draw 级)、最终 0xAARRGGBB 求值([Color.toArgb])、
  * 逐顶点 alpha 缩放([scaleAlpha])。函数体逐字保留(可见性 private→internal)。
  *
- * 语义标注(P1,D1,2025-08 用户确认):
- * - [lerpColor] 使用 **HSV 空间插值 + 色相短弧** —— **需求约束:必须支持「色相渐变」
- *   (如彩虹/hue sweep),RGB 直插无法表达,HSV 是当前唯一可表达方案;勿视为自研偏差,不得修改**;
- * - 与 CPU 快照路径 `RasterGradientSampler.lerpColorARGB`(RGB 直插)语义不同 ——
- *   两者均保留原样、不统一(重构范围声明:行为零变更);
- * - 官方 `androidx.compose.ui.graphics.lerp` 为 Oklab 插值,与本对象亦不同;
- * - 快照路径另有 `RasterGradientSampler.kt` 的 `Color.toArgbInt`(truncate 取整),与
- *   [Color.toArgb](roundToInt) 实现不同,各自保留原样。
+ * 语义标注:
+ * - [lerpColor] 使用 **RGB 直插(含 alpha)**（2026-09-15 与用户确认，覆盖原 2025-08 的
+ *   "HSV 空间插值"方案）：非色相通道的渐变（饱和度 / 明度 / RGB 通道条 / 透明）两端各一个色标即可；
+ *   色相渐变（彩虹 / hue sweep）由调用方给多个色标表达（如 0/60/…/360 共 7 个）；
+ * - 与 CPU 快照路径 `RasterGradientSampler.lerpColorARGB`（同为 RGB 直插）语义一致；
+ * - 官方 `androidx.compose.ui.graphics.lerp` 为 Oklab 插值，与本对象不同；
+ * - 快照路径另有 `RasterGradientSampler.kt` 的 `Color.toArgbInt`（truncate 取整），与
+ *   [Color.toArgb]（roundToInt）实现不同，各自保留原样。
  */
 internal object ColorEvaluator {
 
@@ -212,36 +212,16 @@ internal object ColorEvaluator {
     )
     fun lerpColor(a: Color, b: Color, t: Float): Color {
         val ct = t.coerceIn(0f, 1f)
-
-        // HSV 空间插值:先转 HSV,插 H/S/V,再转回 RGB
-        fun Color.toHsv(): FloatArray {
-            val r = red;
-            val g = green;
-            val b = blue
-            val mx = maxOf(r, g, b);
-            val mn = minOf(r, g, b)
-            val v = mx;
-            val s = if (mx > 0f) (mx - mn) / mx else 0f
-            val h = when {
-                mx == mn -> 0f
-                mx == r  -> ((g - b) / (mx - mn) * 60f + 360f) % 360f
-                mx == g  -> (b - r) / (mx - mn) * 60f + 120f
-                else     -> (r - g) / (mx - mn) * 60f + 240f
-            }
-            return floatArrayOf(h, s, v)
-        }
-
-        val ha = a.toHsv();
-        val hb = b.toHsv()
-        var dh = hb[0] - ha[0]
-        // 色相环绕:取最短路径
-        if (dh > 180f) dh -= 360f
-        else if (dh < -180f) dh += 360f
-        var h = (ha[0] + dh * ct) % 360f
-        if (h < 0f) h += 360f
-        val s = ha[1] + (hb[1] - ha[1]) * ct
-        val v = ha[2] + (hb[2] - ha[2]) * ct
-        return Color.hsv(h, s.coerceIn(0f, 1f), v.coerceIn(0f, 1f))
+        // RGB 直插(与 CPU 光栅化路径 RasterGradientSampler.lerpColorARGB 一致,2026-09-15 与用户确认统一):
+        // 只让单一通道线性变化的色标(饱和度条 / 明度条 / RGB 通道条 / 透明渐变)两端各一个即可 ——
+        // HSV 插值在这些端点上会丢信息(如黑色反解为 h=0,s=0),把"只变一个通道"插成色相扫过一圈。
+        // 色相渐变(彩虹 / hue sweep)由调用方用多个色标表达,如 0/60/…/360 共 7 个。
+        return Color(
+            red = a.red + (b.red - a.red) * ct,
+            green = a.green + (b.green - a.green) * ct,
+            blue = a.blue + (b.blue - a.blue) * ct,
+            alpha = a.alpha + (b.alpha - a.alpha) * ct,
+        )
     }
     fun colorToArgb(color: Color, alphaMul: Float, colorFilter: NativeColorFilter?): Int {
         return applyColorFilter(color.toArgb(alphaMul), colorFilter)
