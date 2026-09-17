@@ -79,7 +79,7 @@ data class PlatformTextData(
 
 /** 平台默认字号(sp):随当前默认字体的 defaultSizeSp(A6/I5,P2-B5) */
 fun platformDefaultFontSizeSp(): Float =
-    moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFont().defaultSizeSp
+    FontResolver.defaultFont().defaultSizeSp
 
 /**
  * 字号 → **最终像素 em(emPx)** 唯一换算入口(P2-B3,A4 尺寸空间唯一):

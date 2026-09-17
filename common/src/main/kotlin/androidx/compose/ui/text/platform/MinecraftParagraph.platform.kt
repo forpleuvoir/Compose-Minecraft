@@ -514,9 +514,11 @@ internal class MinecraftParagraphIntrinsics(
         baseFont = resolvedFont,
     ) { i -> charFonts[i] }
 
-    override val minIntrinsicWidth: Float = layout.minIntrinsicWidth * scale
+    // [layout] 以像素度量（无 1/scale 换算），固有宽度直接取 [layout] 的值；
+    // scale 为基础字号 emPx（见 [resolvedFont] 的 MeasureSpec），非缩放系数，不可再乘。
+    override val minIntrinsicWidth: Float = layout.minIntrinsicWidth
 
-    override val maxIntrinsicWidth: Float = layout.maxIntrinsicWidth * scale
+    override val maxIntrinsicWidth: Float = layout.maxIntrinsicWidth
 }
 
 /**
