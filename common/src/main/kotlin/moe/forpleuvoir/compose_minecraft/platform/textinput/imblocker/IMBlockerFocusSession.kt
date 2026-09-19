@@ -59,8 +59,19 @@ internal object IMBlockerCompatImpl {
         }
     }
 
+    /**
+     * 让 IMBlocker 按我们此刻的坐标重算候选窗位置。
+     *
+     * 只在确认本候选就是 IMBlocker 的焦点持有者时才动作:[IMManager.updateCaretPosition]
+     * 在焦点为空 / 焦点落在容器上时会退化成焦点对象的坐标,而 `MinecraftFocusContext`
+     * 的兜底光标是窗口「1/3 宽、1/2 高」的固定点(给非标准输入场景用的默认值) ——
+     * 逐帧调用时若不加这道判断,那种固定错位会持续盖掉真实光标。
+     */
     @JvmStatic
     fun updateCaretPosition() {
+        val widget = activeWidget ?: return
+
+        if (!widget.isTrulyFocused) return
         IMManager.updateCaretPosition()
     }
 

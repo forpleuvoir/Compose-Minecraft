@@ -69,6 +69,9 @@ open class MinecraftTextInputService : PlatformTextInputService {
     /** 候选窗锚点(旧版 API 经 [notifyFocusedRect] 缓存;新版直接读 request.focusedRectInRoot) */
     private var focusedRect: Rect? = null
 
+    /** 最近一次交由 IME 的光标矩形,供 [syncImePosition] 逐帧去重 */
+    private var syncedRect: Rect? = null
+
     /** IMBlocker 焦点登记句柄;仅在 IMBlocker 已加载且当前会话经新版 API 建立时非 null */
     private var imBlockerSession: IMBlockerFocusSession? = null
 
@@ -116,6 +119,7 @@ open class MinecraftTextInputService : PlatformTextInputService {
         composedLength = 0
         committedCharCount = 0
         focusedRect = null
+        syncedRect = null
     }
 
     override fun showSoftwareKeyboard() {
@@ -137,6 +141,22 @@ open class MinecraftTextInputService : PlatformTextInputService {
         updateTextInputArea()
     }
 
+    /**
+     * 逐帧同步候选窗位置(由 `ComposeScreen.extractRenderState` 每帧调用)。
+     *
+     * 光标矩形的下发**不能只挂在 preedit 上**:装了 IMBlocker 时它会 cancel MC 的
+     * `KeyboardHandler.preeditCallback`,preedit 不再到达场景 —— 于是 `onComposing`
+     * (preedit 路径)与 `notifyFocusedRect`(旧版 `BasicTextField(value)` 路径,新版
+     * `BasicTextField(state)` 从不调用)双双失效,IMBlocker 手里只剩输入法被激活那一刻
+     * 算出的坐标,候选窗从此不再跟随光标。这里把「光标变化 → 重算 IME 位置」独立成
+     * 每帧的触发源,装不装 IMBlocker 都成立;矩形未变时仅一次相等比较。
+     */
+    fun syncImePosition() {
+        val rect = currentFocusedRect() ?: return
+        if (rect == syncedRect) return
+        updateTextInputArea()
+    }
+
     // ── 新版 API 会话绑定(由自定义 PlatformContext.startInputMethod 调用)──
 
     fun bindRequest(newRequest: PlatformTextInputMethodRequest) {
@@ -145,6 +165,7 @@ open class MinecraftTextInputService : PlatformTextInputService {
         composing = false
         committedCharCount = 0
         focusedRect = null
+        syncedRect = null
         textInputManager.startTextInput()
         // 换绑请求时旧会话必须先注销, 否则失效候选会留在 IMBlocker 的焦点表里
         imBlockerSession?.close()
@@ -250,22 +271,29 @@ open class MinecraftTextInputService : PlatformTextInputService {
     private fun currentValue(): TextFieldValue =
         request?.value?.invoke() ?: legacyValue
 
+    /** 当前会话的光标矩形(新版 API 现读现取,旧版 API 取 [notifyFocusedRect] 缓存) */
+    @OptIn(ExperimentalComposeUiApi::class)
+    private fun currentFocusedRect(): Rect? =
+        request?.focusedRectInRoot?.invoke() ?: focusedRect
+
     private fun sendEditCommands(commands: List<EditCommand>) {
         val callback = request?.onEditCommand ?: legacyOnEditCommand ?: return
         callback(commands)
     }
 
     /**
-     * 候选窗跟随:组合更新时把光标矩形交给 MC TextInputManager。
+     * 候选窗跟随:把光标矩形交给 MC [TextInputManager],并让 IMBlocker 重算自己的坐标。
      *
      * 场景为 1:1 像素渲染(场景尺寸 = 窗口像素,根坐标即物理像素),而
      * [TextInputManager.setTextInputArea] 内部把入参当 GUI 单位再乘 guiScale 转
      * 物理像素 —— 直接传像素会被二次放大,候选窗位置随 guiScale 偏移。
      * 这里先除回 GUI 单位,净效果 = 像素直传。
+     *
+     * 触发源见 [syncImePosition](每帧)/ [notifyFocusedRect](旧版 API)/ 组合更新。
      */
-    @OptIn(ExperimentalComposeUiApi::class)
     private fun updateTextInputArea() {
-        val rect = request?.focusedRectInRoot?.invoke() ?: focusedRect ?: return
+        val rect = currentFocusedRect() ?: return
+        syncedRect = rect
         val scale = mc.window.guiScale.toFloat().coerceAtLeast(1f)
         textInputManager.setTextInputArea(
             (rect.left / scale).roundToInt(),
@@ -273,7 +301,8 @@ open class MinecraftTextInputService : PlatformTextInputService {
             (rect.right / scale).roundToInt(),
             (rect.bottom / scale).roundToInt(),
         )
-        // IMBlocker: 光标区变化后同步候选窗位置(组合期间每次 preedit 更新都会走到这里)
+        // IMBlocker: 光标区变化后同步候选窗位置(装了 IMBlocker 时原生 setTextInputArea 被其
+        // mixin 取消,位置完全由这次重算决定)
         IMBlockerCompat.updateCaretPosition()
     }
 }

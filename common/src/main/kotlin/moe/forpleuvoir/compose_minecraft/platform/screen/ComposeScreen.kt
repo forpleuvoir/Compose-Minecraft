@@ -375,6 +375,10 @@ class ComposeScreen(
                 MinecraftRenderPlugins.currentGraphics = null
             }
         }
+        // IME 候选窗跟随:把本帧最新光标矩形同步给 MC 原生通道 + IMBlocker。
+        // 必须逐帧做而不是挂在 preedit 上 —— IMBlocker 会 cancel MC 的 preeditCallback,
+        // 那条路在装了 IMBlocker 时整条失效(候选窗会冻在输入法激活那一刻的坐标)。
+        composeScene?.imeService?.syncImePosition()
         // 复述系统:语义变化(Compose 内部焦点迁移)补触发原版朗读。extractRenderState
         // 帧内调用是安全的(不在语义快照提交期,不会递归);triggerImmediateNarration
         // 内部只在 Narrator.isActive() 或 DEBUG 时执行,静默无副作用。
