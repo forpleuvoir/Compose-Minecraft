@@ -157,6 +157,14 @@ class MinecraftComposeScene(
     /** 全部已登记语义树(复述系统读取入口) */
     fun getSemanticsOwners(): List<SemanticsOwner> = capturedSemanticsOwners.toList()
 
+    /**
+     * 场景是否还有待处理工作(动画帧 / 重组 / 绘制)。
+     *
+     * 关闭动画的自动判定用:关闭请求后连续若干帧为 false 即视为动画已停下
+     * (见 [ComposeScreen] 的收尾逻辑)。转发自场景自身的 invalidations 判定。
+     */
+    fun hasPendingWork(): Boolean = scene.hasInvalidations()
+
     /** 平台接入点实现(factory 注入,默认 [MinecraftPlatformContext]) */
     val platformContext: PlatformContext = platformContextFactory(this)
 

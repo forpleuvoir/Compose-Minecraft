@@ -15,6 +15,7 @@
     "StyleAccessor"
   ],
   "client": [
+    "GameRendererMixin",
     "MinecraftMixin"
   ]
 }
