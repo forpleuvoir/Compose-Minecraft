@@ -7,11 +7,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.DrawCustomCommand
 import androidx.compose.ui.graphics.MinecraftCanvas
 import androidx.compose.ui.graphics.MinecraftPaint
-import androidx.compose.ui.graphics.NativeColorFilter
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.draw
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.invalidateDraw

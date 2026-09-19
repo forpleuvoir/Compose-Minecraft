@@ -20,7 +20,7 @@ import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.Style
 
 /**
- * 原版父屏测试(T.25):一个**原版 Screen**(非 ComposeScreen),仅一个按钮。
+ * 原版父屏测试:一个**原版 Screen**(非 ComposeScreen),仅一个按钮。
  * 点击按钮 → [ComposeScreen.open](parent = 本屏, renderParentScreen = true)
  * —— 打开 Compose 屏幕并**渲染原版父屏**:Compose 内容(半透明背景)下方应透出
  * 原版按钮与菜单遮罩背景(模糊 + 半透明黑,原版 [Screen.extractBackground] 默认行为)。

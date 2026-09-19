@@ -107,7 +107,7 @@ fun Modifier.shadow(
  * @sample androidx.compose.ui.samples.ShadowSample
  * @see graphicsLayer
  *
- * 平台适配点(2025-08):本 API 在本平台标注**弃用**,业务请使用平台扩展
+ * 平台适配点:本 API 在本平台标注**弃用**,业务请使用平台扩展
  * `moe.forpleuvoir.compose_minecraft.platform.ui.shadow`(`platform/render/ShadowLight.kt`)
  * —— 能力与之完全相同(同一 GraphicsLayer 属性 + 同一 GPU 距离场渲染管线),并额外支持
  * `LocalShadowLight` 光源方向配置。本 API 保留可用、不再演进。替换后请同步更新 import

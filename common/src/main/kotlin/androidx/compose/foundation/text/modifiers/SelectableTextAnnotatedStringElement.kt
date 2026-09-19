@@ -45,9 +45,9 @@ internal class SelectableTextAnnotatedStringElement(
     private val selectionController: SelectionController? = null,
     private val color: ColorProducer? = null,
     private val autoSize: TextAutoSize? = null,
-    // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖)
+    // 平台适配点(富文本):spanStyles 切分后的段列表(全覆盖)
     private val segments: List<StyleSegment> = emptyList(),
-    // 平台适配点(T.29):字号渲染缩放(18sp → 2x)
+    // 平台适配点:字号渲染缩放(18sp → 2x)
     private val scale: Float = 1f,
 ) : ModifierNodeElement<SelectableTextAnnotatedStringNode>() {
 

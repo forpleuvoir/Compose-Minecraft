@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.MinecraftCanvas.DrawPathCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawPointsCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawRectCommand
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawRoundRectCommand
-import androidx.compose.ui.graphics.MinecraftCanvas.DrawVerticesCommand
 import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.VertexMode
 import moe.forpleuvoir.compose_minecraft.platform.render.util.BlendPipelines
@@ -28,7 +27,7 @@ import kotlin.math.max
 import kotlin.math.sqrt
 
 /**
- * 3D 透视后端(P3,自 `MinecraftRenderContext.render3D` 原样搬移,2025-08)。
+ * 3D 透视后端(自 `MinecraftRenderContext.render3D` 原样搬移)。
  *
  * 图层 rotationX/rotationY 的 3D 透视无法用 MC 的 2D GUI 管线表达,因此在 CPU 端完成:
  * 局部几何的每个顶点先经命令矩阵(列主序 2D)变换到图层空间,再经 [DrawCommand.layer3D]
@@ -47,7 +46,7 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
     internal var triangleSink = GeometryTessellator.Sink()
 
 
-    /** Paint 快照 → 最终 0xAARRGGBB(alpha 叠加 + T.21 颜色滤镜)。 */
+    /** Paint 快照 → 最终 0xAARRGGBB(alpha 叠加 +  颜色滤镜)。 */
     private fun PaintSnapshot.toArgb(): Int = ColorEvaluator.applyColorFilter(color.toArgb(alpha), colorFilter)
 
     /** 命令矩阵(列主序 4x4)2D 部分的最大轴缩放 */
@@ -61,12 +60,12 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
         val layer3D = command.layer3D ?: return
         val m2 = command.matrix
         val paint = command.paint ?: return
-        // T.21:颜色滤镜经 PaintSnapshot.toArgb() 应用(alpha + colorFilter)
+        // 颜色滤镜经 PaintSnapshot.toArgb 应用(alpha + colorFilter)
         val colorArgb = paint.toArgb()
         var output = FloatArray(384)
         var count = 0
 
-        /** T.23:DrawVerticesCommand 的逐顶点色(其余命令为 null) */
+        /** :DrawVerticesCommand 的逐顶点色(其余命令为 null) */
         var outColors3D: IntArray? = null
 
         /** 追加一个 3D 变换后的三角形;返回 false 表示任一顶点在相机后方 */
@@ -88,7 +87,7 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
         }
 
         fun tessellated(tessellate: (GeometryTessellator.Sink) -> Unit) {
-            // T.24:像素场景(1:1),AA 距离不再乘 guiScale
+            // 像素场景(1:1),AA 距离不再乘 guiScale
             triangleSink.aaScale = matrixScale(m2)
             triangleSink.clear()
             tessellate(triangleSink)
@@ -111,7 +110,7 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
         }
 
         when (command) {
-            // 平台适配点(T.33 修复):3D 路径同样按 style 分流 —— Fill 走实心 quad,
+            // 平台适配点(修复):3D 路径同样按 style 分流 —— Fill 走实心 quad,
             // Stroke 走三角化描边带(与主路径一致,见 render() 内 DrawRectCommand)。
             is DrawRectCommand                     ->
                 if (paint.style == PaintingStyle.Fill) {
@@ -202,7 +201,7 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
             }
 
             is MinecraftCanvas.DrawVerticesCommand -> {
-                // T.23:顶点网格 3D 透视 —— 逐顶点 map3D + 逐顶点色(alpha + colorFilter)
+                // 顶点网格 3D 透视 —— 逐顶点 map3D + 逐顶点色(alpha + colorFilter)
                 val vc = command.positions.size / 2
                 if (vc >= 3) {
                     val alphaMul = paint.alpha

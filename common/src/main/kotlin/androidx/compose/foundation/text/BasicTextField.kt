@@ -205,7 +205,7 @@ fun BasicTextField(
     outputTransformation: OutputTransformation? = null,
     decorator: TextFieldDecorator? = null,
     scrollState: ScrollState = rememberScrollState(),
-    // 平台适配点(T.26 → P3 像素化):输入框文本字号默认 = 双模式统一基准
+    // 平台适配点(像素化):输入框文本字号默认 = 双模式统一基准
     // (像素模式 24sp / stb 模式 18sp,见 TextRenderConfig.effectiveDefaultFontSizeSp)
     fontSize: TextUnit = moe.forpleuvoir.compose_minecraft.platform.ui.text.platformDefaultFontSizeSp().sp,
     // Last parameter must not be a function unless it's intended to be commonly used as a trailing
@@ -259,13 +259,13 @@ internal fun BasicTextField(
     decorator: TextFieldDecorator? = null,
     scrollState: ScrollState = rememberScrollState(),
     isPassword: Boolean = false,
-    // 平台适配点(T.26 → P3 像素化):输入框文本字号默认 = 双模式统一基准
+    // 平台适配点(像素化):输入框文本字号默认 = 双模式统一基准
     fontSize: TextUnit = moe.forpleuvoir.compose_minecraft.platform.ui.text.platformDefaultFontSizeSp().sp,
     // Last parameter must not be a function unless it's intended to be commonly used as a trailing
     // lambda.
 ) {
     val density = LocalDensity.current
-    // 平台适配点(T.26):fontSize(sp) → 渲染缩放(18sp = 2x 平台基准字号;9sp = 1x)
+    // 平台适配点:fontSize(sp) → 渲染缩放(18sp = 2x 平台基准字号;9sp = 1x)
     val textScale = fontSize.toTextScale(density)
     val layoutDirection = LocalLayoutDirection.current
     val singleLine = lineLimits == SingleLine
@@ -303,7 +303,7 @@ internal fun BasicTextField(
     // would be carrying an invalid TextFieldState in its nonMeasureInputs.
     val textLayoutState = remember(transformedState) { TextLayoutState() }
 
-    // 平台适配点(P3 像素化):state 重载**不经过 CoreTextField**,是输入框可见文本
+    // 平台适配点(像素化):state 重载**不经过 CoreTextField**,是输入框可见文本
     // 的独立绘制路径(TextFieldTextLayoutModifier)—— 必须在此盖章默认字体,
     // 否则无 font 的样式会被自研管线拦截、渲染成系统默认字形(实测反馈)
     val textStyle = if (textStyle.fontOriginal == null) {
@@ -535,7 +535,7 @@ internal fun BasicTextField(
                             )
                     )
 
-                    // 平台适配点(T.8):触摸选区手柄(TextFieldSelectionHandles/TextFieldCursorHandle)
+                    // 平台适配点:触摸选区手柄(TextFieldSelectionHandles/TextFieldCursorHandle)
                     // 已移除,桌面鼠标场景不需要手柄球
                 }
             }
@@ -572,7 +572,7 @@ private fun Modifier.addContextMenuComponents(
         addBasicTextFieldTextContextMenuComponents(textFieldSelectionState, coroutineScope)
     else this
 
-// 平台适配点(T.8):TextFieldCursorHandle / TextFieldSelectionHandles 触摸选区手柄已移除,
+// 平台适配点:TextFieldCursorHandle / TextFieldSelectionHandles 触摸选区手柄已移除,
 // 桌面鼠标场景不需要手柄球。
 
 private val DefaultTextFieldDecorator = TextFieldDecorator { it() }

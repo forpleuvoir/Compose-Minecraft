@@ -49,7 +49,7 @@ import net.minecraft.client.input.KeyEvent as MCKeyEvent
  * (preedit)转发到 Compose 编辑缓冲(下划线组合文本);[charTyped] 保持提交文本上屏
  * 并通知 service 计数(组合结束时定位光标)。
  *
- * 父屏幕能力(T.25):
+ * 父屏幕能力:
  * - [parent]:打开本屏之前的 Screen。**关闭流程走完后**自动 `setScreen(parent)` 返回父屏 ——
  *   与原版各 Screen 的 lastScreen 约定一致(原版 [Screen.onClose] 默认 `setScreen(null)`,
  *   [net.minecraft.client.gui.Gui.setScreen] 无自动记忆,lastScreen 是子类约定);
@@ -74,7 +74,7 @@ import net.minecraft.client.input.KeyEvent as MCKeyEvent
  * 双击:由 Compose 手势层自检(detectTapGestures onDoubleTap / 文本框双击选词,
  * 首次抬起后 40–300ms 内再次按下;指针事件携带真实墙钟时间戳)。MC 原生
  * `MouseHandler` 的 doubleClick 标志(250ms)仅透传给 vanilla 子控件链(super 调用),
- * 不参与 Compose 手势判定。IME 候选窗由系统输入法负责;Popup/Dialog 已实现(T.33,
+ * 不参与 Compose 手势判定。IME 候选窗由系统输入法负责;Popup/Dialog 已实现(
  * 场景内图层弹层:焦点隔离/scrim 遮罩/Escape 与 outside 点击关闭)。
  *
  * 世界渲染:默认照常渲染(与原版一致);[disableWorldRender] 为 true(或全局
@@ -91,7 +91,7 @@ class ComposeScreen(
     val parent: Screen? = null,
     renderParentScreen: Boolean = false,
     /**
-     * 场景密度(T.26):默认 1f(1dp == 1 像素,场景尺寸 = 窗口像素 T.24);
+     * 场景密度:默认 1f(1dp == 1 像素,场景尺寸 = 窗口像素);
      * 传 >1f 放大 UI(官方桌面 density 语义,文本字号同步放大)。
      */
     val density: Float = 1f,
@@ -156,7 +156,7 @@ class ComposeScreen(
     private var composeScene: MinecraftComposeScene? = null
 
     /**
-     * T.25:可复活标记 —— true 时 [removed] 不销毁场景(关闭返回父屏后状态保留),
+     * 可复活标记 —— true 时 [removed] 不销毁场景(关闭返回父屏后状态保留),
      * 由 [open] 在替换父屏前自动设置(父屏为 ComposeScreen 时)。
      */
     var reopenable: Boolean = false
@@ -274,7 +274,7 @@ class ComposeScreen(
             }
             composeScene = scene
         }
-        // T.24:setScreen 先 removed 旧屏再 init 新屏,注册顺序保证 active 指向当前屏
+        // setScreen 先 removed 旧屏再 init 新屏,注册顺序保证 active 指向当前屏
         ComposeGuiRenderer.register(composeScene!!.renderer)
     }
 
@@ -303,7 +303,7 @@ class ComposeScreen(
         worldBackdropHandle = null
     }
 
-    /** T.25:关闭返回父屏后再次打开时复活场景(重新注册渲染器) */
+    /** :关闭返回父屏后再次打开时复活场景(重新注册渲染器) */
     override fun added() {
         ensureScene()
         // 复活后复位可复活标记:场景被 open 标记为 reopenable 后不会自动复位,若不在
@@ -349,7 +349,7 @@ class ComposeScreen(
             return
         }
         if (shouldRenderParent && parent != null) {
-            // T.25:渲染父屏(Compose 之下)。原版父屏走原版 GuiRenderState(原版
+            // 渲染父屏(Compose 之下)。原版父屏走原版 GuiRenderState(原版
             // guiRenderer 先画,Compose 后画盖上面);Compose 父屏由其 renderFrame
             // 收集到自身渲染器,再并入本屏渲染器(元素顺序在前 = 画在下面)。
             // 关闭流程中父屏为 ComposeScreen 时也走这里(交叉过渡,见 shouldRenderParent)。
@@ -360,7 +360,7 @@ class ComposeScreen(
                 }
             }
         }
-        // T.38:vanillaDraw 帧态 —— 先注入当前帧原版 GuiGraphicsExtractor
+        // vanillaDraw 帧态 —— 先注入当前帧原版 GuiGraphicsExtractor
         // (guiScale 通道用),再驱动 renderFrame(前/后渲染回调在 renderFrame 内经
         // 1:1 桥或原版通道执行),完成后清除 —— guiScale 通道回调只在 extract
         // 阶段栈内可见 graphics。1:1 通道不依赖本参数(桥经 GuiCommandSink 注入
@@ -459,7 +459,7 @@ class ComposeScreen(
     }
 
     /**
-     * T.24:空实现 —— 不渲染原版 Screen 的菜单背景遮罩
+     * 空实现 —— 不渲染原版 Screen 的菜单背景遮罩
      * ([Screen.extractBackground] 默认走 extractBlurredBackground + extractMenuBackground,
      * 即模糊 + 半透明黑色遮罩)。Compose 内容自绘背景(业务背景色/图片),不需要原版遮罩。
      */
@@ -614,7 +614,7 @@ class ComposeScreen(
     // ── 生命周期 ─────────────────────────────────────────────
 
     /**
-     * T.25:关闭请求 —— 有父屏则回到父屏(与原版各 Screen 的 lastScreen 约定一致),
+     * 关闭请求 —— 有父屏则回到父屏(与原版各 Screen 的 lastScreen 约定一致),
      * 无父屏走原版默认(setScreen(null):回游戏 HUD / 主菜单)。
      *
      * 注意:**不立即关屏** —— 先进入 [ScreenCloseCoordinator] 的关闭流程,退出动画播完
@@ -691,7 +691,7 @@ class ComposeScreen(
     override fun shouldCloseOnEsc(): Boolean = closeOnEsc
 
     override fun removed() {
-        // T.24:注销本屏渲染器(避免 gui 阶段继续提交已关闭的场景)
+        // 注销本屏渲染器(避免 gui 阶段继续提交已关闭的场景)
         composeScene?.let { ComposeGuiRenderer.unregister(it.renderer) }
         // 世界渲染借用必须在此释放:屏已不在显示,继续占用只会让世界白渲染
         // (作为父屏被渲染时,本屏的 extractRenderState 会重新 sync 借回)
@@ -751,7 +751,7 @@ class ComposeScreen(
         private const val QUIET_FRAMES_BEFORE_CLOSE = 2
 
         /**
-         * 关闭当前 Compose 屏幕(T.25 父屏幕语义):等价于对当前屏调用 [ComposeScreen.requestClose]
+         * 关闭当前 Compose 屏幕(父屏幕语义):等价于对当前屏调用 [ComposeScreen.requestClose]
          * —— 进入关闭流程(退出动画播完再切屏),有父屏则回到父屏,无父屏回游戏/主菜单。
          * 当前屏幕不是 [ComposeScreen](如原版屏幕)时返回 false,不做任何事。
          *
@@ -770,12 +770,12 @@ class ComposeScreen(
         /**
          * 打开一个 Compose 屏幕(等价于原版 minecraft.gui.setScreen),参数与构造器一致。
          *
-         * T.25:[parent] 默认取打开前的当前屏幕 —— 关闭流程走完后自动返回它(「父屏幕能力」);
+         * [parent] 默认取打开前的当前屏幕 —— 关闭流程走完后自动返回它(「父屏幕能力」);
          * 显式传 null 关闭回主菜单/游戏内。[renderParentScreen] 控制打开期间是否把
          * 父屏内容渲染在 Compose 之下(运行期可切换)。父屏为 [ComposeScreen] 时自动标记
          * [ComposeScreen.reopenable],保证返回后场景/状态复活。
          *
-         * T.26:[density] 场景密度,默认 1f(1dp == 1 像素);传 >1f 放大 UI。
+         * [density] 场景密度,默认 1f(1dp == 1 像素);传 >1f 放大 UI。
          *
          * 其余参数:[disableWorldRender] 本屏停画世界(默认取全局值)、[pauseGame] 是否暂停游戏、
          * [closeOnEsc] Esc 是否关屏、[animation] 进出场动画、[exitParentOnOpen] 打开时父屏是否

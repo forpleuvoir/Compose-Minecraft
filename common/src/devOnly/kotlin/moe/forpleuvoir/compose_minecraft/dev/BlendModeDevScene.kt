@@ -28,7 +28,7 @@ import androidx.compose.ui.text.TextStyle
 import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 
 /**
- * 混合模式测试(T.22):17 种可表达的 BlendMode。
+ * 混合模式测试:17 种可表达的 BlendMode。
  *
  * 每块 = 灰色底(0xFF757575)+ 半透明红(0xCCE53935,alpha 0.66)叠加,
  * 红色块带对应 blendMode。矩形走 blit 组 pipeline(gui_blend_*),圆形走

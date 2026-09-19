@@ -3,7 +3,7 @@ package moe.forpleuvoir.compose_minecraft.platform.render.text
 import kotlin.math.roundToInt
 
 /**
- * 字形缓存(T.TT,设计文档 §3):(码点, 量化字号) → 图集槽位 + 局部几何。
+ * 字形缓存(设计文档 §3):(码点, 量化字号) → 图集槽位 + 局部几何。
  *
  * - key 的字号按 0.25px 量化:段级字号/姿态缩放产生任意浮点字号,
  *   量化在清晰度无损的前提下显著提高缓存命中;
@@ -11,7 +11,7 @@ import kotlin.math.roundToInt
  *   quad 放进命令局部坐标系,由姿态矩阵统一变换到屏幕 —— 高分辨率位图
  *   经 UV 映射到同尺寸 quad,纹理像素与物理像素 1:1(矢量光栅化红利);
  * - 负缓存:缺字码点记录进 [misses],避免每帧重复 FindGlyphIndex;
- * - P3① 页粒度 LRU:条目带帧号时间戳([CachedGlyph.lastUseFrame]),活跃页数
+ * -  页粒度 LRU:条目带帧号时间戳([CachedGlyph.lastUseFrame]),活跃页数
  *   超 [TextRenderConfig.atlasMaxPages] 水位时在帧首把「最久未使用」的整页
  *   退役(条目失效、页游标延迟到帧末重置复用)—— §k 混淆等长驻场景显存有界。
  */
@@ -41,7 +41,7 @@ internal object GlyphCache {
         /** 空白字符(有 advance 无轮廓,如空格):只推进笔位不生成 quad */
         val hasBitmap: Boolean = widthLocal > 0f
 
-        /** P3① LRU 时间戳:最后一次命中/创建的渲染帧号([onFrameStart] 递增) */
+        /**  LRU 时间戳:最后一次命中/创建的渲染帧号([onFrameStart] 递增) */
         var lastUseFrame: Int = 0
             internal set
     }
@@ -66,7 +66,7 @@ internal object GlyphCache {
     /** 缺字负缓存(按字体实例区分,支持常规/粗体双字重) */
     private val misses = HashMap<Int, HashSet<Int>>()
 
-    /** P3① 渲染帧号时钟:每帧渲染入口递增,作为 LRU 时间戳 */
+    /**  渲染帧号时钟:每帧渲染入口递增,作为 LRU 时间戳 */
     private var frame = 0
 
     fun quantize(sizePx: Float): Float = (sizePx / SIZE_QUANTUM).roundToInt() * SIZE_QUANTUM
@@ -91,7 +91,7 @@ internal object GlyphCache {
         val q = quantize(sizePx)
         val key = packKey(slot, codepoint, q, bold)
         cache[key]?.let {
-            it.lastUseFrame = frame // P3① LRU 命中续期
+            it.lastUseFrame = frame //  LRU 命中续期
             return it
         }
 

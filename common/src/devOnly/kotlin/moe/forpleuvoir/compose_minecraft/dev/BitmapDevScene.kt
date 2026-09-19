@@ -41,7 +41,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * 图层快照测试屏幕(T.17):验证 GraphicsLayer.toImageBitmap 的 CPU 光栅化。
+ * 图层快照测试屏幕:验证 GraphicsLayer.toImageBitmap 的 CPU 光栅化。
  *
  * 上方 200x200 图层内容(与 GPU 回放相同的绘制命令,经 record 录制);
  * 点击「生成快照」→ 协程内 toImageBitmap() → 下方显示快照(原样 + 2x 放大),

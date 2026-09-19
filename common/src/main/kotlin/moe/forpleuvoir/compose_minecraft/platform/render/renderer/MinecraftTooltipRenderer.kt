@@ -25,9 +25,10 @@ import net.minecraft.util.Mth
 import net.minecraft.world.item.ItemDisplayContext
 import net.minecraft.world.item.ItemStack
 import org.joml.Matrix3x2f
+import moe.forpleuvoir.compose_minecraft.platform.ui.tooltip.TooltipLines
 
 /**
- * 1:1 tooltip 渲染桥(T.39):把原版 `GuiGraphicsExtractor` 中 tooltip 相关的绘制
+ * 1:1 tooltip 渲染桥:把原版 `GuiGraphicsExtractor` 中 tooltip 相关的绘制
  * 全部转译为 Compose 渲染管线的元素,经 [GuiCommandSink] 提交 —— **完全不走
  * [net.minecraft.client.gui.GuiGraphicsExtractor] / 原版 GuiRenderState**。
  *
@@ -221,6 +222,8 @@ class MinecraftTooltipRenderer(
         }
     }
 
+    // 存疑(未修复):countText 形参在所有调用点都传 null,自定义数量文本分支走不到。
+    // 当前行为正常,复现"tooltip 物品数量显示异常"时优先看此处。
     private fun itemCount(font: Font, itemStack: ItemStack, x: Int, y: Int, countText: String?) {
         if (itemStack.count != 1 || countText != null) {
             val amount: String = countText ?: itemStack.count.toString()

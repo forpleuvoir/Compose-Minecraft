@@ -2,9 +2,11 @@ package moe.forpleuvoir.compose_minecraft.platform.render.pip
 
 import net.minecraft.client.renderer.state.gui.pip.GuiEntityRenderState
 import org.joml.Matrix3x2f
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
+import moe.forpleuvoir.compose_minecraft.platform.render.state.ItemRenderState
 
 /**
- * 实体画中画渲染状态(T.37):包装原版 [GuiEntityRenderState] + 色调色 + 叠加 pose + 稳定缓存 key。
+ * 实体画中画渲染状态:包装原版 [GuiEntityRenderState] + 色调色 + 叠加 pose + 稳定缓存 key。
  * 经 [GuiCommandSink.addEntity] 提交,由 [ComposeOversizedEntityRenderer] 离屏渲染。
  *
  * [GuiEntityRenderState] 是 vanilla record,其 [GuiEntityRenderState.pose] 恒为恒等矩阵

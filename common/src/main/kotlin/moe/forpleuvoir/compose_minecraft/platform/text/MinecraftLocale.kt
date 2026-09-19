@@ -6,7 +6,6 @@
 package moe.forpleuvoir.compose_minecraft.platform.text
 
 import moe.forpleuvoir.compose_minecraft.mc
-import net.minecraft.client.Minecraft
 import net.minecraft.locale.Language
 
 /**

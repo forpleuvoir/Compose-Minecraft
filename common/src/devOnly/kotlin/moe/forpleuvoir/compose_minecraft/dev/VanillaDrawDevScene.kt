@@ -20,7 +20,7 @@ import net.minecraft.network.chat.Style
 import kotlin.math.roundToInt
 
 /**
- * 原版绘制修饰符测试(T.38,独立 ComposeScreen,由总菜单按钮打开)。
+ * 原版绘制修饰符测试(独立 ComposeScreen,由总菜单按钮打开)。
  *
  * 验证项:
  * - `Modifier.vanillaDraw`(前渲染,垫底)与 `Modifier.postVanillaDraw`(后渲染,置顶)

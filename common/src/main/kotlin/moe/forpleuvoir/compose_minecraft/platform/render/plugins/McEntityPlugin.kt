@@ -13,6 +13,7 @@ import net.minecraft.resources.Identifier
 import net.minecraft.world.entity.Entity
 import org.joml.Quaternionf
 import org.joml.Vector3f
+import moe.forpleuvoir.compose_minecraft.platform.render.pip.ComposeOversizedEntityRenderer
 
 /** 实体渲染数据:经 [EntityPipRenderState] 离屏 PIP 渲染(1:1 像素通道)。 */
 data class EntityDrawData(
@@ -27,8 +28,8 @@ data class EntityDrawData(
 )
 
 /**
- * 内置实体插件(T.37):把实体经 [EntityPipRenderState] 提交到 Compose 1:1 像素管线,
- * 由 [moe.forpleuvoir.compose_minecraft.platform.render.ComposeOversizedEntityRenderer]
+ * 内置实体插件:把实体经 [EntityPipRenderState] 提交到 Compose 1:1 像素管线,
+ * 由 [ComposeOversizedEntityRenderer]
  * 离屏 PIP 渲染后再 blit。与 [McItemPlugin] 同通道
  * (不依赖原版 GuiGraphicsExtractor 的 guiScale 通道),坐标/缩放 1:1。
  *
@@ -59,7 +60,7 @@ object McEntityPlugin : MinecraftRenderPlugin {
         val color = if (dd.color == -1) context.paint?.let { p -> p.color.toArgb(p.alpha) } ?: -1 else dd.color
 
         // 绕 Y 轴旋转:与原版 GuiEntityRenderer 的 rotation 语义一致。
-        // 叠加 X 轴前倾(rotationX):先绕 X 后绕 Y(与 T.15 内旋 XYZ 语义对齐)。
+        // 叠加 X 轴前倾(rotationX):先绕 X 后绕 Y(与  内旋 XYZ 语义对齐)。
         val baseRotation = Quaternionf().rotateX(dd.rotationX).rotateY(dd.rotationY)
 
         // 提交为 EntityPipRenderState(sink.addEntity 接收),ComposeGuiRenderer 在

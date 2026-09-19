@@ -25,7 +25,7 @@ import net.minecraft.resources.Identifier
 import java.io.IOException
 
 /**
- * 图片管线测试屏幕(T.16):
+ * 图片管线测试屏幕:
  *
  * 验证 `MinecraftImageBitmap`(CPU 像素)→ GpuTexture 上传 → 带 UV 的
  * `BlitRenderState` 回放全链路:

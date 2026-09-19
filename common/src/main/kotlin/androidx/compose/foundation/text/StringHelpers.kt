@@ -24,7 +24,7 @@ internal fun StringBuilder.appendCodePointX(codePoint: Int): StringBuilder = app
 /**
  * Returns the index of the character break preceding [index].
  *
- * 平台适配点(T.11 修复):恢复**字符级**断点 —— 原实现误写成"找空白/换行断点"
+ * 平台适配点(修复):恢复**字符级**断点 —— 原实现误写成"找空白/换行断点"
  * (跳词/跳行语义),导致方向键一次跳一个词、Delete 删到行首。官方 desktop 用
  * ICU BreakIterator(字符级);此处用 JVM Character 码点边界(正确处理 emoji/surrogate)。
  */
@@ -37,7 +37,7 @@ internal fun String.findPrecedingBreak(index: Int): Int {
  * Returns the index of the character break following [index]. Returns -1 if there are no more
  * breaks before the end of the string.
  *
- * 平台适配点(T.11 修复):恢复**字符级**断点(同 [findPrecedingBreak])。
+ * 平台适配点(修复):恢复**字符级**断点(同 [findPrecedingBreak])。
  */
 internal fun String.findFollowingBreak(index: Int): Int {
     if (index >= length) return -1

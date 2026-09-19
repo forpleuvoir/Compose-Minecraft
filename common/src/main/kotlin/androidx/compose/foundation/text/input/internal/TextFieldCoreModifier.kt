@@ -169,7 +169,7 @@ internal class TextFieldCoreModifierNode(
      * Whether to show cursor at all when TextField has focus. This depends on enabled, read only,
      * and brush at a given time.
      *
-     * 平台适配点(T.7 修复):焦点直接读 [TextFieldSelectionState.isFocused](由装饰器
+     * 平台适配点(修复):焦点直接读 [TextFieldSelectionState.isFocused](由装饰器
      * `onIsFocusedUpdated` 实时写入),不再依赖经 interactionSource 传播的 [isFocused] 字段 ——
      * 后者在首次聚焦时可能不更新(传播链路断),导致光标不渲染。
      */
@@ -279,7 +279,7 @@ internal class TextFieldCoreModifierNode(
         this.toolbarRequester = toolbarRequester
         this.platformSelectionBehaviors = platformSelectionBehaviors
 
-        // 平台适配点(T.7 修复):焦点以 selectionState 为准(装饰器实时写入),
+        // 平台适配点(修复):焦点以 selectionState 为准(装饰器实时写入),
         // 与 showCursor 保持一致;字段 isFocused 仅保留给 magnifier 等内部使用。
         this.isFocused = isFocused || textFieldSelectionState.isFocused
 
@@ -324,7 +324,7 @@ internal class TextFieldCoreModifierNode(
         val value = textFieldState.visualText
         val textLayoutResult = textLayoutState.layoutResult ?: return
 
-        // 平台适配点(T.7 修复):惰性同步光标动画状态 —— 焦点到(selectionState)但动画未启动
+        // 平台适配点(修复):惰性同步光标动画状态 —— 焦点到(selectionState)但动画未启动
         // 时补启动(updateNode 未触发的场景,如首次聚焦 interactionSource 传播断链);
         // 失焦时停止动画,避免光标残留。
         if (showCursor && cursorAnimation == null) {
@@ -391,7 +391,7 @@ internal class TextFieldCoreModifierNode(
         val width = min(placeable.width, constraints.maxWidth)
 
         return layout(width, placeable.height) {
-            // 平台适配点(T.6 修复):水平滚动恢复原版 ScrollState 模型
+            // 平台适配点(修复):水平滚动恢复原版 ScrollState 模型
             // (updateScrollState + placeRelative 位移),移除自研 displayPos 截断 ——
             // 原 displayPos 模型把单行 EditBox 的水平截断套用在多行文本上,
             // 导致光标在第二行时第一行被错误水平顶走。
@@ -585,13 +585,13 @@ internal class TextFieldCoreModifierNode(
         if (cursorAnimation == null) {
             cursorAnimation = CursorAnimationState(currentValueOf(LocalCursorBlinkEnabled))
         }
-        // 平台适配点(T.7 修复):无论是否新建动画对象都强制重绘 —— 若 draw 在动画启动前
+        // 平台适配点(修复):无论是否新建动画对象都强制重绘 —— 若 draw 在动画启动前
         // 已执行过(尚未注册 alpha 快照观察),cursorAlpha 从 0→1 的写入不会触发重绘,
         // 导致首次聚焦时光标不显示;切走再切回时焦点变化触发重绘才显示。
         invalidateDraw()
         changeObserverJob =
             coroutineScope.launch {
-                // 平台适配点(T.7 修复):首次启动立即显示光标并开始闪烁,不等 snapshotFlow
+                // 平台适配点(修复):首次启动立即显示光标并开始闪烁,不等 snapshotFlow
                 // 首次发射(场景中无文本变化时 snapshotFlow 不触发,导致首次聚焦光标不渲染)。
                 // snapshotFlow 仅负责文本/光标变化时重置闪烁(变化计数递增 → collectLatest
                 // 重启 snapToVisibleAndAnimate,内部取消旧动画重新开始)。
@@ -682,7 +682,7 @@ internal fun TextFieldCoreModifierNode.drawSelectionHighlight(
     selection: TextRange,
     textLayoutResult: TextLayoutResult,
 ) {
-    // 平台适配点(T.11):选区渲染可通过 LocalTextSelectionRenderer 覆盖。
+    // 平台适配点:选区渲染可通过 LocalTextSelectionRenderer 覆盖。
     // 外部提供渲染器时使用自定义绘制;否则用默认(整体选区 Path 一次绘制,
     // 与官方 drawDefaultSelectionHighlight 一致)。
     val customRenderer = currentValueOf(LocalTextSelectionRenderer)
@@ -727,7 +727,7 @@ internal fun TextFieldCoreModifierNode.drawCursor(
     cursorAnimation: CursorAnimationState?,
     textFieldSelectionState: TextFieldSelectionState,
 ) {
-    // 平台适配点(T.7):MC EditBox 风格竖条光标。
+    // 平台适配点:MC EditBox 风格竖条光标。
     // - 宽度取光标矩形宽(SelectionState 按 DefaultCursorThickness = 2.dp 折算像素,
     //   并把左右钳制在布局范围内);x = 光标前缀宽度;
     // - y = 行顶 - 1 到 行底 + 1(对应 MC TextCursorUtils.extractInsertCursor 的

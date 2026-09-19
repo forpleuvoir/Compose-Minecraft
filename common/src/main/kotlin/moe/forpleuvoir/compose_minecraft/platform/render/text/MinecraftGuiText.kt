@@ -13,7 +13,7 @@ import net.minecraft.resources.Identifier
 import org.slf4j.Logger
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 平台 TrueType 文本渲染管线(T.TT,设计文档 §3「gui_text RenderPipeline」)
+// 平台 TrueType 文本渲染管线(设计文档 §3「gui_text RenderPipeline」)
 //
 // 参照 MinecraftGuiTriangles 先例(自建 pipeline + 仓库内自写 core shader +
 // 懒编译):拓扑 TRIANGLES、POSITION_TEX_COLOR 顶点格式(位置/图集 UV/顶点色)、

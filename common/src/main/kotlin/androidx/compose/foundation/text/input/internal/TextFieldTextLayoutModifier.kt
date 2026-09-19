@@ -55,7 +55,7 @@ internal class TextFieldTextLayoutModifier(
     private val singleLine: Boolean,
     private val onTextLayout: (Density.(getResult: () -> TextLayoutResult?) -> Unit)?,
     private val keyboardOptions: KeyboardOptions,
-    // 平台适配点(T.26):输入框文本渲染缩放(1f = 原样;BasicTextField(fontSize) 派生)
+    // 平台适配点:输入框文本渲染缩放(1f = 原样;BasicTextField(fontSize) 派生)
     private val scale: Float = 1f,
 ) : ModifierNodeElement<TextFieldTextLayoutModifierNode>() {
     override fun create(): TextFieldTextLayoutModifierNode =
@@ -119,7 +119,7 @@ internal class TextFieldTextLayoutModifierNode(
     private var singleLine: Boolean,
     onTextLayout: (Density.(getResult: () -> TextLayoutResult?) -> Unit)?,
     keyboardOptions: KeyboardOptions,
-    // 平台适配点(T.26):输入框文本渲染缩放(1f = 原样;BasicTextField(fontSize) 派生)
+    // 平台适配点:输入框文本渲染缩放(1f = 原样;BasicTextField(fontSize) 派生)
     private var scale: Float = 1f,
 ) :
     DelegatingNode(),

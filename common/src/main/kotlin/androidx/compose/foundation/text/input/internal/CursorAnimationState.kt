@@ -27,7 +27,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** 平台适配点(T.7):MC TextCursorUtils.CURSOR_BLINK_INTERVAL_MS(字段为 private,常量同值) */
+/** 平台适配点:MC TextCursorUtils.CURSOR_BLINK_INTERVAL_MS(字段为 private,常量同值) */
 private const val MC_CURSOR_BLINK_INTERVAL_MS = 300L
 
 /**
@@ -79,7 +79,7 @@ internal class CursorAnimationState(val animate: Boolean) {
                         cursorAlpha = 1f
                         if (!animate) awaitCancellation()
                         while (true) {
-                            // 平台适配点(T.7):闪烁周期调为 MC TextCursorUtils 的 300ms
+                            // 平台适配点:闪烁周期调为 MC TextCursorUtils 的 300ms
                             // (原版 CursorAnimationState 为 500ms)
                             delay(MC_CURSOR_BLINK_INTERVAL_MS)
                             cursorAlpha = 0f

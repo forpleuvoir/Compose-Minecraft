@@ -104,7 +104,7 @@ sealed interface DialogAnimation {
 /**
  * 构造一个 MC [Screen] 形态的 Compose 对话框(**不自动打开**)。
  *
- * 与 T.33 的"场景内 Dialog 图层"区别:本函数返回独立的原版屏幕,可跨屏覆盖、
+ * 与  的"场景内 Dialog 图层"区别:本函数返回独立的原版屏幕,可跨屏覆盖、
  * 独立持有输入与 IME 焦点;图层版 Dialog 仍在同一 Compose 场景内。
  *
  * 关闭语义:Esc([dismissOnBackPress])/ 点击遮罩([dismissOnClickOutside])/

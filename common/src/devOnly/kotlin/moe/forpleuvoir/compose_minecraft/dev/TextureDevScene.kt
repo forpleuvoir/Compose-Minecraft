@@ -31,7 +31,7 @@ import net.minecraft.world.item.Items
 import kotlin.math.roundToInt
 
 /**
- * MC 原生渲染测试 (T.37):
+ * MC 原生渲染测试 :
  * 纹理/物品渲染测试。
  */
 @Composable

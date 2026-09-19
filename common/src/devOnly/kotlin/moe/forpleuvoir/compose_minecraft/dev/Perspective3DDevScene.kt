@@ -32,7 +32,7 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
 /**
- * 3D 透视专项测试屏幕(T.15):验证 graphicsLayer rotationX/rotationY/rotationZ 的绘制端。
+ * 3D 透视专项测试屏幕:验证 graphicsLayer rotationX/rotationY/rotationZ 的绘制端。
  *
  * 布局:全屏居中,元素少,避免溢出。
  * - 青色方块:滑块控制 rotationX(绕水平轴);

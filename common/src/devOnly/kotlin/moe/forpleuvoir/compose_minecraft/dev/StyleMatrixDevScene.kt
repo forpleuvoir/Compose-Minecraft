@@ -174,7 +174,7 @@ fun StyleMatrixDevScene() {
                 BasicText(
                     "Focus A: $focusStateText | Key: $focusedKey",
                     modifier = Modifier.padding(8.dp),
-                    // T.19:scale 参数已移除 → fontSize(sp) 并入 style;0.85 * 16sp = 13.6sp
+                    // scale 参数已移除 → fontSize(sp) 并入 style;0.85 * 16sp = 13.6sp
                     style = Style.EMPTY.withColor(Color.White).toTextStyle().merge(
                         TextStyle(fontSize = if (focusPanelFocused) 13.6.sp else 16.sp)
                     )

@@ -85,7 +85,7 @@ private constructor(
     /** The minimum width provided while calculating this text layout. */
     val constraints: Constraints,
 
-    /** 平台适配点(T.26):文本渲染缩放(1f = 原样,经 MultiParagraphIntrinsics.scale 注入布局)。 */
+    /** 平台适配点:文本渲染缩放(1f = 原样,经 MultiParagraphIntrinsics.scale 注入布局)。 */
     val scale: Float = 1f,
 ) {
 
@@ -148,7 +148,7 @@ private constructor(
         layoutDirection: LayoutDirection,
         fontFamilyResolver: FontFamily.Resolver,
         constraints: Constraints,
-        // 平台适配点(T.26):文本渲染缩放(1f = 原样)
+        // 平台适配点:文本渲染缩放(1f = 原样)
         scale: Float = 1f,
     ) : this(
         text,

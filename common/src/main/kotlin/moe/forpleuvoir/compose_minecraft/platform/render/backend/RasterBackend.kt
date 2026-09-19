@@ -32,9 +32,10 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import androidx.compose.ui.graphics.MinecraftCanvas.DrawCommand
 
 /**
- * CPU 光栅化后端(P2,自 `GraphicsLayerRasterizer` 原样搬移,2025-08)。
+ * CPU 光栅化后端(自 `GraphicsLayerRasterizer` 原样搬移)。
  *
  * 把 [DrawCommand] 直接光栅化到 CPU 像素缓冲(0xAARRGGBB),支撑
  * `GraphicsLayer.toImageBitmap` —— 图层内容快照,无渲染上下文依赖。
@@ -48,7 +49,7 @@ import kotlin.math.sqrt
  *
  * 不支持(静默跳过,快照中缺失,调用方自行注意):
  * - [DrawShadowCommand]:阴影是 GPU 距离场渲染,快照不含阴影;
- * - 文本的部分能力:P3③ 已实现 TTF 字形/装饰线/渐变/混淆/粗体/斜体的 CPU
+ * - 文本的部分能力: 已实现 TTF 字形/装饰线/渐变/混淆/粗体/斜体的 CPU
  *   光栅化([drawText]),但缺字字符无原版字形可兜底(跳过墨迹保留推进)、
  *   阴影与 GUI 端一致未绘制、[TextRenderBackend.VANILLA] 定向 run 跳过。
  */
@@ -171,7 +172,7 @@ internal class RasterBackend(
     }
 
     /**
-     * P3③ CPU 文本路径:直接 stb 光栅化字形并逆映射混入像素缓冲。
+     *  CPU 文本路径:直接 stb 光栅化字形并逆映射混入像素缓冲。
      *
      * - **不经 [GlyphCache]/图集**:二者绑定 GPU 纹理上传(渲染线程约束),
      *   而 `toImageBitmap` 快照可能不在渲染线程回放 —— 此处每次直接
@@ -413,7 +414,7 @@ internal class RasterBackend(
 
     private fun tessellate(
         out: IntArray, width: Int, height: Int,
-        cmd: androidx.compose.ui.graphics.MinecraftCanvas.DrawCommand,
+        cmd: DrawCommand,
         tessellate: (Sink) -> Unit,
     ) {
         val sink = Sink()
@@ -579,6 +580,9 @@ internal class RasterBackend(
             if (denom == 0f) return@repeat
             val invDenom = 1f / denom
 
+            // 存疑(未修复):顶点色 alpha(aa/ba/ca)已解出但未参与最终 alpha 计算,
+            // 下方 a 只由 coverage 得出 —— CPU 光栅化的三角形渐变忽略逐顶点 alpha。
+            // 当前行为正常,复现"逐顶点 alpha 不生效"时优先看此处。
             val ar = acol shr 16 and 0xFF
             val ag = acol shr 8 and 0xFF
             val ab = acol and 0xFF
@@ -677,7 +681,7 @@ internal class RasterBackend(
                 // 逆变换到命令局部坐标
                 val lx = inv00 * x + inv01 * y + inv20
                 val ly = inv10 * x + inv11 * y + inv21
-                if (lx < x0 || lx >= x1 || ly < y0 || ly >= y1) {
+                if (lx !in x0..<x1 || ly < y0 || ly >= y1) {
                     idx++
                     continue
                 }
@@ -741,7 +745,9 @@ internal class RasterBackend(
         val vc = positions.size / 2
         if (vc < 3) return
         // 顶点色 × paint.alpha(与 GPU 回放 scaleAlpha 一致)
-        val alphaMul = cmd.paint?.alpha ?: 1f
+        // 存疑(未修复):paint 声明为非空类型却用了安全调用,可空性标注与实际不符。
+        // 当前行为正常,复现"顶点色整体透明度错"时优先看此处。
+        val alphaMul = cmd.paint.alpha
         fun scaled(argb: Int): Int {
             val a = (((argb ushr 24) and 0xFF) * alphaMul + 0.5f).toInt().coerceIn(0, 255)
             return (argb and 0x00FFFFFF) or (a shl 24)
@@ -781,17 +787,17 @@ internal class RasterBackend(
         if (tris.size < 9) return
 
         val m = cmd.matrix
-        val m00 = m[0];
-        val m10 = m[1];
-        val m01 = m[4];
-        val m11 = m[5];
-        val m20 = m[12];
+        val m00 = m[0]
+        val m10 = m[1]
+        val m01 = m[4]
+        val m11 = m[5]
+        val m20 = m[12]
         val m21 = m[13]
         val clip = cmd.clip
         var k = 0
         while (k + 2 < tris.size) {
-            val ai = tris[k];
-            val bi = tris[k + 1];
+            val ai = tris[k]
+            val bi = tris[k + 1]
             val ci = tris[k + 2]; k += 3
             val ax = positions[ai * 2] * m00 + positions[ai * 2 + 1] * m01 + m20
             val ay = positions[ai * 2] * m10 + positions[ai * 2 + 1] * m11 + m21

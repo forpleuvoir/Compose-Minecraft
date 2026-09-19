@@ -41,7 +41,6 @@ import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.minecraftEntity
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
-import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Style
 import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.LivingEntity
@@ -49,7 +48,7 @@ import kotlin.math.PI
 import kotlin.math.roundToInt
 
 /**
- * 实体渲染测试 (T.37):MinecraftEntity Modifier —— 实体离屏 PIP 渲染,
+ * 实体渲染测试 :MinecraftEntity Modifier —— 实体离屏 PIP 渲染,
  * 验证旋转(rotationX/rotationY)/色调色/graphicsLayer alpha/多实体共存。
  */
 @Composable

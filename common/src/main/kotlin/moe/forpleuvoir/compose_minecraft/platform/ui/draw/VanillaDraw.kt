@@ -30,9 +30,10 @@ import net.minecraft.util.FormattedCharSequence
 import org.joml.Matrix3x2f
 import java.util.ArrayDeque
 import kotlin.math.roundToInt
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposeGuiRenderer
 
 /**
- * 绘制修饰符扩展(T.38):在合成时把本节点注册进「原版 GUI 绘制桥」帧管线。
+ * 绘制修饰符扩展:在合成时把本节点注册进「原版 GUI 绘制桥」帧管线。
  *
  * ## 双通道设计
  * 每个修饰符([Modifier.vanillaDraw] 与 [Modifier.postVanillaDraw])都有一个
@@ -44,7 +45,7 @@ import kotlin.math.roundToInt
  *   API(`fill` / `fillGradient` / `text` / `enableScissor` 等)。每个调用被转译成
  *   与后端完全相同的 element 类型(`ColoredRectangleRenderState` /
  *   `GuiTextRenderState`),经 [GuiCommandSink] 注入
- *   [moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiRenderer] 的
+ *   [ComposeGuiRenderer] 的
  *   items 列表,由 Compose 渲染器的 **1:1 像素投影 + 像素级裁剪**绘制 ——
  *   **完全不受原版 guiScale 影响**(与 Compose 场景同坐标系:窗口像素 1:1,
  *   1dp == 1 像素,文字 9px、矩形像素级对齐);
@@ -78,7 +79,7 @@ import kotlin.math.roundToInt
  * 通道;需要原版完整渲染能力(图标、tooltip、九宫格贴图)时开原版通道。
  *
  * ## 坐标换算[VanillaDrawScope]
- * 场景尺寸 = 窗口像素(T.24 1:1);节点场景偏移 = `LayoutCoordinates.positionInRoot()`
+ * 场景尺寸 = 窗口像素(1:1);节点场景偏移 = `LayoutCoordinates.positionInRoot`
  * (**包含 graphicsLayer 图层位移**,不含图层 translation/rotation/scale)。
  * [VanillaDrawScope] 的换算助手按通道产出坐标:
  * - 1:1 通道:本地坐标 + 场景偏移 → **窗口像素整数**(不缩放);
@@ -142,7 +143,7 @@ fun Modifier.postVanillaDraw(
  * 两条通道的 native([VanillaGuiGraphics] 1:1 桥 与 当前帧原版
  * [GuiGraphicsExtractor])注入回调。
  *
- * ## 为什么需要回调每帧重放(T.38 关键机制)
+ * ## 为什么需要回调每帧重放(关键机制)
  * 本平台 Compose 图层是"命令烘焙"模型:`GraphicsLayer.record` 只在图层
  * isDirty 时执行,静态帧只回放缓存命令、**不再执行节点的 draw 代码**。若
  * vanilla 绘制挂在 DrawModifierNode.draw 里,vanilla 元素只会进入**首帧**,
@@ -229,7 +230,7 @@ val LocalVanillaDrawState = staticCompositionLocalOf<VanillaDrawState> {
  * API 与「节点本地坐标 → 绘制空间坐标」换算。
  *
  * ## 两条通道的坐标语义
- * 场景尺寸 = 窗口像素(T.24 1:1,1dp == 1 像素,不除 guiScale);节点场景偏移
+ * 场景尺寸 = 窗口像素(1:1,1dp == 1 像素,不除 guiScale);节点场景偏移
  * ([originInRoot]) = `LayoutCoordinates.positionInRoot()`(含 graphicsLayer
  * 图层位移,不含图层仿射变换)。换算助手按 [guiScaleEnabled] 产出**当前通道的
  * 坐标空间**:
@@ -375,14 +376,14 @@ class VanillaDrawScope(
 }
 
 /**
- * 1:1 像素投影的原生 GUI 绘制桥(T.38 方案 B,1:1 通道的 native)。
+ * 1:1 像素投影的原生 GUI 绘制桥(方案 B,1:1 通道的 native)。
  *
  * 提供与原版 [net.minecraft.client.gui.GuiGraphicsExtractor] **形态一致**的
  * 常用绘制 API(`fill` / `fillGradient` / `horizontalLine` / `verticalLine` /
  * `text` / `centeredText` / `enableScissor` / `disableScissor`),但**不写入
  * 原版 GuiRenderState** —— 每个调用构造与后端完全相同的 element 类型
  * (`ColoredRectangleRenderState` / `GuiTextRenderState` 等),经 [GuiCommandSink]
- * 注入 [moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiRenderer]
+ * 注入 [ComposeGuiRenderer]
  * 的 items 列表,由 Compose 渲染器的 **1:1 像素投影 + 像素级裁剪**绘制:
  * - 坐标语义 = 窗口像素(与 Compose 场景同坐标系,不受原版 guiScale 影响);
  * - 文字复用原版字体管线(9px 基准行高,与 Compose BasicText 同度量);
@@ -609,6 +610,8 @@ private class VanillaDrawNode(
     /** 每帧 vanilla 重放入口(renderFrame 内、两条通道注入时调用) */
     private fun invokeVanilla(bridge: VanillaGuiGraphics, graphics: GuiGraphicsExtractor?, guiScale: Float) {
         if (!hasGeometry) return   // 首次 draw 之前(几何未知)跳过
+        // 存疑(未修复):两个分支各自硬编码 guiScaleEnabled(原版通道 true / 1:1 通道 false),
+        // 该值在分支内恒定。当前行为正常,复现"原版绘制缩放判断错"时优先看此处。
         val scope = if (guiScaleEnabled) {
             val g = graphics
             if (g == null) return   // 原版通道但本帧 extractor 缺失 → 跳过

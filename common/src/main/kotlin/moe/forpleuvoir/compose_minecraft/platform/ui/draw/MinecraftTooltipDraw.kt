@@ -9,7 +9,7 @@ import moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftToolt
 import moe.forpleuvoir.compose_minecraft.platform.ui.tooltip.TooltipLines
 
 /**
- * 在 [DrawScope] 中绘制一个原版视觉的 tooltip(T.39),经 [McTooltipPlugin] 在
+ * 在 [DrawScope] 中绘制一个原版视觉的 tooltip,经 [McTooltipPlugin] 在
  * Compose 1:1 管线渲染 —— **不走 GuiGraphicsExtractor**。
  *
  * [x]/[y] 为**内容区**左上角坐标(不含背景外扩),单位与 [TooltipLines.measure] 一致:

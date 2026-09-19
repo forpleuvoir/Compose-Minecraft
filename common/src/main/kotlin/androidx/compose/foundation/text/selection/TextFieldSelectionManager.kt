@@ -425,7 +425,7 @@ internal class TextFieldSelectionManager(val undoManager: UndoManager? = null) {
 
                 val collapsed = runningSelection?.collapsed ?: value.selection.collapsed
                 setHandleState(if (collapsed) Cursor else Selection)
-                // 平台适配点(T.8):触摸选区手柄已移除,不再维护 show*Handle 可见状态
+                // 平台适配点:触摸选区手柄已移除,不再维护 show*Handle 可见状态
 
                 if (isLongPressSelectionOnly) {
                     // Note that even if we called onValueChange when selection is updated,
@@ -1312,7 +1312,7 @@ internal class TextFieldSelectionManager(val undoManager: UndoManager? = null) {
 
         state?.isInTouchMode = isTouchBasedSelection
 
-        // 平台适配点(T.8):触摸选区手柄已移除,不再维护 show*Handle 可见状态
+        // 平台适配点:触摸选区手柄已移除,不再维护 show*Handle 可见状态
 
         return newSelection
     }
@@ -1330,7 +1330,7 @@ internal class TextFieldSelectionManager(val undoManager: UndoManager? = null) {
 }
 
 // TODO: Upstream https://youtrack.jetbrains.com/issue/CMP-5772
-// 平台适配点(T.8):TextFieldSelectionHandle / isSelectionHandleInVisibleBound 已随
+// 平台适配点:TextFieldSelectionHandle / isSelectionHandleInVisibleBound 已随
 // 触摸选区手柄移除删除。
 
 /**

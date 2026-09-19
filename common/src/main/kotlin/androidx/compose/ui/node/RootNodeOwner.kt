@@ -86,7 +86,7 @@ internal class RootNodeOwner(
     private val rootSemanticsNode = EmptySemanticsModifier()
     private val snapshotObserver = snapshotInvalidationTracker.snapshotObserver()
 
-    // Minecraft 平台:用我们自己的 GraphicsContext(命令录制型图层),不依赖 Skia。
+    // Minecraft 平台:用平台自己的 GraphicsContext(命令录制型图层),不依赖 Skia。
     private val graphicsContext = MinecraftGraphicsContext()
     private val coroutineScope = CoroutineScope(coroutineContext + Job(parent = coroutineContext[Job]))
 

@@ -102,7 +102,7 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
         singleLine: Boolean,
         softWrap: Boolean,
         keyboardOptions: KeyboardOptions,
-        // 平台适配点(T.26):输入框文本渲染缩放(1f = 原样;BasicTextField(fontSize) 组合期算好传入)
+        // 平台适配点:输入框文本渲染缩放(1f = 原样;BasicTextField(fontSize) 组合期算好传入)
         scale: Float = 1f,
     ) {
         nonMeasureInputs =
@@ -278,7 +278,7 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
             layoutDirection = measureInputs.layoutDirection,
             density = measureInputs.density,
             fontFamilyResolver = measureInputs.fontFamilyResolver,
-            // 平台适配点(T.26):输入框字号缩放(经 TextMeasurer → MultiParagraphIntrinsics 注入)
+            // 平台适配点:输入框字号缩放(经 TextMeasurer → MultiParagraphIntrinsics 注入)
             scale = nonMeasureInputs.scale,
         )
     }
@@ -383,7 +383,7 @@ internal class TextFieldLayoutStateCache : State<TextLayoutResult?>, StateObject
         val singleLine: Boolean,
         val softWrap: Boolean,
         val isKeyboardTypePhone: Boolean,
-        // 平台适配点(T.26):文本渲染缩放(缓存键,变化时重排)
+        // 平台适配点:文本渲染缩放(缓存键,变化时重排)
         val scale: Float,
     ) {
 

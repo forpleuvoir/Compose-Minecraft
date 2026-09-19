@@ -11,31 +11,17 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 帧钩子(T.24 独立渲染工作流,用户拍板解除「无帧钩子 mixin」约定):
+ * 帧钩子:把 Compose 场景插进原版 draw() 的「before-blur 段(普通 GUI:HUD/screen/toast)
+ * 之后、after-blur 段(F3 debug overlay)之前」,层级 = 普通 GUI &lt; Compose &lt; F3。
  * <p>
- * 注入点演进(每轮用户实测反馈驱动):
- * 1. 初版:GameRenderer.render() 的 guiRenderer.render()V 调用**之前** —— Compose
- *    先画、原版 GUI 后画盖住 Compose(用户:「渲染的位置不对,变成在屏幕之前渲染了」)。
- * 2. 二版:GuiRenderer.draw() 第二个 executeDrawRange(after-blur 段)**之前**
- *    —— 但该注入点**依赖原版 draws 非空**:ComposeScreen 打开时原版 GUI 内容
- *    实际只有菜单遮罩(after-blur 段),ComposeScreen.extractBackground 空实现
- *    移除遮罩后 draws 全空,draw() 直接 return,注入点不触发 → Compose 完全不
- *    渲染(用户:「直接啥都不渲染了」)。
- * 3. 三版:render() 的 draw() 调用点 AFTER —— draw() 调用指令无条件存在,
- *    **不依赖原版 draws 状态**,Compose 必渲染;但层级为原版 GUI 之后
- *    (最上层),F3 调试覆盖层(FPS 信息)被 Compose 盖住(用户:「渲染的位置
- *    太靠后了都比 fps信息渲染还靠后了」)。
- * 4. 四版:render() 的 draw() 调用点 BEFORE —— draw() 调用指令无条件存在,
- *    **不依赖原版 draws 状态**,Compose 必渲染;Compose 先画、原版随后画,
- *    F3 调试覆盖层(FPS 信息)画在 Compose 之上(满足「Compose 在 F3 之前」)。
- *    但原版 HUD/toasts 也画在 Compose 之上(用户实测:「HUD都渲染到屏幕上了」)。
- * 5. 现版(用户拍板「插入原版屏幕之后、F3 之前」):
- *    Compose 画在原版 draw() 的「before-blur 段(普通 GUI: HUD/screen/toast)
- *    之后、after-blur 段(F3 debug overlay)之前」—— 配合 {@link DebugOverlayMixin}
- *    使 F3 进入 after-blur 段,Compose 精确位于普通 GUI 与 F3 之间。
- *    原版 HUD/toast 提取逻辑完全不变、不做任何隐藏;F3 调试覆盖层保持最上。
+ * 落点选择:两个 executeDrawRange 之间**依赖原版 draws 非空**(before-blur 段有内容才会
+ * 走到那里;ComposeScreen 空实现 extractBackground,原版 GUI 只剩菜单遮罩,遮罩一去掉
+ * draws 可能全空 → draw() 直接 return,注入点不触发)。故此处只负责 F3 开启时的精确层级,
+ * 配合 {@link DebugOverlayMixin} 把 F3 排进 after-blur 段。
  * <p>
- * Compose 屏关闭/未打开时 [ComposeGuiRenderer.getActive] 为 null,所有注入为 no-op,
+ * 原版 HUD/toast 提取逻辑完全不变、不做任何隐藏;F3 调试覆盖层保持最上。
+ * <p>
+ * Compose 屏关闭/未打开时 {@link ComposeGuiRenderer#getActive} 为 null,所有注入为 no-op,
  * 原版行为完全不变。
  */
 @Mixin(GuiRenderer.class)
@@ -55,6 +41,10 @@ public abstract class GuiRendererMixin {
      * 此时 before-blur 段(普通 GUI: HUD/screen/toast)已画完,after-blur 段(F3)尚未画,
      * 层级 = 普通 GUI < Compose < F3。
      * 仅当 {@link DebugOverlayMixin} 成功将 F3 排入 after-blur 段时触发(即 F3 开启时)。
+     * <p>
+     * 存疑(未修复):注入点用 ordinal = 1 + {@code At.Shift.BEFORE} 定位到第二个
+     * executeDrawRange 之前,原版指令序变化时可能失配(IDE 亦标记 brittle)。
+     * 当前行为正常,复现"Compose 层级错位 / 完全不渲染"时优先看此处。
      */
     @Inject(
         method = "draw",

@@ -12,7 +12,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFont
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.MinecraftFonts
@@ -21,7 +20,7 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
 /**
- * 字体缺字回退测试(P3 像素化):
+ * 字体缺字回退测试(像素化):
  *
  * - 全局默认字体 = compose_minecraft:fusion_pixel(12px 网格,24sp 显示);
  * - Fusion Pixel 覆盖外的文字(阿拉伯文/泰文/希伯来文/天城文/emoji 等)应

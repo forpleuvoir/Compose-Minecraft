@@ -36,7 +36,7 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
 /**
- * 颜色滤镜测试屏幕(T.21):验证 GraphicsLayer/Paint 级 colorFilter 的 draw 级近似。
+ * 颜色滤镜测试屏幕:验证 GraphicsLayer/Paint 级 colorFilter 的 draw 级近似。
  *
  * 每块 = 标签 + 原始 8 色条带(对照)+ 滤镜后条带。
  * 覆盖:ColorMatrix(反相/灰度)、BlendModeColorFilter(tint SrcIn/SrcOver/Modulate)、

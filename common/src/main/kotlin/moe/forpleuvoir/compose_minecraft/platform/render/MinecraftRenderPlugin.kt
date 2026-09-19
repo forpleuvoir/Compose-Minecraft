@@ -12,6 +12,9 @@ import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.resources.Identifier
 import org.joml.Matrix3x2f
 import kotlin.math.roundToInt
+import androidx.compose.ui.graphics.MinecraftCanvas
+import androidx.compose.ui.graphics.MinecraftPaint
+import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 
 /**
  * 自定义渲染的上下文,透传给 [MinecraftRenderPlugin.onDraw]。
@@ -34,7 +37,7 @@ class CustomDrawContext(
 }
 
 /**
- * 自定义渲染插件(T.37):mod 开发者通过实现本接口并注册到 [MinecraftRenderPlugins],
+ * 自定义渲染插件:mod 开发者通过实现本接口并注册到 [MinecraftRenderPlugins],
  * 在 Compose 1:1 像素管线中渲染 MC 原生内容。
  *
  * [onDraw] 参数 [tag] 标识渲染类型、[data] 携带渲染数据。
@@ -95,6 +98,20 @@ object MinecraftRenderPlugins {
 
 // ── 扩展函数 ──────────────────────────────────────────────────────
 
+/**
+ * 命令矩阵(列主序 4x4)→ JOML [Matrix3x2f](列主序 3x2)。
+ *
+ * androidx `Matrix.values` 为列主序:values[0]=m00, values[1]=m10, values[4]=m01,
+ * values[5]=m11, values[12]=m20, values[13]=m21;而 JOML 构造器参数序为
+ * (m00, m01, m10, m11, m20, m21),两者顺序不同,故按 this[0], this[1], this[4],
+ * this[5] 传入,等价于交换 m01/m10(对 2x2 预转置)。
+ *
+ * 为什么必须交换:MC 26.2 运行时打包的 JOML,`transformPosition` 是**行主序**实现
+ * (x' = m00·x + m10·y + m20,与标准列主序 x' = m00·x + m01·y + m20 相反)。若按列主序
+ * 直接传入,2x2 旋转矩阵会被**转置**:旋转方向反转,且绕 pivot 旋转时中心随角度摆动
+ * (幅度 2·|sinθ|·|p|,表现为"公转")。纯缩放/平移不受影响(对角矩阵转置不变),
+ * 因此"只有旋转异常、缩放平移正常"时应优先怀疑这里的 2x2 行列语义。
+ */
 fun FloatArray.toMatrix3x2f(): Matrix3x2f =
     Matrix3x2f(this[0], this[1], this[4], this[5], this[12], this[13])
 

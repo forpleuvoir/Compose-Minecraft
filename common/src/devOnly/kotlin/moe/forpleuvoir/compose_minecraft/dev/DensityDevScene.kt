@@ -35,11 +35,11 @@ import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
 
 /**
- * 密度参数测试(T.26):验证 `ComposeScreen.open(density = …)` 场景密度可配置。
+ * 密度参数测试:验证 `ComposeScreen.open(density = …)` 场景密度可配置。
  *
  * 本屏由 dev 菜单以 **density = 2f** 打开 —— 场景内所有 dp 尺寸 / sp 字号
  * 按官方桌面 density 语义放大 2 倍:
- * - [LocalDensity.current.density] 显示实际值(应为 2.0);
+ * - [LocalDensity] 显示实际值(应为 2.0);
  * - 100.dp.toPx() 应为 200px(1f 时为 100px),红块视觉 2 倍大;
  * - sp 字号换算 `sp × density / 9`(BasicText.kt MC_TEXT_SCALE_BASE_PX),
  *   9sp = 1x 原生、18sp = 2x 基准 —— density=2 时再乘 2;

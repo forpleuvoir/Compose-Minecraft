@@ -6,11 +6,11 @@ import androidx.compose.runtime.setValue
 import moe.forpleuvoir.compose_minecraft.mc
 
 /**
- * 文本渲染后端定向选择(T.TT,设计文档 §3.1.1)。
+ * 文本渲染后端定向选择(设计文档 §3.1.1)。
  *
  * - [DEFAULT]:由字体解析结果的通道决定分流(A2);
  * - [VANILLA]:强制原版 MC 位图字体渲染(定向回退,组合期经
- *   `LocalTextRenderBackend` 覆盖 —— 该 CompositionLocal 属 P2)。
+ *   `LocalTextRenderBackend` 覆盖 —— 该 CompositionLocal 属)。
  *
  * 无"强制启用"档:启用是平台级决策,不暴露给子树(避免与全局开关职责重复)。
  */
@@ -27,7 +27,7 @@ enum class TextRenderBackend {
  * - [designSizePx]:字体加载 em(px)。像素字体必填其设计网格(如 Fusion Pixel
  *   = 12)—— advance/行高按原生网格计算,保证与 FreeType 渲染端逐像素一致;
  *   null = 跟随全局基准([TextRenderConfig.baseFontSizePx]);
- * - [weight]/[italic]:多字重族描述(P2 样式完备阶段消费,P1 仅记录)。
+ * - [weight]/[italic]:多字重族描述(样式完备阶段消费, 仅记录)。
  */
 data class FontSource(
     val path: String,
@@ -40,11 +40,11 @@ data class FontSource(
 )
 
 /**
- * 自研 TrueType 文本渲染管线全局配置(T.TT,设计文档 §3.4)。
+ * 自研 TrueType 文本渲染管线全局配置(设计文档 §3.4)。
  *
  * - [fontSources] 按优先级排序,全部失败 → 回退原版(D4);
  * - STB 矢量链是否就绪由 TrueTypeFontManager 的加载结果决定,无独立总开关
- *   (历史 KDoc 的 `[enabled]` 开关从未落地,font-system 重构 T.RF-G 清理)。
+ *   (历史 KDoc 的 `[enabled]` 开关从未落地,font-system 重构  清理)。
  *
  * 配置在运行时可变;[fontSources] 变化对**新建布局**生效
  * (MinecraftTextLayout 构造时快照度量来源),已建场景需重建后切换。
@@ -99,7 +99,7 @@ object TextRenderConfig {
     var boldEmboldenRatio: Float by mutableStateOf(1f / 32f)
 
     /**
-     * 字形图集活跃页水位(P3① 页粒度 LRU):超过即在本帧渲染前把「最久未使用」
+     * 字形图集活跃页水位(页粒度 LRU):超过即在本帧渲染前把「最久未使用」
      * 的页整页退役(cache 条目同步失效),帧末重置该页打包游标供后续复用 ——
      * §k 混淆等持续产生新字形的长驻场景显存不再无界增长。
      * 单页 = 1024×1024 R8 = 1 MB;默认 8 页(8 MB)。工作集真超水位时按 LRU

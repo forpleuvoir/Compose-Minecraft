@@ -54,9 +54,9 @@ internal class ParagraphLayoutCache(
     private var softWrap: Boolean = true,
     private var maxLines: Int = Int.MAX_VALUE,
     private var minLines: Int = DefaultMinLines,
-    /** 平台适配点(T.3):MC Component 展平后的多段样式;空 = 单样式(旧行为)。 */
+    /** 平台适配点:MC Component 展平后的多段样式;空 = 单样式(旧行为)。 */
     private var segments: List<StyleSegment> = emptyList(),
-    /** 平台适配点(T.10):文本缩放;1f = 原样。 */
+    /** 平台适配点:文本缩放;1f = 原样。 */
     private var scale: Float = 1f,
 ) {
 
@@ -251,7 +251,7 @@ internal class ParagraphLayoutCache(
         maxLines: Int,
         minLines: Int,
         segments: List<StyleSegment> = emptyList(),
-        /** 平台适配点(T.10):文本缩放;1f = 原样。 */
+        /** 平台适配点:文本缩放;1f = 原样。 */
         scale: Float = 1f,
     ) {
         this.text = text

@@ -20,6 +20,7 @@ import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.ItemStackTemplate
 import net.minecraft.world.item.component.BundleContents
 import org.apache.commons.lang3.math.Fraction
+import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent
 
 /**
  * tooltip 行(1:1 渲染):文本行与图片行的统一接口,测量/渲染语义对齐原版
@@ -131,7 +132,7 @@ data class TooltipLines(
 }
 
 /**
- * 图片组件测量/渲染分派(T.39):`BundleTooltip`(/`BundleContents`)内容网格、
+ * 图片组件测量/渲染分派:`BundleTooltip`(`BundleContents`)内容网格、
  * `ActivePlayersTooltip` 玩家列表的 1:1 绘制 —— 逻辑 1:1 翻译原版
  * `ClientBundleTooltip` / `ClientActivePlayersTooltip`(默认值一致,常量可覆盖)。
  */

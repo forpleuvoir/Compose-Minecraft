@@ -61,9 +61,9 @@ internal class MultiParagraphLayoutCache(
     private var minLines: Int = DefaultMinLines,
     private var placeholders: List<AnnotatedString.Range<Placeholder>>? = null,
     private var autoSize: TextAutoSize? = null,
-    // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖,渲染端逐段绘制)
+    // 平台适配点(富文本):spanStyles 切分后的段列表(全覆盖,渲染端逐段绘制)
     private var segments: List<StyleSegment> = emptyList(),
-    // 平台适配点(T.29):字号渲染缩放(18sp → 2x)。AnnotatedString 版文本的
+    // 平台适配点:字号渲染缩放(18sp → 2x)。AnnotatedString 版文本的
     // fontSize 经 BasicText 组合端换算后一路透传到这里,布局与绘制共用。
     private var scale: Float = 1f,
 ) {
@@ -117,7 +117,7 @@ internal class MultiParagraphLayoutCache(
     /** [LayoutDirection] used to compute [MultiParagraphIntrinsics] */
     private var intrinsicsLayoutDirection: LayoutDirection? = null
 
-    /** 平台适配点(T.20):intrinsics 缓存键中的 scale 分量(TextAutoSize 多档字号布局) */
+    /** 平台适配点:intrinsics 缓存键中的 scale 分量(TextAutoSize 多档字号布局) */
     private var intrinsicsScale: Float = 1f
 
     /** 最近一次 [layoutWithConstraints] 的 [LayoutDirection],TextAutoSize 搜索布局复用 */
@@ -215,7 +215,7 @@ internal class MultiParagraphLayoutCache(
             return true
         }
         if (autoSize != null) {
-            // 平台适配点(T.20/T.25):TextAutoSize 二分搜索最大适配字号(sp → 渲染 scale,
+            // 平台适配点:TextAutoSize 二分搜索最大适配字号(sp → 渲染 scale,
             // 唯一换算入口 fontSizeToEmPx),用搜索得到的字号重新布局
             val localAutoSize = autoSize!!
             val scale =
@@ -316,9 +316,9 @@ internal class MultiParagraphLayoutCache(
         minLines: Int,
         placeholders: List<AnnotatedString.Range<Placeholder>>?,
         autoSize: TextAutoSize?,
-        // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖)
+        // 平台适配点(富文本):spanStyles 切分后的段列表(全覆盖)
         segments: List<StyleSegment> = emptyList(),
-        // 平台适配点(T.29):字号渲染缩放(18sp → 2x),见构造注释
+        // 平台适配点:字号渲染缩放(18sp → 2x),见构造注释
         scale: Float = 1f,
     ) {
         this.text = text
@@ -363,7 +363,7 @@ internal class MultiParagraphLayoutCache(
                     fontFamilyResolver = fontFamilyResolver,
                     placeholders = placeholders.orEmpty(),
                     scale = scale,
-                    // 平台适配点(T.29 富文本):段列表透传到 intrinsics → Paragraph → 渲染端
+                    // 平台适配点(富文本):段列表透传到 intrinsics → Paragraph → 渲染端
                     segments = segments,
                 )
             } else {
@@ -474,7 +474,7 @@ internal class MultiParagraphLayoutCache(
         var lastLayoutResult: TextLayoutResult? = null
             private set
 
-        // 平台适配点(T.20):sp → px,与 T.19 的 TextUnit.toTextScale 同公式
+        // 平台适配点:sp → px,与  的 TextUnit.toTextScale 同公式
         // (18sp = 18px = 渲染 scale 2x,含 fontScale)
         override fun TextUnit.toPx(): Float =
             when (type) {
@@ -491,7 +491,7 @@ internal class MultiParagraphLayoutCache(
             text: AnnotatedString,
             fontSize: TextUnit,
         ): TextLayoutResult {
-            // 平台适配点(T.20/T.25):MC 无原生字号系统,字号经渲染 scale 驱动
+            // 平台适配点:MC 无原生字号系统,字号经渲染 scale 驱动
             // (唯一换算入口 fontSizeToEmPx);用局部 intrinsics 布局(不污染主布局缓存)
             val scale = fontSizeToEmPx(fontSize.value)
             val localIntrinsics =
@@ -502,7 +502,7 @@ internal class MultiParagraphLayoutCache(
                     fontFamilyResolver = this@MultiParagraphLayoutCache.fontFamilyResolver,
                     placeholders = placeholders.orEmpty(),
                     scale = scale,
-                    // 平台适配点(T.29 富文本):autoSize 探测布局同样携带段列表
+                    // 平台适配点(富文本):autoSize 探测布局同样携带段列表
                     segments = this@MultiParagraphLayoutCache.segments,
                 )
             val multiParagraph =

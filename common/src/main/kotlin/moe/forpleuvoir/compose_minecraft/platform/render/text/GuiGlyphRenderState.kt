@@ -8,18 +8,18 @@ import net.minecraft.client.renderer.state.gui.GuiElementRenderState
 import org.joml.Matrix3x2fc
 
 /**
- * TrueType 文本 quad 批次渲染元素(T.TT,设计文档 §3「GuiGlyphRenderState」)。
+ * TrueType 文本 quad 批次渲染元素(设计文档 §3「GuiGlyphRenderState」)。
  *
  * - 顶点:命令局部坐标 [x, y, u, v] 平铺,每顶点 4 float、每 quad 6 顶点
  *   (两三角形);几何变换由 [pose](命令矩阵的 2D 部分)在 GPU 端完成,
  *   与 BlitRenderState/GuiTriangleRenderState 一致;
  * - 颜色:每顶点 0xAARRGGBB(纯色 run 统一色;渐变画刷由 TrueTypeTextWriter
- *   逐 quad 中心采样取色 —— T.TT,font-system 重构 T.RF-G 更正过时注释);
+ *   逐 quad 中心采样取色 —— ,font-system 重构  更正过时注释);
  * - UV:R8 图集页内的归一化坐标([GlyphAtlas]);
  * - bounds:局部包围盒经 pose 变换后与 scissor 求交(元素被
  *   GuiRenderer 接受的前提)。
  *
- * P3② 批次合并:[pose]/[pageIndex]/[vertices]/[colors] 对渲染器开放
+ *  批次合并:[pose]/[pageIndex]/[vertices]/[colors] 对渲染器开放
  * (internal)—— ComposeGuiRenderer 把 (page, scissor) 相同的连续 run
  * 预变换进世界坐标后合并为单个提交元素。
  */

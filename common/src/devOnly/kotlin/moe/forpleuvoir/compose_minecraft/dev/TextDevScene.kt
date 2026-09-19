@@ -43,10 +43,10 @@ import net.minecraft.network.chat.HoverEvent
 import net.minecraft.network.chat.Style
 
 /**
- * 文本字号测试屏幕(T.19):验证 `BasicText(fontSize)` 以 sp 驱动字号。
+ * 文本字号测试屏幕:验证 `BasicText(fontSize)` 以 sp 驱动字号。
  *
  * 约定 **16sp = 原样 1 倍**(与旧 `scale = 1f` 渲染一致),8sp 半大、32sp 两倍;
- * 布局尺寸(行高/宽度/换行)随缩放联动(T.10 的 1/scale 换算链路)。
+ * 布局尺寸(行高/宽度/换行)随缩放联动(1/scale 换算链路)。
  *
  * 分块(编号便于反馈):
  * ① 字号阶梯:8/16/24/32/48sp,背景框高度 = 各字号行盒;
@@ -201,7 +201,7 @@ fun TextDevScene() {
                 )
             }
 
-            // ── ⑨ MC 渲染特性(PlatformSpanStyle 承载,T.28)──
+            // ── ⑨ MC 渲染特性(PlatformSpanStyle 承载)──
             SectionLabel("⑨ MC 渲染特性(PlatformSpanStyle:obfuscated/shadowColor/clickEvent/hoverEvent/insertion/font)")
             BasicText(
                 "Obfuscated 乱码(闪烁字体):",
@@ -242,7 +242,7 @@ fun TextDevScene() {
                 ),
             )
 
-            // ── ⑩ 富文本(AnnotatedString spanStyles 逐段混排,T.29)──
+            // ── ⑩ 富文本(AnnotatedString spanStyles 逐段混排)──
             SectionLabel("⑩ 富文本(spanStyles 逐段混排:每段一行,便于核对样式)")
             BasicText(
                 "spanStyles 段级样式叠加 base TextStyle;段间无样式文本走默认样式。字号(scale)逐段暂不支持。",
@@ -311,7 +311,7 @@ fun TextDevScene() {
                 style = TextStyle(fontSize = 36.sp),
             )
 
-            // ── ⑪ 默认字体/默认样式 CompositionLocal(T.30)──
+            // ── ⑪ 默认字体/默认样式 CompositionLocal──
             SectionLabel("⑪ 默认字体/默认样式 CompositionLocal(T.30)")
             CompositionLocalProvider(
                 LocalDefaultTextStyle provides TextStyle(fontSize = 36.sp, color = Color(0xFFFFD54F)),
@@ -328,7 +328,7 @@ fun TextDevScene() {
             }
             BasicText("默认字体:default(恢复)", style = TextStyle(fontSize = 36.sp))
 
-            // ── ⑫ overflow(Ellipsis / Clip,T.41)──
+            // ── ⑫ overflow(Ellipsis / Clip)──
             SectionLabel("⑫ overflow:Ellipsis 应在末行尾追加 \"...\",Clip 仅截断")
             BasicText(
                 "Ellipsis(maxLines=2):一行很长的文本第二行应当被裁剪并追加三点省略号,验证溢出语义",
@@ -349,7 +349,7 @@ fun TextDevScene() {
                 style = TextStyle(color = Color(0xFFCE93D8)),
             )
 
-            // ── ⑬ InlineContent(T.41)──
+            // ── ⑬ InlineContent──
             SectionLabel("⑬ InlineContent:占位符原子排版 + 替代文本不显示")
             val inlineContent = mapOf(
                 // Center 对齐:在行盒内垂直居中 —— 对 MC 字形观感最稳

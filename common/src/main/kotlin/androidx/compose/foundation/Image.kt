@@ -105,7 +105,7 @@ fun Image(
         contentScale,
         alpha,
         colorFilter,
-        // 平台适配点(T.16):官方此重载硬编码 Low(线性)。本平台统一走 DefaultFilterQuality(默认 None=最近邻)
+        // 平台适配点:官方此重载硬编码 Low(线性)。本平台统一走 DefaultFilterQuality(默认 None=最近邻)
         DefaultFilterQuality,
     )
 }

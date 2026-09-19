@@ -45,7 +45,7 @@ object ComposeInputBridge {
     )
 
     /**
-     * MC KeyEvent → Compose [ComposeKeyEvent](GLFW 键码 → 我们自己的 Compose [Key] 常量)。
+     * MC KeyEvent → Compose [ComposeKeyEvent](GLFW 键码 → 本平台自己的 Compose [Key] 常量)。
      *
      * 修饰键来源:MC `KeyEvent.modifiers` 的位标志(InputWithModifiers 语义,
      * 非 macOS 下 Control 位 = 2、Shift 位 = 1、Alt 位 = 4),事件发生时已固定。
@@ -65,7 +65,7 @@ object ComposeInputBridge {
 
 /**
  * MC 键码 → Compose [Key] 常量(不引用任何 AWT/desktop/LWJGL 类型,键位语义对照
- * 我们拷贝的 Compose Key.kt 常量表,参考 ibuki_gourd 的映射关系):
+ * 本平台拷贝的 Compose Key.kt 常量表,键位映射参照 ibuki_gourd 项目):
  *
  * 键码来源说明:MC 输入层当前基于 GLFW 窗口(与 OpenGL/Vulkan 渲染后端无关),
  * [MCKeyEvent.key] 就是 GLFW 键码(带 [InputConstants.Value] 注解)。这里不直接

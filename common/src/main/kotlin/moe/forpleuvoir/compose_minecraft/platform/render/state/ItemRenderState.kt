@@ -6,9 +6,12 @@ import net.minecraft.client.renderer.item.TrackingItemStackRenderState
 import net.minecraft.client.renderer.state.gui.ScreenArea
 import net.minecraft.util.Mth
 import org.joml.Matrix3x2f
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
+import net.minecraft.client.renderer.state.gui.GuiItemRenderState
+import net.minecraft.world.item.ItemStack
 
 /**
- * 物品渲染状态(T.37):照抄原版 [GuiItemRenderState](ScreenArea 行为:oversizedBounds/bounds 计算),
+ * 物品渲染状态:照抄原版 [GuiItemRenderState](ScreenArea 行为:oversizedBounds/bounds 计算),
  * 增加 [size](目标槽位尺寸,宽高可分离,替代写死 16)与 [color](0xAARRGGBB 调制色,-1 = 白色不调制)。
  * public —— 外部 mod 可构造,经 [GuiCommandSink.addItem] 提交。
  */

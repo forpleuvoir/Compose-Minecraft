@@ -7,9 +7,12 @@ import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.client.gui.render.TextureSetup
 import net.minecraft.client.renderer.state.gui.GuiElementRenderState
 import org.joml.Matrix3x2fc
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposeGuiRenderer
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.GeometryTessellator
+import moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftShadowRenderer
 
 /**
- * GPU 距离场软阴影渲染元素(平台扩展,T.14 重构版)。
+ * GPU 距离场软阴影渲染元素(平台扩展, 重构版)。
  *
  * - 顶点:局部坐标交错 [x, y, distNorm] 平铺,每 3 个顶点一个三角形;
  *   distNorm = 到阴影形状真实轮廓的有符号距离 ÷ (σ√2)(片元插值),
@@ -17,12 +20,12 @@ import org.joml.Matrix3x2fc
  *   (参照 Skia SkShadowUtils:σ = 0.667·e,无离屏、无 CPU 模糊);
  * - 颜色:RGB = 阴影颜色(默认黑),alpha = 颜色 alpha × 阴影强度
  *   (ambient 0.039 / spot 0.19 × (1-e/600)),由 [shadowColorArgb] 统一给定
- *   (每个阴影 = ambient + spot 两个元素,颜色各自携带,T.18);
+ *   (每个阴影 = ambient + spot 两个元素,颜色各自携带);
  * - 网格由 [GeometryTessellator.shadowFill] 生成并 LRU 缓存
  *   ([MinecraftShadowRenderer]),形状不变时每帧零 CPU;
  * - bounds:本体(外扩模糊带)经 pose 变换后与 scissor 求交 —— 供
  *   GuiRenderer 层级归并使用,非 null 是元素被接受的前提;
- * - 渲染顺序:T.24 起由 [ComposeGuiRenderer] 把本类型元素排到列表最前(最先绘制 =
+ * - 渲染顺序:由 [ComposeGuiRenderer] 把本类型元素排到列表最前(最先绘制 =
  *   最底层),内容后画盖住阴影重叠部分 —— 等价于官方"先画阴影、后画内容"
  *   (原 GuiRenderStateMixin 排序 hack 已随独立渲染工作流删除)。
  */

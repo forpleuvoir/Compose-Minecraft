@@ -1,7 +1,7 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.text
 
 /**
- * TrueType 混合度量源(P2-B3 统一实现,总设计 I2/A5):
+ * TrueType 混合度量源(统一实现,总设计 I2/A5):
  *
  * - 链上首含字形字体 → 其 HMetrics × `target/chainEm`(链网格比);
  * - 缺字码点 → 原版位图度量 × `target/vanillaEm`(位图 9 网格比)——

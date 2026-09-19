@@ -237,7 +237,7 @@ fun ImageBitmap(
 ): ImageBitmap = ActualImageBitmap(width, height, config, hasAlpha, colorSpace)
 
 /**
- * 平台适配点(T.16):从 CPU 像素数组(0xAARRGGBB)构造位图。
+ * 平台适配点:从 CPU 像素数组(0xAARRGGBB)构造位图。
  *
  * 官方 `ImageBitmap` 没有公开的像素写入 API(仅 [ImageBitmap.toPixelMap] 只读),
  * 本平台据此提供像素构造重载:业务方/测试代码可用程序生成的像素直接建图,
@@ -257,7 +257,7 @@ fun ImageBitmap(
 fun ByteArray.decodeToImageBitmap(): ImageBitmap = createImageBitmap(this)
 
 internal fun createImageBitmap(bytes: ByteArray): ImageBitmap {
-    // 平台适配点(T.16):MC 的 NativeImage 基于 stb 解码(PNG/JPEG 等,与
+    // 平台适配点:MC 的 NativeImage 基于 stb 解码(PNG/JPEG 等,与
     // Skiko/Skia 的解码能力对齐);像素从 ABGR 字节序转换回 Compose Argb8888。
     val native = try {
         NativeImage.read(bytes)

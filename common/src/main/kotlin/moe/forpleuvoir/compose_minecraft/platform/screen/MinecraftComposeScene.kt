@@ -32,13 +32,12 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.popup.LocalPopupHost
 import moe.forpleuvoir.compose_minecraft.platform.ui.popup.PopupHostOverlay
 import moe.forpleuvoir.compose_minecraft.platform.ui.popup.PopupHostState
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalCharFilter
-import net.minecraft.client.Minecraft
 
 /**
  * Minecraft 平台的 Compose Scene 宿主(阶段 D)。
  *
  * 包装 CMP 移植的 [CanvasLayersComposeScene]:
- * - 密度默认 1f,场景尺寸 = Minecraft 窗口像素(T.24:1:1,不再除 guiScale),
+ * - 密度默认 1f,场景尺寸 = Minecraft 窗口像素(1:1,不再除 guiScale),
  *   1dp == 1 像素;可传 [density] 放大(2f 时 1dp == 2 像素,UI 元素视觉放大,
  *   与官方桌面 density 语义一致,文本字号同步放大);
  * - 由 [ComposeScreen](原版 Screen 桥接)每帧调用 [renderFrame],把绘制命令记录进
@@ -50,7 +49,7 @@ import net.minecraft.client.Minecraft
 class MinecraftComposeScene(
     width: Int,
     height: Int,
-    /** 平台适配点(T.26):场景密度,默认 1f(1dp == 1 像素);业务方可传 >1f 放大 UI */
+    /** 平台适配点:场景密度,默认 1f(1dp == 1 像素);业务方可传 >1f 放大 UI */
     density: Float = 1f,
     /**
      * 平台接入点工厂(平台开放点):默认 [MinecraftPlatformContext]。
@@ -73,14 +72,14 @@ class MinecraftComposeScene(
     private val renderContext = MinecraftRenderContext()
 
     /**
-     * 本屏的独立 GUI 渲染器(T.24):extract 阶段经 [renderFrame] 收集 Compose 命令,
+     * 本屏的独立 GUI 渲染器:extract 阶段经 [renderFrame] 收集 Compose 命令,
      * gui 阶段由 GuiRendererMixin 在 GuiRenderer.draw 的 after-blur(HUD)段之前提交。
      * [ComposeScreen] init/removed 负责注册/注销 [ComposeGuiRenderer.active]。
      */
     val renderer = ComposeGuiRenderer()
 
     /**
-     * vanillaDraw 帧级状态(T.38):持有已挂载的 vanillaDraw/postVanillaDraw
+     * vanillaDraw 帧级状态:持有已挂载的 vanillaDraw/postVanillaDraw
      * 节点回调,由 [renderFrame] 把当前帧收集器([ComposeGuiRenderer])与当前帧
      * 原版 [net.minecraft.client.gui.GuiGraphicsExtractor]
      * ([VanillaDrawState.graphics],由 ComposeScreen.extractRenderState 写入)
@@ -191,7 +190,7 @@ class MinecraftComposeScene(
             val popupHostState = remember { PopupHostState() }
             CompositionLocalProvider(
                 LocalPopupHost provides popupHostState,
-                // T.38:vanillaDraw 帧态(LocalVanillaDrawState),实例稳定不触发重组
+                // vanillaDraw 帧态(LocalVanillaDrawState),实例稳定不触发重组
                 LocalVanillaDrawState provides vanillaDrawState,
             ) {
                 // 读取 LocalCharFilter(业务方可经 CompositionLocalProvider 覆盖),
@@ -240,7 +239,7 @@ class MinecraftComposeScene(
     }
 
     /**
-     * 同步 Minecraft 窗口尺寸(像素,T.24:1:1,不再除 guiScale)并渲染当前帧:
+     * 同步 Minecraft 窗口尺寸(像素,:1:1,不再除 guiScale)并渲染当前帧:
      * 重组/布局/绘制到 [canvas],再提交到 [renderer] 收集器(gui 阶段由
      * GuiRendererMixin 提交)。由 [ComposeScreen.extractRenderState] 每帧调用
      * (调用前已写入 [VanillaDrawState.graphics] 当前帧原版 extractor)。
@@ -267,12 +266,12 @@ class MinecraftComposeScene(
         // 1:1 通道不参与绘制,仅原版通道以 GUI 单位绘制时使用)
         val graphics = vanillaDrawState.graphics
         val guiScale = windowState.guiScale.toFloat().coerceAtLeast(1f)
-        // T.38:每帧重放前渲染回调(绕开 Compose 图层"命令烘焙"脏标记缓存 ——
+        // 每帧重放前渲染回调(绕开 Compose 图层"命令烘焙"脏标记缓存 ——
         // GraphicsLayer.record 静态帧不重跑 draw 块)。桥元素注入在
         // renderContext.render 之前 → 元素位于列表头部,画在 Compose 内容之下。
         vanillaDrawState.runFrameCallbacks(renderer, graphics, guiScale)
         renderContext.render(canvas, renderer)
-        // T.38:每帧重放后渲染回调(在 renderContext.render 之后 → 元素位于列表
+        // 每帧重放后渲染回调(在 renderContext.render 之后 → 元素位于列表
         // 尾部,画在全部 Compose 内容之上;guiScale 通道例外,见 KDoc)。
         vanillaDrawState.runPostFrameCallbacks(renderer, graphics, guiScale)
     }

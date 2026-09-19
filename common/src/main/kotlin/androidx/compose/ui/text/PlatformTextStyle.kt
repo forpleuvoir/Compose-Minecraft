@@ -24,7 +24,7 @@ import net.minecraft.network.chat.HoverEvent
 /**
  * Platform specific configuration for [SpanStyle] on Desktop.
  *
- * 平台适配点(T.28):TextStyle 已恢复移植,此处为其补回 PlatformTextStyle 外壳
+ * 平台适配点:TextStyle 已恢复移植,此处为其补回 PlatformTextStyle 外壳
  * 与 createPlatformTextStyle;官方 desktop 版含 textDecorationLineStyle/
  * fontRasterizationSettings(ExperimentalTextApi),项目无这些类型,保持简化
  * (spanStyle/paragraphStyle 引用项目既有 PlatformSpanStyle(blendRadius)/
@@ -43,22 +43,22 @@ import net.minecraft.network.chat.HoverEvent
 class PlatformSpanStyle(
     val blendRadius: Float? = null,
 
-    /** MC 乱码(obfuscated)效果;null = 未设置。平台适配点(T.28)。 */
+    /** MC 乱码(obfuscated)效果;null = 未设置。平台适配点。 */
     val obfuscated: Boolean? = null,
 
-    /** MC 文本阴影色(ARGB);null = 未设置(MC 默认关阴影)。平台适配点(T.28)。 */
+    /** MC 文本阴影色(ARGB);null = 未设置(MC 默认关阴影)。平台适配点。 */
     val shadowColor: Color? = null,
 
-    /** MC 点击事件;null = 未设置。平台适配点(T.28)。 */
+    /** MC 点击事件;null = 未设置。平台适配点。 */
     val clickEvent: ClickEvent? = null,
 
-    /** MC 悬停事件;null = 未设置。平台适配点(T.28)。 */
+    /** MC 悬停事件;null = 未设置。平台适配点。 */
     val hoverEvent: HoverEvent? = null,
 
-    /** MC 插入文本(shift+点击插入聊天);null = 未设置。平台适配点(T.28)。 */
+    /** MC 插入文本(shift+点击插入聊天);null = 未设置。平台适配点。 */
     val insertion: String? = null,
 
-    /** MC 资源包字体;null = MC 默认字体。平台适配点(T.28)。 */
+    /** MC 资源包字体;null = MC 默认字体。平台适配点。 */
     val font: FontDescription? = null,
 
     /** @suppress */
@@ -180,7 +180,7 @@ class PlatformParagraphStyle(
 /**
  * Platform specific configuration for [TextStyle] on Desktop.
  *
- * 平台适配点(T.28):TextStyle 恢复移植后补回的外壳(官方 desktop 简化版,
+ * 平台适配点:TextStyle 恢复移植后补回的外壳(官方 desktop 简化版,
  * 去掉 ExperimentalTextApi 的 textDecorationLineStyle 构造)。
  */
 @Immutable
@@ -226,7 +226,7 @@ internal fun lerp(
                     stop.apiVersion == PlatformSpanStyle.DefaultApiVersion ->
                     PlatformSpanStyle(
                         blendRadius = fractionBlendRadius,
-                        // T.28:MC 渲染特性为离散值(布尔/对象),取 fraction < 0.5 的一侧
+                        // MC 渲染特性为离散值(布尔/对象),取 fraction < 0.5 的一侧
                         obfuscated = lerpDiscrete(start.obfuscated, stop.obfuscated, fraction),
                         shadowColor = lerpDiscrete(start.shadowColor, stop.shadowColor, fraction),
                         clickEvent = lerpDiscrete(start.clickEvent, stop.clickEvent, fraction),

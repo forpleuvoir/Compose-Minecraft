@@ -5,7 +5,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.foundation.text.KeyCommand
 
 /**
- * 字段键行为自定义(P3 键位方案):
+ * 字段键行为自定义(键位方案):
  *
  * - [mappingOverride]:键→命令覆盖,先于默认 `KeyMapping.map` 查询
  *   (返回 null = 交回默认映射);

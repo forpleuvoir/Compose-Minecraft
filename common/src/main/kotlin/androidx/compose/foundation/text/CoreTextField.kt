@@ -202,10 +202,10 @@ internal fun CoreTextField(
     decorationBox: @Composable (innerTextField: @Composable () -> Unit) -> Unit =
         @Composable { innerTextField -> innerTextField() },
     textScrollerPosition: TextFieldScrollerPosition? = null,
-    /** 平台适配点(T.TT P2):子树级渲染后端定向 */
+    /** 平台适配点:子树级渲染后端定向 */
     textBackend: TextRenderBackend = TextRenderBackend.DEFAULT,
 ) {
-    // 平台适配点(P3 像素化):未显式指定字体的输入框文本跟随全局默认字体
+    // 平台适配点(像素化):未显式指定字体的输入框文本跟随全局默认字体
     // (像素模式 = fusion_pixel,经原版 FreeType 渲染;stb 模式 = minecraft:default,
     // 由自研管线渲染)—— 否则 style 无 font 时被 stb 管线拦截,输入框永远走旧渲染
     val textStyle = if (textStyle.fontOriginal == null) {
@@ -408,7 +408,7 @@ internal fun CoreTextField(
             state.layoutCoordinates = it
             state.layoutResult?.innerTextFieldCoordinates = it
             if (enabled) {
-                // 平台适配点(T.8):触摸选区手柄已移除,仅保留浮动工具条的显示/隐藏逻辑
+                // 平台适配点:触摸选区手柄已移除,仅保留浮动工具条的显示/隐藏逻辑
                 if (state.handleState == HandleState.Selection) {
                     if (state.showFloatingToolbar && windowInfo.isWindowFocused) {
                         manager.showSelectionToolbar()
@@ -989,7 +989,7 @@ internal suspend fun BringIntoViewRequester.bringSelectionEndIntoView(
 private fun SelectionToolbarAndHandles(manager: TextFieldSelectionManager, show: Boolean) {
     with(manager) {
         if (show) {
-            // 平台适配点(T.8):触摸选区手柄已移除,此处仅维护浮动工具条状态。
+            // 平台适配点:触摸选区手柄已移除,此处仅维护浮动工具条状态。
             // Check whether text layout result became stale. A stale text layout might be
             // completely unrelated to current TextFieldValue, causing offset errors.
             state
@@ -1058,13 +1058,13 @@ internal fun Modifier.defaultTextFieldDraw(
     state: LegacyTextFieldState,
     value: TextFieldValue,
     offsetMapping: OffsetMapping,
-    /** 平台适配点(T.TT P2):子树级渲染后端定向 */
+    /** 平台适配点:子树级渲染后端定向 */
     backend: TextRenderBackend = TextRenderBackend.DEFAULT,
 ): Modifier =
     this.drawBehind {
         state.layoutResult?.let { layoutResult ->
             drawIntoCanvas { canvas ->
-                // P2:子树渲染后端定向 —— 绘制面盖章,recordTextDraw 落章进命令
+                // 子树渲染后端定向 —— 绘制面盖章,recordTextDraw 落章进命令
                 val mcCanvas = canvas as? MinecraftCanvas
                 val prevBackend = mcCanvas?.textBackendOverride
                 mcCanvas?.textBackendOverride = backend

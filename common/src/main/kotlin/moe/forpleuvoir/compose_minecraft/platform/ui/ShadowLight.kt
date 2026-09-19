@@ -11,7 +11,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 
 /**
- * 阴影光源配置(T.14 方向性投影)。
+ * 阴影光源配置(方向性投影)。
  *
  * [LocalShadowLight] 为光源方向(归一化向量,屏幕坐标:y 向下,
  * 默认右上角 = (1, -1))。业务方用 [androidx.compose.runtime.CompositionLocalProvider]
@@ -28,7 +28,7 @@ val LocalShadowLight =
     staticCompositionLocalOf { Offset(1f, -1f) }
 
 /**
- * 阴影修饰符(平台扩展 T.14):在 [shadowElevation] 高度上按 [shape] 投射阴影,
+ * 阴影修饰符(平台扩展):在 [shadowElevation] 高度上按 [shape] 投射阴影,
  * 光源方向自动取自 [LocalShadowLight](组合期读取,业务 provider 生效)。
  *
  * @param elevation 阴影扩散距离(阴影向光源反方向偏移 elevation×0.5)

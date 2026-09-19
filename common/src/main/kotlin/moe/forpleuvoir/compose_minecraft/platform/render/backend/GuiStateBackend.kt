@@ -19,28 +19,28 @@ import moe.forpleuvoir.compose_minecraft.platform.render.toMatrix3x2f
 import moe.forpleuvoir.compose_minecraft.platform.render.toScreenRectangle
 import moe.forpleuvoir.compose_minecraft.platform.render.util.BlendPipelines
 import moe.forpleuvoir.compose_minecraft.platform.render.util.MinecraftImageTextureCache
-import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontOriginal
 import net.minecraft.client.gui.render.TextureSetup
 import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.client.renderer.state.gui.BlitRenderState
 import net.minecraft.client.renderer.state.gui.ColoredRectangleRenderState
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState
-import org.joml.Matrix3x2f
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import androidx.compose.ui.graphics.MinecraftCanvas.DrawCommand
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.MinecraftRenderContext
 
 /**
- * 2D GUI 回放后端(P2,自 `MinecraftRenderContext.render()` 2D 分支原样搬移,2025-08)。
+ * 2D GUI 回放后端(自 `MinecraftRenderContext.render` 2D 分支原样搬移)。
  *
  * 把 [DrawCommand] 提交为 MC 的 GuiElementRenderState(经 [GuiCommandSink]):
  * - 纯色矩形 → [BlitRenderState] 最快路径;其余几何 → [GeometryTessellator] CPU
  *   三角化 → [GuiTriangleRenderState](TRIANGLES pipeline);
  * - 文本 → [GuiTextRenderState];阴影 → [MinecraftShadowRenderer];图片 → blit 纹理;
  * - 三角形缓存([triangleCache],按几何指纹)与输出缓冲复用([triangleSink])
- *   保持原实现(行为零变更,P2 只搬移)。
+ *   保持原实现(行为零变更, 只搬移)。
  *
- * [sink] 为当前帧提交目标,由 [moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderContext]
+ * [sink] 为当前帧提交目标,由 [MinecraftRenderContext]
  * 每帧设置(收集器实例稳定)。
  */
 internal class GuiStateBackend : GeometryBackend {
@@ -65,7 +65,7 @@ internal class GuiStateBackend : GeometryBackend {
         val sink = sink ?: return
         val scissor = scissorFor(cmd)
         if (cmd.clip != null && scissor == null) return
-        // 平台适配点(T.33 修复):矩形必须按 paint.style 分流 —— Fill 走 blit
+        // 平台适配点(修复):矩形必须按 paint.style 分流 —— Fill 走 blit
         // 实心四边形(最快路径);Stroke 走三角化描边带(GeometryTessellator.
         // roundRect radius=0 退化为矩形描边)。原实现无条件 blit,导致
         // border(1.dp, color) 的描边矩形被画成整块实心色块,覆盖内部内容。
@@ -235,13 +235,13 @@ internal class GuiStateBackend : GeometryBackend {
         val sink = sink ?: return
         val scissor = scissorFor(cmd)
         if (cmd.clip != null && scissor == null) return
-        // P2-B4(A2/A3):通道由命令携带的字体绑定唯一决定 —— 无模式开关、
+        // (A2/A3):通道由命令携带的字体绑定唯一决定 —— 无模式开关、
         // 无白名单特判。VANILLA 定向 = 全部位图通道渲染(归属 id 不变)。
-        val font = cmd.font ?: moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.resolveNative(cmd.style)
+        val font = cmd.font ?: FontResolver.resolveNative(cmd.style)
         when {
             cmd.backend == TextRenderBackend.VANILLA ->
                 submitOwnedRun(cmd, font, scissor, sink, allowStb = false)
-            font.font.channel == moe.forpleuvoir.compose_minecraft.platform.render.text.FontChannel.STB_VECTOR -> {
+            font.font.channel == FontChannel.STB_VECTOR -> {
                 val scr = scissor?.toScreenRectangle()
                 if (!TrueTypeTextWriter.trySubmit(cmd, scr, sink, font)) {
                     // 写器拒绝(极端情形):整段落位图终端兜底(D4)
@@ -262,7 +262,7 @@ internal class GuiStateBackend : GeometryBackend {
      */
     private fun submitOwnedRun(
         cmd: DrawTextCommand,
-        primary: moe.forpleuvoir.compose_minecraft.platform.render.text.ResolvedFont,
+        primary: ResolvedFont,
         scissor: Rect?,
         sink: GuiCommandSink,
         allowStb: Boolean,
@@ -274,19 +274,19 @@ internal class GuiStateBackend : GeometryBackend {
         var segX = cmd.x
         var penX = 0f
         var prevCp = -1
-        var cur: moe.forpleuvoir.compose_minecraft.platform.render.text.GlyphOwner? = null
+        var cur: GlyphOwner? = null
         fun flush(endIdx: Int) {
             val owner = cur ?: return
             val text = cmd.text.substring(segStart, endIdx)
-            val resolved = moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
+            val resolved = FontResolver
                 .resolve(owner.font.id, primary.spec)
-            val segCmd = androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand(
+            val segCmd = DrawTextCommand(
                 matrix = cmd.matrix, clip = cmd.clip, text = text,
                 x = segX, y = cmd.y, style = cmd.style, alpha = cmd.alpha,
                 shader = cmd.shader, backend = cmd.backend, font = resolved,
             )
             when {
-                allowStb && owner.channel == moe.forpleuvoir.compose_minecraft.platform.render.text.FontChannel.STB_VECTOR ->
+                allowStb && owner.channel == FontChannel.STB_VECTOR ->
                     if (!TrueTypeTextWriter.trySubmit(segCmd, scr, sink, resolved)) {
                         bitmapTerminalFallback(segCmd, resolved, scr, sink)
                     }
@@ -299,9 +299,9 @@ internal class GuiStateBackend : GeometryBackend {
                     cmd = segCmd, sink = sink, scissor = scr,
                     text = text, font = resolved, fontId = owner.font.id,
                     xBaseline = segX,
-                    // 回退段锚点 = 行基线(T.RF-I):submit 的 y 语义即最终基线
+                    // 回退段锚点 = 行基线:submit 的 y 语义即最终基线
                     //(内部 −7 网格补偿唯一一份);与 TrueTypeTextWriter.flushVanilla
-                    // 的 P3 补偿同一规则 —— 回退字形必须压在 primary 行基线上,
+                    // 的  补偿同一规则 —— 回退字形必须压在 primary 行基线上,
                     // 否则非位图主字体下回退段整体上浮(视觉"顶部对齐")
                     yBaseline = cmd.y + primary.baselineFromTopPx,
                     colorArgb = solidArgb(cmd),
@@ -329,12 +329,12 @@ internal class GuiStateBackend : GeometryBackend {
     /** 渐变位图字符阶梯(原版 sink 一段一色限制;推进与布局同源) */
     private fun splitGradientBitmapChars(
         cmd: DrawTextCommand,
-        resolved: moe.forpleuvoir.compose_minecraft.platform.render.text.ResolvedFont,
-        owner: moe.forpleuvoir.compose_minecraft.platform.render.text.GlyphOwner,
+        resolved: ResolvedFont,
+        owner: GlyphOwner,
         scr: ScreenRectangle?,
         sink: GuiCommandSink,
         penStart: Float,
-        /** 行基线 y(T.RF-I):回退段锚点唯一来源,语义同 flush() 注释 */
+        /** 行基线 y:回退段锚点唯一来源,语义同 flush 注释 */
         lineBaselineY: Float,
     ) {
         var penX = penStart
@@ -363,13 +363,13 @@ internal class GuiStateBackend : GeometryBackend {
     /** 写器拒绝时的位图终端整段兜底(D4) */
     private fun bitmapTerminalFallback(
         cmd: DrawTextCommand,
-        primary: moe.forpleuvoir.compose_minecraft.platform.render.text.ResolvedFont,
+        primary: ResolvedFont,
         scr: ScreenRectangle?,
         sink: GuiCommandSink,
     ) {
-        val terminal = moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
+        val terminal = FontResolver
             .resolve(
-                moe.forpleuvoir.compose_minecraft.platform.render.text.BuiltinFonts.uniFontTerminal.id,
+                BuiltinFonts.uniFontTerminal.id,
                 primary.spec,
             )
         VanillaBitmapSubmitter.submitFor(
@@ -398,7 +398,7 @@ internal class GuiStateBackend : GeometryBackend {
      */
     private fun drawDebugTextBounds(
         cmd: DrawTextCommand,
-        font: moe.forpleuvoir.compose_minecraft.platform.render.text.ResolvedFont,
+        font: ResolvedFont,
         scissor: Rect?,
         sink: GuiCommandSink,
     ) {
@@ -451,7 +451,7 @@ internal class GuiStateBackend : GeometryBackend {
         val sink = sink ?: return
         val scissor = scissorFor(cmd)
         if (cmd.clip != null && scissor == null) return
-        // T.14 阴影(渐变保底):MC 原生双色垂直渐变矩形(GUI pipeline,与 blit 同排序组,
+        //  阴影(渐变保底):MC 原生双色垂直渐变矩形(GUI pipeline,与 blit 同排序组,
         // 阴影命令先记录先绘制,层级正确)
         sink.addElement(
             ColoredRectangleRenderState(
@@ -473,7 +473,7 @@ internal class GuiStateBackend : GeometryBackend {
         val sink = sink ?: return
         val scissor = scissorFor(cmd)
         if (cmd.clip != null && scissor == null) return
-        // T.14 阴影(GPU 距离场):CPU 三角化 + 每顶点距离场,
+        //  阴影(GPU 距离场):CPU 三角化 + 每顶点距离场,
         // gui_shadow shader 高斯模糊解析解生成软阴影(参照 Skia SkShadowUtils)
         MinecraftShadowRenderer.renderShadow(
             sink = sink,
@@ -540,10 +540,10 @@ internal class GuiStateBackend : GeometryBackend {
         MinecraftRenderPlugins.dispatch(cmd.tag, cmd.data, ctx)
     }
 
-    // ── scissor(原 render() 循环内联逻辑,提取为单方法,P2)──────────────────
+    // ── scissor(原 render 循环内联逻辑,提取为单方法)──────────────────
 
     /**
-     * 平台适配点(T.9 兜底):MC 的 enableScissor 对 "宽高 <= 0" 直接抛
+     * 平台适配点(兜底):MC 的 enableScissor 对 "宽高 <= 0" 直接抛
      * IllegalArgumentException("Scissor size must be >0")。两个来源:
      * 1. 退化裁剪(空、反转、NaN、亚像素高度)—— 用四舍五入后的整数尺寸判定;
      * 2. 裁剪矩形完全落在窗口外 —— MC 钳制后高/宽会变成 0 同样崩溃,
@@ -551,7 +551,7 @@ internal class GuiStateBackend : GeometryBackend {
      */
     private fun scissorFor(command: DrawCommand): Rect? {
         val windowState = mc.gameRenderer.gameRenderState().windowRenderState
-        // T.24:场景尺寸 = 窗口像素(1:1),不再除 guiScale
+        // 场景尺寸 = 窗口像素(1:1),不再除 guiScale
         val windowWidth = windowState.width.toFloat()
         val windowHeight = windowState.height.toFloat()
         return command.clip?.let { raw ->
@@ -610,7 +610,7 @@ internal class GuiStateBackend : GeometryBackend {
     }
 
     /**
-     * 顶点网格命令回放(T.23):按 [DrawVerticesCommand.vertexMode] 与索引展开
+     * 顶点网格命令回放:按 [DrawVerticesCommand.vertexMode] 与索引展开
      * 三角形,逐顶点色(源色 × Paint.alpha + colorFilter)提交
      * [GuiTriangleRenderState(vertexColors)] —— GPU 顶点色插值产生渐变。
      *
@@ -628,7 +628,7 @@ internal class GuiStateBackend : GeometryBackend {
         if (vc < 3) return
         val alphaMul = paint.alpha
         val srcColors = command.colors
-        // 逐顶点:alpha 叠加 + colorFilter(T.21)
+        // 逐顶点:alpha 叠加 + colorFilter
         val vertColors = IntArray(vc) { i -> ColorEvaluator.applyColorFilter(ColorEvaluator.scaleAlpha(srcColors[i], alphaMul), paint.colorFilter) }
         // 预估输出:indices 非空按索引数,否则按顶点数
         val maxTris = if (command.indices.isNotEmpty()) command.indices.size else vc
@@ -725,7 +725,7 @@ internal class GuiStateBackend : GeometryBackend {
     ): BlitRenderState {
         // Java record 构造器无参数名,必须使用位置参数
         return BlitRenderState(
-            // T.22:blendMode ≠ SrcOver 时选对应 blend 变体 pipeline,否则默认 GUI
+            // blendMode ≠ SrcOver 时选对应 blend 变体 pipeline,否则默认 GUI
             BlendPipelines.guiFor(paint.blendMode) ?: RenderPipelines.GUI,
             TextureSetup.noTexture(),
             matrix.toMatrix3x2f(),
@@ -737,14 +737,14 @@ internal class GuiStateBackend : GeometryBackend {
             1f,
             0f,
             1f,
-            // T.21:颜色滤镜经 PaintSnapshot.toArgb() 应用(alpha + colorFilter)
+            // 颜色滤镜经 PaintSnapshot.toArgb 应用(alpha + colorFilter)
             paint.toArgb(),
             clip?.toScreenRectangle(),
         )
     }
 
     /**
-     * 把一条图片绘制命令转成 [BlitRenderState](T.16 图片管线)。
+     * 把一条图片绘制命令转成 [BlitRenderState](图片管线)。
      *
      * - 纹理:CPU 像素(0xAARRGGBB)→ [MinecraftImageTextureCache] 上传为
      *   [com.mojang.blaze3d.textures.GpuTexture],按位图身份缓存,首次绘制上传一次;
@@ -894,26 +894,11 @@ internal class GuiStateBackend : GeometryBackend {
         const val OPAQUE_COVERAGE = 1e4f
 
         /** 调试框颜色:行盒轮廓(绿)/ 基线(红) */
-        val DBG_BOUNDS_COLOR = 0xFF00E676.toInt()
-        val DBG_BASELINE_COLOR = 0xFFFF5252.toInt()
+        const val DBG_BOUNDS_COLOR = 0xFF00E676.toInt()
+        const val DBG_BASELINE_COLOR = 0xFFFF5252.toInt()
     }
 }
 
-/** Paint 快照 → 最终 0xAARRGGBB(alpha 叠加 + T.21 颜色滤镜)。 */
+/** Paint 快照 → 最终 0xAARRGGBB(alpha 叠加 + 颜色滤镜)。 */
 private fun PaintSnapshot.toArgb(): Int = ColorEvaluator.applyColorFilter(color.toArgb(alpha), colorFilter)
-
-/**
- * 命令矩阵(列主序 4x4)→ JOML [Matrix3x2f](列主序 3x2)。
- * androidx Matrix.values 为列主序:values[0]=m00, values[1]=m10, values[4]=m01,
- * values[5]=m11, values[12]=m20, values[13]=m21;
- * JOML 构造器参数序 (m00, m01, m10, m11, m20, m21),注意顺序不同。
- *
- * 平台适配点(T.13 修复):MC 26.2 运行时打包的 JOML,`transformPosition` 为
- * **行主序**实现(x' = m00·x + m10·y + m20,实测见运行时探针),与标准列主序
- * (x' = m00·x + m01·y + m20)相反。若按列主序直接传入,2x2 旋转矩阵会被
- * **转置**:旋转方向反转,且绕 pivot 旋转时中心随角度摆动(幅度 2·|sinθ|·|p|,
- * 表现为"公转"观感)。因此传入时交换 m01/m10(即对 2x2 预转置),抵消其行主序行为。
- */
-private fun FloatArray.toMatrix3x2f(): Matrix3x2f =
-    Matrix3x2f(this[0], this[1], this[4], this[5], this[12], this[13])
 

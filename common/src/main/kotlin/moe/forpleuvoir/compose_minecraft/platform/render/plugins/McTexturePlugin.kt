@@ -17,6 +17,7 @@ import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.client.renderer.state.gui.BlitRenderState
 import net.minecraft.client.renderer.state.gui.TiledBlitRenderState
 import net.minecraft.resources.Identifier
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
 
 /**
  * 纹理子区域(像素坐标,相对纹理左上角)。[uStart]..[uEnd] 为水平范围、[vStart]..[vEnd] 为垂直范围,
@@ -83,7 +84,7 @@ data class TextureDrawData(
 /**
  * 原版精灵图绘制数据(R.1):经 [McTexturePlugin] 按原版 `GuiSpriteScaling`
  * (stretch / tile / nine_slice)渲染一个 GUI atlas sprite,由下沉到
- * [moe.forpleuvoir.compose_minecraft.platform.render.GuiCommandSink] 的
+ * [GuiCommandSink] 的
  * sprite 缩放扩展方法处理。与 [TextureDrawData](原生纹理 + 手动 UV/corner)正交。
  */
 data class SpriteDrawData(

@@ -53,7 +53,7 @@ import net.minecraft.network.chat.Style
 import net.minecraft.resources.Identifier
 
 /**
- * 自定义字体测试(T.32):枚举系统字体目录 → 搜索过滤 → 注册为自定义字体 → LocalDefaultFont 切换渲染。
+ * 自定义字体测试:枚举系统字体目录 → 搜索过滤 → 注册为自定义字体 → LocalDefaultFont 切换渲染。
  * 布局:返回 + 搜索框 + 预览(置顶)+ 可滚动列表(简易滚动条,thumb 可拖动)。
  */
 @Composable

@@ -6,12 +6,12 @@ import net.minecraft.resources.Identifier
 import java.nio.ByteBuffer
 
 /**
- * 平台内置 Fusion Pixel 像素字体文件加载(P1 重构后仅承担「资源加载」职责):
+ * 平台内置 Fusion Pixel 像素字体文件加载(重构后仅承担「资源加载」职责):
  * - 度量/覆盖/回退等**决策**已上收 [BuiltinFonts] 的 FusionPixelFont(普通
  *   PlatformFont 条目,零特判);本单例只负责把 ttf 资源解析为 [TrueTypeFont];
  * - **资源通道(MC 环境铁律)**:必须经 `mc.resourceManager` 读取 —— 与
  *   shader/lang 相同的资源包栈通道;类加载器直读在 MC 运行时不可靠
- *   (P3 实测静默失败),已废弃;
+ *   (实测静默失败),已废弃;
  * - 懒加载一次(stb 解析,渲染线程);失败打 ERROR 并返回 null,调用方落
  *   位图兜底(VanillaRunMetrics / MC_BITMAP 通道)。
  */

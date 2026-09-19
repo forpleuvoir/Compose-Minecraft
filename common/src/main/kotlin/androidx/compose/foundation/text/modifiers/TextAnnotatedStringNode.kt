@@ -84,11 +84,11 @@ internal class TextAnnotatedStringNode(
     private var overrideColor: ColorProducer? = null,
     private var autoSize: TextAutoSize? = null,
     private var onShowTranslation: ((TextSubstitutionValue) -> Unit)? = null,
-    // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖)
+    // 平台适配点(富文本):spanStyles 切分后的段列表(全覆盖)
     private var segments: List<StyleSegment> = emptyList(),
-    // 平台适配点(T.29):字号渲染缩放(18sp → 2x),透传给 MultiParagraphLayoutCache
+    // 平台适配点:字号渲染缩放(18sp → 2x),透传给 MultiParagraphLayoutCache
     private var scale: Float = 1f,
-    /** 平台适配点(T.TT P2):子树级渲染后端定向 */
+    /** 平台适配点:子树级渲染后端定向 */
     private var textBackend: TextRenderBackend = TextRenderBackend.DEFAULT,
 ) : Modifier.Node(), LayoutModifierNode, DrawModifierNode, SemanticsModifierNode {
     override val shouldAutoInvalidate: Boolean
@@ -175,9 +175,9 @@ internal class TextAnnotatedStringNode(
         fontFamilyResolver: FontFamily.Resolver,
         overflow: TextOverflow,
         autoSize: TextAutoSize?,
-        // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖)
+        // 平台适配点(富文本):spanStyles 切分后的段列表(全覆盖)
         segments: List<StyleSegment>,
-        // 平台适配点(T.29):字号渲染缩放(18sp → 2x)
+        // 平台适配点:字号渲染缩放(18sp → 2x)
         scale: Float = 1f,
     ): Boolean {
         var changed: Boolean

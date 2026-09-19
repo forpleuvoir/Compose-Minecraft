@@ -83,15 +83,15 @@ internal class TextStringSimpleNode(
     private var maxLines: Int = Int.MAX_VALUE,
     private var minLines: Int = DefaultMinLines,
     private var overrideColor: ColorProducer? = null,
-    /** 平台适配点(T.3):MC Component 展平后的多段样式;空 = 单样式(旧行为)。 */
+    /** 平台适配点:MC Component 展平后的多段样式;空 = 单样式(旧行为)。 */
     private var segments: List<StyleSegment> = emptyList(),
-    /** 平台适配点(T.10):文本缩放;1f = 原样。 */
+    /** 平台适配点:文本缩放;1f = 原样。 */
     private var scale: Float = 1f,
-    /** 平台适配点(T.28):文本透明度(TextStyle.alpha,默认 1f),绘制时合成进颜色。 */
+    /** 平台适配点:文本透明度(TextStyle.alpha,默认 1f),绘制时合成进颜色。 */
     private var textAlpha: Float = 1f,
-    /** 平台适配点(T.TT):渐变画刷(TextStyle.brush 非 SolidColor),绘制走 brush 重载。 */
+    /** 平台适配点:渐变画刷(TextStyle.brush 非 SolidColor),绘制走 brush 重载。 */
     private var textBrush: Brush? = null,
-    /** 平台适配点(T.TT P2):子树级渲染后端定向 */
+    /** 平台适配点:子树级渲染后端定向 */
     private var textBackend: TextRenderBackend = TextRenderBackend.DEFAULT,
 ) : Modifier.Node(), LayoutModifierNode, DrawModifierNode, SemanticsModifierNode {
     override val shouldAutoInvalidate: Boolean
@@ -225,9 +225,9 @@ internal class TextStringSimpleNode(
         softWrap: Boolean,
         fontFamilyResolver: FontFamily.Resolver,
         overflow: TextOverflow,
-        /** 平台适配点(T.3):MC Component 展平后的多段样式;空 = 单样式(旧行为)。 */
+        /** 平台适配点:MC Component 展平后的多段样式;空 = 单样式(旧行为)。 */
         segments: List<StyleSegment> = emptyList(),
-        /** 平台适配点(T.10):文本缩放;1f = 原样。 */
+        /** 平台适配点:文本缩放;1f = 原样。 */
         scale: Float = 1f,
     ): Boolean {
         var changed: Boolean
@@ -533,11 +533,11 @@ internal class TextStringSimpleNode(
                 val color =
                     if (overrideColorVal.isSpecified) overrideColorVal
                     else drawStyle.color?.toColor() ?: Color.White
-                // 平台适配点(T.28):TextStyle.alpha 合成进绘制色(MinecraftParagraph.paint
+                // 平台适配点:TextStyle.alpha 合成进绘制色(MinecraftParagraph.paint
                 // 经 recordTextDraw alpha 参数消费;MC TextColor 无 alpha 通道)
-                // 平台适配点(T.TT):TextStyle.brush(非 SolidColor)→ 渐变逐字形取色绘制
+                // 平台适配点:TextStyle.brush(非 SolidColor)→ 渐变逐字形取色绘制
                 val textBrush = textBrush
-                // P2:子树渲染后端定向 —— 绘制面盖章,recordTextDraw 落章进命令
+                // 子树渲染后端定向 —— 绘制面盖章,recordTextDraw 落章进命令
                 val prevBackend = (canvas as? MinecraftCanvas)?.textBackendOverride
                 (canvas as? MinecraftCanvas)?.textBackendOverride = textBackend
                 try {

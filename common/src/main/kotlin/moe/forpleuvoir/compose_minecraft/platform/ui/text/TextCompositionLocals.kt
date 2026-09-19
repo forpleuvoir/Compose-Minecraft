@@ -28,7 +28,7 @@ import net.minecraft.network.chat.FontDescription
 import net.minecraft.resources.Identifier
 
 /**
- * 默认文本样式(T.30):`BasicText` 等文本组件**未显式传 [TextStyle]**时使用的默认样式。
+ * 默认文本样式:`BasicText` 等文本组件**未显式传 [TextStyle]**时使用的默认样式。
  * 默认 [TextStyle.Default];业务可用
  * [androidx.compose.runtime.CompositionLocalProvider] 覆盖(如全局字号/颜色)。
  *
@@ -38,7 +38,7 @@ import net.minecraft.resources.Identifier
 val LocalDefaultTextStyle = staticCompositionLocalOf<TextStyle> { TextStyle.Default }
 
 /**
- * 默认字体(T.30 → P3 像素化):文本**未显式指定字体**(`SpanStyle.platformStyle.font`)时使用的
+ * 默认字体(像素化):文本**未显式指定字体**(`SpanStyle.platformStyle.font`)时使用的
  * MC 字体。默认 [MinecraftFonts.FusionPixel](compose_minecraft:fusion_pixel,平台内置
  * Fusion Pixel 12px 像素字体,**仅作用于 Compose 渲染的文本** —— 经原版 FreeType
  * 管线按设计网格渲染,锐利;原版自身渲染如 tooltip/HUD 不受影响,仍用 minecraft:default)。
@@ -47,7 +47,7 @@ val LocalDefaultTextStyle = staticCompositionLocalOf<TextStyle> { TextStyle.Defa
 val LocalDefaultFont = staticCompositionLocalOf<FontDescription> { MinecraftFonts.FusionPixel }
 
 /**
- * 默认字号(T.32 → P3 像素化):`BasicText` 等文本组件的 [TextStyle]**未显式指定
+ * 默认字号(像素化):`BasicText` 等文本组件的 [TextStyle]**未显式指定
  * `fontSize`**(`TextStyle.Default` 语义)时使用的默认字号。
  * 默认 = [TextRenderConfig.pixelFontEmSp](12sp):像素字体设计网格,字形与屏幕
  * 像素 1:1(锐利);放大建议取 12 的整数倍。业务可用
@@ -56,20 +56,20 @@ val LocalDefaultFont = staticCompositionLocalOf<FontDescription> { MinecraftFont
  */
 // 默认字号 = 像素字体 em 基准(原「原版行高 ×2 = 18sp / TTF 16sp」双分支已随
 // 全局默认字体切换为 Fusion Pixel 而统一,见 [TextRenderConfig.pixelFontEmSp])
-// ⚠️ 默认值语义(P3 修正):staticCompositionLocalOf 的默认 lambda **首次访问后
+// ⚠️ 默认值语义(修正):staticCompositionLocalOf 的默认 lambda **首次访问后
 // 全局冻结** —— 不能承载「随模式切换的动态默认」。因此本 Local 的默认值改为
 // [TextUnit.Unspecified](= 未提供,消费端经 [resolveDefaultFontSize] 跟随当前
 // 模式实时解析);显式 provide 非 Unspecified 值仍是业务覆盖通道。
 val LocalDefaultFontSize = staticCompositionLocalOf<TextUnit> { TextUnit.Unspecified }
 
 /**
- * 解析生效默认字体(P3):像素模式下 LocalDefaultFont 的冻结默认(fusion_pixel)
+ * 解析生效默认字体:像素模式下 LocalDefaultFont 的冻结默认(fusion_pixel)
  * 该哨兵值映射回 minecraft:default(自研 stb 渲染器的输入)。业务显式
  * provide 的字体始终优先。
  */
 @Composable
 fun resolveDefaultFont(): FontDescription {
-    // P2-B5:「默认字体是谁」由 FontResolver.defaultFontId 唯一决定。
+    // 「默认字体是谁」由 FontResolver.defaultFontId 唯一决定。
     // LocalDefaultFont 冻结默认(fusion_pixel)视为「未指定」→ 跟随 defaultFontId;
     // 业务显式 Provider 的字体始终优先(对照屏切 defaultFontId 即生效)。
     val provided0 = LocalDefaultFont.current
@@ -80,7 +80,7 @@ fun resolveDefaultFont(): FontDescription {
         FontResolver.bitmapPreferred(provided) else provided
 }
 
-/** 解析生效默认字号(sp):跟随「生效字体」的 defaultSizeSp(font-system 重构 T.RF-G 更正失效引用) */
+/** 解析生效默认字号(sp):跟随「生效字体」的 defaultSizeSp(font-system 重构  更正失效引用) */
 @Composable
 fun resolveDefaultFontSize(): TextUnit {
     // A6:默认字号跟随「生效字体」(含 LocalDefaultFont 局部作用域),
@@ -88,12 +88,12 @@ fun resolveDefaultFontSize(): TextUnit {
     val desc = resolveDefaultFont()
     val sizeSp = moe.forpleuvoir.compose_minecraft.platform.render.text.FontRegistry[desc]
         ?.defaultSizeSp
-        ?: moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver.defaultFont().defaultSizeSp
+        ?: FontResolver.defaultFont().defaultSizeSp
     return sizeSp.sp
 }
 
 /**
- * 文本渲染后端定向选择(T.TT P2):子树级强制原版位图渲染。
+ * 文本渲染后端定向选择:子树级强制原版位图渲染。
  *
  * - 默认 [TextRenderBackend.DEFAULT]:按解析字体的通道分流;
  * - 提供 [TextRenderBackend.VANILLA]:该子树内文本强制原版位图字形渲染;
@@ -102,16 +102,16 @@ fun resolveDefaultFontSize(): TextUnit {
  * 组合期读取(BasicText/BasicTextField 内),经绘制节点盖章进 DrawTextCommand。
  */
 val LocalTextRenderBackend =
-    staticCompositionLocalOf { moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend.DEFAULT }
+    staticCompositionLocalOf { TextRenderBackend.DEFAULT }
 
 /**
- * MC 资源字体清单(T.30):Minecraft 渲染体系可用的内置字体
+ * MC 资源字体清单:Minecraft 渲染体系可用的内置字体
  * (字体定义资源 `font/<name>.json`,经 [FontDescription.Resource] 引用)。
  *
  * - [Default]:minecraft:default,原版默认字体(**仅原版渲染使用** ——
  *   tooltip/HUD 等;Compose 文本默认已切至 [FusionPixel]);
  * - [FusionPixel]:compose_minecraft:fusion_pixel,平台内置 Fusion Pixel
- *   12px 像素字体(P3 全局默认,定义见 `assets/compose_minecraft/font/fusion_pixel.json`);
+ *   12px 像素字体(全局默认,定义见 `assets/compose_minecraft/font/fusion_pixel.json`);
  * - [Alt]:minecraft:alt,备选字体(更紧凑的字形集);
  * - [UniFont]:minecraft:unifont,Unicode 全量字体(启用「强制 Unicode 字体」时使用);
  * - [IllagerAlt]:minecraft:illageralt,灾厄村民文字(替换字形);
@@ -123,7 +123,7 @@ val LocalTextRenderBackend =
 object MinecraftFonts {
     val Default: FontDescription = FontDescription.DEFAULT
 
-    /** 平台内置 Fusion Pixel 像素字体(compose_minecraft:fusion_pixel,P3 全局默认) */
+    /** 平台内置 Fusion Pixel 像素字体(compose_minecraft:fusion_pixel, 全局默认) */
     val FusionPixel: FontDescription =
         FontDescription.Resource(Identifier.fromNamespaceAndPath("compose_minecraft", "fusion_pixel"))
 

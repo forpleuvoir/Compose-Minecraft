@@ -145,7 +145,7 @@ internal abstract class TextFieldKeyEventHandler {
             }
         }
 
-        // P3 默认行为(P3 键位方案前置):多行字段按 Tab 插入 4 空格并消费事件
+        //  默认行为(键位方案前置):多行字段按 Tab 插入 4 空格并消费事件
         // —— 消费后 GLFW 字符回调不再投递 \t,杜绝“控制字符直接入文”;
         // 单行放行(false)= 焦点系统接管。自定义经 TextFieldKeyScheme。
         if (event.key == Key.Tab && !event.isShiftPressed && editable && !singleLine) {

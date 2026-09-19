@@ -36,6 +36,13 @@ import moe.forpleuvoir.compose_minecraft.platform.render.pip.ComposeOversizedEnt
 import java.util.*
 import kotlin.math.max
 import kotlin.math.min
+import moe.forpleuvoir.compose_minecraft.mixin.GuiRendererMixin
+import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.screen.MinecraftComposeScene
+import net.minecraft.client.gui.render.GuiItemAtlas
+import net.minecraft.client.gui.render.GuiRenderer
+import net.minecraft.client.renderer.state.gui.GuiRenderState
+import net.minecraft.client.renderer.state.gui.pip.GuiEntityRenderState
 
 
 /**
@@ -49,21 +56,21 @@ interface GuiCommandSink {
     fun addText(text: GuiTextRenderState)
 
     /**
-     * 追加一个物品渲染状态(T.37):与 [GuiRenderState.addItem] 对齐 ——
+     * 追加一个物品渲染状态:与 [GuiRenderState.addItem] 对齐 ——
      * 由渲染器在 prepare 阶段统一经 [GuiItemAtlas] 烘焙后转为 blit 提交。
      * 默认空实现(不支持物品的 sink 忽略)。
      */
     fun addItem(item: ItemRenderState) = Unit
 
     /**
-     * 追加一个实体渲染状态(T.37):包装原版 [GuiEntityRenderState] + 色调色,
+     * 追加一个实体渲染状态:包装原版 [GuiEntityRenderState] + 色调色,
      * 由渲染器在 prepare 阶段经 [ComposeOversizedEntityRenderer] 离屏 PIP 渲染。
      * 默认空实现(不支持实体的 sink 忽略)。
      */
     fun addEntity(entity: EntityPipRenderState) = Unit
 
     /**
-     * 追加一个画中画渲染状态(T.37,原版 [GuiRenderState.addPicturesInPictureState]):
+     * 追加一个画中画渲染状态(原版 [GuiRenderState.addPicturesInPictureState]):
      * 实体预览(GuiEntityRenderState)、oversized 物品等 PIP 内容。
      * 默认空实现(不支持 PIP 的 sink 忽略)。
      */
@@ -71,10 +78,10 @@ interface GuiCommandSink {
 }
 
 /**
- * 独立的 Compose GUI 渲染器(T.24):与 MC 原版 [net.minecraft.client.renderer.GuiRenderer] 平级,
+ * 独立的 Compose GUI 渲染器:与 MC 原版 [GuiRenderer] 平级,
  * 但拥有完全独立的上下文,解决原版 GUI 渲染链路的两个精度问题:
  *
- * 1. **裁剪精度丢失**:原版 [net.minecraft.client.renderer.GuiRenderer] 的 enableScissor 把
+ * 1. **裁剪精度丢失**:原版 [GuiRenderer] 的 enableScissor 把
  *    GUI 单位 scissor × guiScale 后 `(int)` 截断 —— 裁剪边界并非实际像素;
  * 2. **非像素投影**:原版投影 = `窗口 / guiScale`(GUI 单位),场景坐标是缩放后的值。
  *
@@ -115,11 +122,11 @@ class ComposeGuiRenderer : GuiCommandSink {
     )
 
     /**
-     * T.25:吸收另一收集器的命令到**本收集器末尾**(元素顺序在自身之前,用于
+     * 吸收另一收集器的命令到**本收集器末尾**(元素顺序在自身之前,用于
      * 「渲染父屏」:父屏内容画在子屏之下),并清空对方 —— 对方收集器不被提交
      * (父屏已 removed,renderer 未注册),每帧被重新填充,不清空会无限累积。
      *
-     * P3②:吸收前先落盘双方开启中的文本批次 —— 父屏批次必须先于本屏既有
+     * 吸收前先落盘双方开启中的文本批次 —— 父屏批次必须先于本屏既有
      * 元素之后、被吸收内容之前定序,否则跨渲染器的连续同 key run 会错序。
      */
     fun absorbAndClear(other: ComposeGuiRenderer) {
@@ -170,11 +177,11 @@ class ComposeGuiRenderer : GuiCommandSink {
         }
     }
 
-    // ── P3② 文本批次合并状态 ─────────────────────────────────────────────
+    // ──  文本批次合并状态 ─────────────────────────────────────────────
     //
     // 目标:同页同 scissor 的**连续** gui_text run 合并为单次提交,消掉每 run 的
-    // 元素对象/数组拷贝/bounds 计算等固定开销。层级安全设计(用户拍板:我们是
-    // Compose UI 树,z 序 = 记录顺序,**绝不做原版 sortElements 式重排**):
+    // 元素对象/数组拷贝/bounds 计算等固定开销。层级安全设计(Compose UI 树的
+    // z 序 = 记录顺序,**绝不做原版 sortElements 式重排**):
     // - 合并仅发生在记录顺序中相邻的 run 之间 —— flush-on-key-change:
     //   (page, scissor) 变化、或任何非文本元素插入,立即落盘再开新批;
     // - 落盘元素按开启批时序 append 进 [items],所有 quad 的绘制顺序与逐元素
@@ -316,13 +323,13 @@ class ComposeGuiRenderer : GuiCommandSink {
      * 注入点不依赖原版 draws 状态)。
      */
     fun render() {
-        // T.32:自定义字体自愈 —— 资源重载清空 FontManager.fontSets 后重建已注册字体
+        // 自定义字体自愈 —— 资源重载清空 FontManager.fontSets 后重建已注册字体
         // (无注册时 O(1) 空检查,见 MinecraftCustomFonts.ensureAlive)
         MinecraftCustomFonts.ensureAlive()
-        // P3① 图集 LRU 时钟 + 活跃页水位淘汰(淘汰页本帧不再分配,
+        //  图集 LRU 时钟 + 活跃页水位淘汰(淘汰页本帧不再分配,
         // 游标在帧末 flushRetiredPages 重置复用)
         GlyphCache.onFrameStart()
-        // P3②:收集阶段(extract)开启的文本批在本帧 prepare 前落盘
+        // 收集阶段(extract)开启的文本批在本帧 prepare 前落盘
         flushTextBatch()
         if (items.isEmpty()) {
             GlyphAtlas.flushRetiredPages()
@@ -336,7 +343,7 @@ class ComposeGuiRenderer : GuiCommandSink {
         vertexBuffer.endFrame()
         draws.clear()
         items.clear()
-        // P3①:draw 完成后重置已退役页游标 —— 此前本帧元素仍持有旧槽位 UV,
+        // draw 完成后重置已退役页游标 —— 此前本帧元素仍持有旧槽位 UV,
         // 提前重置会让下一帧收集阶段覆盖其内容造成花屏
         GlyphAtlas.flushRetiredPages()
     }
@@ -470,7 +477,7 @@ class ComposeGuiRenderer : GuiCommandSink {
                     executeDraw(drawState, renderPass)
                 }
             }
-        // T.24 修复:setProjectionMatrix 是全局渲染状态。Compose 画完后恢复原版
+        //  修复:setProjectionMatrix 是全局渲染状态。Compose 画完后恢复原版
         // guiscale 投影,避免影响随后的原版 GUI 段(draw() 会重设自身投影,
         // 此处恢复为防御性保留,保证后续原版 HUD/F3 段投影正确)。
         restoreVanillaProjection(windowState)
@@ -537,7 +544,7 @@ class ComposeGuiRenderer : GuiCommandSink {
     )
 
     /**
-     * P3② 批次合并产物:(page, scissor) 相同的连续 gui_text run 合并为单个
+     *  批次合并产物:(page, scissor) 相同的连续 gui_text run 合并为单个
      * 提交元素。顶点已是**世界坐标**(追加时按各自 pose 预变换,与
      * `addVertexWith2DPose` 逐位一致),buildVertices 直接以恒等位姿写出。
      * bounds = 世界包围盒与 scissor 求交(对齐 [GuiGlyphRenderState] 语义)。
@@ -622,7 +629,7 @@ class ComposeGuiRenderer : GuiCommandSink {
 }
 
 /**
- * 将调制色预乘 alpha(T.37):物品图集走 [RenderPipelines.GUI_TEXTURED_PREMULTIPLIED_ALPHA]
+ * 将调制色预乘 alpha:物品图集走 [RenderPipelines.GUI_TEXTURED_PREMULTIPLIED_ALPHA]
  * 预乘 alpha 管线,顶点色作为采样结果乘数,RGB 必须与 alpha 同步缩放 —— 否则单独降 alpha
  * 会发白(覆盖率下降但颜色贡献未降)。alpha == 0xFF 时恒等(不影响纯白/不透明染色)。
  */

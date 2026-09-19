@@ -5,15 +5,15 @@ import moe.forpleuvoir.compose_minecraft.platform.render.state.GuiShadowRenderSt
 import androidx.compose.ui.graphics.MinecraftPath
 import net.minecraft.client.gui.navigation.ScreenRectangle
 import org.joml.Matrix3x2f
-import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.min
 import kotlin.math.sin
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposeGuiRenderer
 
 /**
- * GPU 距离场软阴影渲染器(T.14 重构版)—— 完全参照 Skia SkShadowUtils
+ * GPU 距离场软阴影渲染器(重构版)—— 完全参照 Skia SkShadowUtils
  * 的参数语义,模糊在 GPU 完成:
  *
  * - **双阴影**:ambient(环境光,无偏移)+ spot(点光,投影偏移),分别提交;
@@ -25,7 +25,7 @@ import kotlin.math.sin
  *   CPU 只做形状三角化 + 每顶点距离场([GeometryTessellator.shadowFill]),
  *   无离屏渲染、无纹理上传、无 CPU 卷积;
  * - **网格 LRU 缓存**:形状(轮廓 + σ + 偏移)不变时每帧零 CPU;
- * - 渲染顺序:T.24 起由 [ComposeGuiRenderer] 把阴影元素排到列表最前(最底层),
+ * - 渲染顺序:由 [ComposeGuiRenderer] 把阴影元素排到列表最前(最底层),
  *   内容后画盖住重叠 —— 等价于官方"先画阴影、后画内容"。
  *
  * 平台适配点:
@@ -194,6 +194,8 @@ internal object MinecraftShadowRenderer {
 
     // ── 形状 → 轮廓点序列(局部坐标,逆时针)───────────────────────────────
 
+    // 存疑(未修复):返回类型声明为可空,但各分支都不返回 null —— 签名与实际实现不符。
+    // 当前行为正常,复现"阴影形状缺失"时优先看此处。
     private fun shapePoints(
         pathSegments: List<MinecraftPath.PathSegmentData>?,
         left: Float, top: Float, right: Float, bottom: Float,

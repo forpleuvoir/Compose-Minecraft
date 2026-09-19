@@ -10,9 +10,7 @@ import com.mojang.blaze3d.shaders.ShaderSource
 import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
 import com.mojang.blaze3d.vertex.VertexConsumer
-import com.mojang.blaze3d.vertex.VertexFormat
 import com.mojang.logging.LogUtils
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.client.gui.render.TextureSetup
 import net.minecraft.client.renderer.BindGroupLayouts
@@ -20,6 +18,7 @@ import net.minecraft.client.renderer.state.gui.GuiElementRenderState
 import net.minecraft.resources.Identifier
 import org.joml.Matrix3x2fc
 import org.slf4j.Logger
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.MinecraftRenderContext
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 平台自定义 GUI 三角形渲染管线与渲染元素
@@ -152,13 +151,13 @@ internal object MinecraftGuiTriangles {
  *   每 3 个顶点一个三角形;几何变换由 [pose](命令矩阵的 2D 部分)在 GPU 端
  *   完成,与 BlitRenderState 一致;
  * - 颜色:统一 0xAARRGGBB(三角化器已把 Compose Color 与 Paint.alpha 折算好);
- *   或 T.23 [vertexColors]:每顶点 0xAARRGGBB(与 [vertices] 顶点数等长,
+ *   或  [vertexColors]:每顶点 0xAARRGGBB(与 [vertices] 顶点数等长,
  *   GPU 顶点色插值渐变,drawVertices 用;非空时优先于 [colorArgb]);
  * - coverage:与顶点一一对应的「到最近真实轮廓的有符号屏幕像素距离」
  *   (LineWidth 属性槽):外侧为负、轮廓上为 0、内侧为正;内部实心三角形为大数;
  * - [stroke] = true 走描边专用 pipeline(gui_triangles_stroke,固定过渡无
  *   fwidth 噪声),false 走填充 pipeline(gui_triangles,fwidth smoothstep);
- * - [blendMode](T.22):≠ SrcOver 时选对应 blend 变体 pipeline(BlendPipelines),
+ * - [blendMode]:≠ SrcOver 时选对应 blend 变体 pipeline(BlendPipelines),
  *   否则用默认 TRANSLUCENT pipeline;
  * - bounds:局部包围盒经 pose 变换后与 scissor 求交 —— 供 GuiRenderer 的
  *   层级归并(findAppropriateNode)使用,非 null 是元素被接受的前提。
@@ -170,9 +169,9 @@ internal class GuiTriangleRenderState(
     /** 交错 [x, y, coverage] 平铺,每 3 个顶点一个三角形 */
     val vertices: FloatArray,
     val stroke: Boolean = false,
-    /** T.22:混合模式(≠ SrcOver 时选 blend 变体 pipeline) */
+    /** :混合模式(≠ SrcOver 时选 blend 变体 pipeline) */
     val blendMode: androidx.compose.ui.graphics.BlendMode = androidx.compose.ui.graphics.BlendMode.SrcOver,
-    /** T.23:每顶点 0xAARRGGBB(与顶点数等长,drawVertices 逐顶点色插值;null = 统一 [colorArgb]) */
+    /** :每顶点 0xAARRGGBB(与顶点数等长,drawVertices 逐顶点色插值;null = 统一 [colorArgb]) */
     val vertexColors: IntArray? = null,
 ) : GuiElementRenderState {
 

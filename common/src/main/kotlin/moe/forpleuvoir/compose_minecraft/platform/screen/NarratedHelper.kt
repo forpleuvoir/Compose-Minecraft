@@ -38,11 +38,11 @@ object NarratedHelper {
      * 复述系统接入(方案 A):重写原版 [Screen.updateNarratedWidget],把 Compose 语义树
      * 映射为原版朗读输出。
      *
-     * 朗读目标(与用户确认:悬停优先 + 焦点兜底 —— 鼠标悬停到哪个组件就朗读哪个,
+     * 朗读目标(悬停优先 + 焦点兜底 —— 鼠标悬停到哪个组件就朗读哪个,
      * 无悬停时才回退朗读语义焦点节点(Focused == true 的节点,经 focusable/clickable
      * 自动写入,Focusable.kt 语义应用)):
      *
-     * 文本组装(与用户确认):主文本 = text > contentDescription > editableText
+     * 文本组装:主文本 = text > contentDescription > editableText
      * (BasicText 写 text、Image 写 contentDescription、BasicTextField 写 editableText);
      * 附加 HINT = stateDescription / ToggleableState / Selected / Error /
      * ProgressBarRangeInfo / Heading;类型词 = Role 名(经 MC 语言系统翻译)。

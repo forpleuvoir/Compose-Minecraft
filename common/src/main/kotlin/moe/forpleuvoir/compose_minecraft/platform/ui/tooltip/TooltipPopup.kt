@@ -32,7 +32,7 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.popup.register
 import kotlin.math.roundToInt
 
 /**
- * 原版 tooltip 定位(T.39):实现 `DefaultTooltipPositioner` 同款算法 ——
+ * 原版 tooltip 定位:实现 `DefaultTooltipPositioner` 同款算法 ——
  * 鼠标 + 偏移(20, -20)起手,超出右边界翻转回退 24、贴边 4,超出下边界贴底
  * (高度 + 3 边距)。所有数值参数化,默认 = 原版。
  *
@@ -103,7 +103,7 @@ class TooltipPositionProvider(
 }
 
 /**
- * 以 popup 形式渲染原版视觉 tooltip(T.39):基于 [LocalPopupHost] 注册场景根弹层,
+ * 以 popup 形式渲染原版视觉 tooltip:基于 [LocalPopupHost] 注册场景根弹层,
  * 内容为绘制原版 tooltip 视觉的 [Canvas](经 [drawMinecraftTooltip],不走
  * GuiGraphicsExtractor);定位用 [TooltipPositionProvider](鼠标跟随,原版语义)。
  *
@@ -125,7 +125,7 @@ fun TooltipPopup(
     lines: TooltipLines,
     positionProvider: PopupPositionProvider,
     guiScaleEnabled: Boolean = false,
-    /** 自定义 Compose 密度(覆盖 [LocalDensity.current.density])。null = 自动读取场景密度。 */
+    /** 自定义 Compose 密度(覆盖 [LocalDensity])。null = 自动读取场景密度。 */
     density: Float? = null,
     properties: PopupProperties = PopupProperties(focusable = false),
 ) {
@@ -169,7 +169,7 @@ fun TooltipPopup(
  *
  * @param lines tooltip 数据([TooltipLines] 由 itemTooltipLines / tooltipLinesOf 构建)。
  * @param guiScaleEnabled 是否启用原版 guiScale。
- * @param density 自定义 Compose 密度(覆盖 [LocalDensity.current.density])。null = 自动读取场景密度。
+ * @param density 自定义 Compose 密度(覆盖 [LocalDensity])。null = 自动读取场景密度。
  * @param positionProvider 自定义定位(默认 null 时内部构造 [TooltipPositionProvider])。
  * @param interactionSource 交互源。null 时内部自动创建,非 null 时复用(如与 [Modifier.clickable] 共用)。
  */

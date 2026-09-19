@@ -12,18 +12,17 @@ import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
 import com.mojang.logging.LogUtils
 import androidx.compose.ui.graphics.BlendMode
-import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.BindGroupLayouts
 import net.minecraft.resources.Identifier
 import org.slf4j.Logger
 import java.util.concurrent.ConcurrentHashMap
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 平台自定义 blend pipeline(T.22)
+// 平台自定义 blend pipeline
 //
-// 背景:GraphicsLayer/Paint 的 blendMode(≠ SrcOver)在 T.21 只透传不生效,
+// 背景:GraphicsLayer/Paint 的 blendMode(≠ SrcOver)在  只透传不生效,
 // 因为 MC 26.2 的 blend 函数在 pipeline 编译期固定(ColorTargetState.blendFunction),
-// draw 级无法逐命令切换。T.22 为每个可表达的 BlendMode 自建一个 pipeline
+// draw 级无法逐命令切换。 为每个可表达的 BlendMode 自建一个 pipeline
 // (与官方 RenderPipelines.GUI_INVERT = GUI_SNIPPET + INVERT 同款思路):
 // - blit 组:core/gui shader + POSITION_COLOR + QUADS(与 RenderPipelines.GUI 同构,
 //   BlitRenderState 可直接用);

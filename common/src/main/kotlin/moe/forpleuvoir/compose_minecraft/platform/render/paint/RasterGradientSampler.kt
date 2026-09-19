@@ -10,17 +10,17 @@ import kotlin.math.floor
 import kotlin.math.sqrt
 
 /**
- * CPU 快照路径(P1 从 `GraphicsLayerRasterizer` 原样搬移,2025-08)。
+ * CPU 快照路径(从 `GraphicsLayerRasterizer` 原样搬移)。
  *
  * 承载 CPU 光栅化(toImageBitmap 快照)的渐变采样与顶点色计算。
  *
  * 语义标注:
- * - [lerpColorARGB] 使用 **RGB 直插**（与 GPU 回放路径 `ColorEvaluator.lerpColor` 一致，
- *   2026-09-15 与用户确认统一）：非色相通道的渐变两端各一个色标即可，色相渐变由调用方给多个色标表达；
+ * - [lerpColorARGB] 使用 **RGB 直插**(与 GPU 回放路径 `ColorEvaluator.lerpColor` 一致):
+ *   非色相通道的渐变两端各一个色标即可,色相渐变由调用方给多个色标表达;
  * - 取整方式(`Color.toArgbInt`,truncate)与 GPU 系 `ColorEvaluator.toArgb`(roundToInt)不同,
  *   各自保留原样。
  *
- * 搬移原则:P1 只做结构搬移,函数体逐字保留;可见性 private→internal(跨文件调用)。
+ * 搬移原则: 只做结构搬移,函数体逐字保留;可见性 private→internal(跨文件调用)。
  */
 internal object RasterGradientSampler {
 

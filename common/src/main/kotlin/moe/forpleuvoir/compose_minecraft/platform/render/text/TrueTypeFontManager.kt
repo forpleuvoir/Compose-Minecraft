@@ -7,7 +7,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 
 /**
- * 字体加载与选择(T.TT,D1 开放设计 + 缺字回退链)。
+ * 字体加载与选择(D1 开放设计 + 缺字回退链)。
  *
  * 双链槽位:
  * - **常规体链**:[TextRenderConfig.fontSources] —— 全部加载为**有序回退链**:
@@ -66,7 +66,7 @@ internal object TrueTypeFontManager {
     private fun boldFingerprint(): Int =
         java.util.Objects.hashCode(TextRenderConfig.boldFontSources)
 
-    // P3 修正:内置 Fusion Pixel 不再注入本链 —— 本链是自研 stb 渲染器的
+    //  修正:内置 Fusion Pixel 不再注入本链 —— 本链是自研 stb 渲染器的
     // 「系统字体链」(渲染 minecraft:default 的 run);像素字体的度量/覆盖
     // 判定由独立的 [PixelFont] 单例承担,二者职责分离,互不污染。
 
@@ -150,7 +150,7 @@ internal object TrueTypeFontManager {
         }
         if (fonts.isEmpty()) return null
         // 度量仅常规链需要(粗体链只用于绘制字形,不参与布局);
-        // 链网格 em = 首字体加载 em,混合源按目标 em 统一缩放(P2-B3)
+        // 链网格 em = 首字体加载 em,混合源按目标 em 统一缩放
         val metrics = if (!bold) {
             TrueTypeMetricsSource(fonts, VanillaRunMetrics, fonts.first().baseSizePx)
         } else null

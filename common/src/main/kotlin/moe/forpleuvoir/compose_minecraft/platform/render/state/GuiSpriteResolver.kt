@@ -10,7 +10,7 @@ import net.minecraft.resources.Identifier
 import kotlin.jvm.optionals.getOrElse
 
 /**
- * GUI atlas sprite 解析结果(T.39):sprite 本体 + 采样设置 + 缩放模式。
+ * GUI atlas sprite 解析结果:sprite 本体 + 采样设置 + 缩放模式。
  *
  * [textureSetup] 取自 sprite 所属 atlas 纹理(`sprite.atlasLocation()` → TextureManager,
  * 与原版 `GuiGraphicsExtractor.blitTiledSprite/innerBlit` 一致 —— atlas 纹理由
@@ -32,7 +32,7 @@ class GuiSprite(
 }
 
 /**
- * GUI atlas sprite 解析器(T.39):从 `AtlasIds.GUI` 图集取 sprite 并解析其
+ * GUI atlas sprite 解析器:从 `AtlasIds.GUI` 图集取 sprite 并解析其
  * [GuiSpriteScaling](stretch / tile / nine_slice,数据来自 sprite meta `gui.scaling`)。
  *
  * 与原版 `GuiGraphicsExtractor.blitSprite` 的解析链路一致,但只做只读解析,

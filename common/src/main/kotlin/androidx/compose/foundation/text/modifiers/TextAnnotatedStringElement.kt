@@ -53,11 +53,11 @@ internal class TextAnnotatedStringElement(
     private val color: ColorProducer? = null,
     private val autoSize: TextAutoSize? = null,
     private val onShowTranslation: ((TextAnnotatedStringNode.TextSubstitutionValue) -> Unit)? = null,
-    // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖)
+    // 平台适配点(富文本):spanStyles 切分后的段列表(全覆盖)
     private val segments: List<StyleSegment> = emptyList(),
-    // 平台适配点(T.29):字号渲染缩放(18sp → 2x)
+    // 平台适配点:字号渲染缩放(18sp → 2x)
     private val scale: Float = 1f,
-    /** 平台适配点(T.TT P2):子树级渲染后端定向 */
+    /** 平台适配点:子树级渲染后端定向 */
     private val backend: TextRenderBackend = TextRenderBackend.DEFAULT,
 ) : ModifierNodeElement<TextAnnotatedStringNode>() {
 

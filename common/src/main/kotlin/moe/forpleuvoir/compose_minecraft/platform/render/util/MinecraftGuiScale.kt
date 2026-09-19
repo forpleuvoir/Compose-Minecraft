@@ -1,10 +1,9 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.util
 import moe.forpleuvoir.compose_minecraft.mc
 
-import net.minecraft.client.Minecraft
 
 /**
- * 原版 guiScale 工具(T.39):读取当前窗口 guiScale,或按原版算法独立计算。
+ * 原版 guiScale 工具:读取当前窗口 guiScale,或按原版算法独立计算。
  *
  * 原版链路(Minecraft.tick → `window.calculateScale(options.guiScale, enforceUnicode)` → `window.setGuiScale`):
  * `calculateScale` 从 1 起自增,受 maxScale(设置值,0 = 自动)与最小逻辑分辨率

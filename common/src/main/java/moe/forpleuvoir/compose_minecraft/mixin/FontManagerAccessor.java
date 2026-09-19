@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 
 /**
  * 暴露 FontManager.fontSets(private final Map),供自定义字体注册
- * (T.32)运行时注入新字体集。accessor mixin,非反射。
+ * 运行时注入新字体集。accessor mixin,非反射。
  */
 @Mixin(FontManager.class)
 public interface FontManagerAccessor {

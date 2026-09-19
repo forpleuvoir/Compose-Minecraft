@@ -101,7 +101,7 @@ internal class TextLayoutState {
         singleLine: Boolean,
         softWrap: Boolean,
         keyboardOptions: KeyboardOptions,
-        // 平台适配点(T.26):输入框文本渲染缩放(1f = 原样;BasicTextField(fontSize) 派生)
+        // 平台适配点:输入框文本渲染缩放(1f = 原样;BasicTextField(fontSize) 派生)
         scale: Float = 1f,
     ) {
         layoutCache.updateNonMeasureInputs(
@@ -131,7 +131,7 @@ internal class TextLayoutState {
     ): TextLayoutResult {
         // 缩放契约说明:约束以「缩放后空间」传入,段内(MinecraftParagraph.layoutText)
         // 自行按 1/scale 折算 —— 此处保持原样透传,**不得**在外层重复折算
-        // (曾因外层多除一次导致字段可用宽度减半,实测反馈 2026-08)
+        // (曾因外层多除一次导致字段可用宽度减半,实测反馈)
         val layoutResult =
             layoutCache.layoutWithNewMeasureInputs(
                 density = density,

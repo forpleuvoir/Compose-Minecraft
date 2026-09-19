@@ -29,12 +29,11 @@ import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.vanillaDraw
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.toTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
-import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Style
 import kotlin.math.roundToInt
 
 /**
- * vanillaDraw 遮挡矩阵 / 弹层遮挡测试(T.38)。
+ * vanillaDraw 遮挡矩阵 / 弹层遮挡测试。
  *
  * 本场景验证「vanillaDraw 内容(1:1 像素桥)与 Compose 元素互相遮盖」的层级关系:
  *

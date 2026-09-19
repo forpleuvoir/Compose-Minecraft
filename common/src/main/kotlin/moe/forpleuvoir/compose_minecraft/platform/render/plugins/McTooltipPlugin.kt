@@ -7,6 +7,7 @@ import moe.forpleuvoir.compose_minecraft.platform.render.toMatrix3x2f
 import moe.forpleuvoir.compose_minecraft.platform.render.toScreenRectangle
 import moe.forpleuvoir.compose_minecraft.platform.ui.tooltip.TooltipLines
 import net.minecraft.resources.Identifier
+import moe.forpleuvoir.compose_minecraft.platform.render.util.MinecraftGuiScale
 
 /**
  * tooltip 绘制数据:经 [McTooltipPlugin] 在 Compose 1:1 管线渲染原版视觉的 tooltip。
@@ -29,7 +30,7 @@ data class TooltipDrawData(
 )
 
 /**
- * 内置 tooltip 插件(T.39):渲染与原版 `GuiGraphicsExtractor.tooltip` 视觉一致的
+ * 内置 tooltip 插件:渲染与原版 `GuiGraphicsExtractor.tooltip` 视觉一致的
  * tooltip —— 背景 sprite(background + frame 九宫格)+ 文本行 + 图片行,
  * **完全不走 GuiGraphicsExtractor / 原版 GuiRenderState**,由 Compose 渲染器
  * 1:1 像素投影 + 像素级裁剪绘制(getTooltipFromItem 同款文本解析见 [TooltipLines])。

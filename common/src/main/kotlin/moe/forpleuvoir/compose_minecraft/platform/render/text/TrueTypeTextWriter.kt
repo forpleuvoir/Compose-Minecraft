@@ -1,25 +1,20 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.text
 
 import androidx.compose.ui.graphics.MinecraftCanvas.DrawTextCommand
-import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.ColorEvaluator
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
 import moe.forpleuvoir.compose_minecraft.platform.render.toMatrix3x2f
-import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontOriginal
-import moe.forpleuvoir.compose_minecraft.platform.ui.text.toComponent
 import net.minecraft.client.gui.navigation.ScreenRectangle
-import net.minecraft.client.renderer.state.gui.GuiTextRenderState
-import net.minecraft.locale.Language
 import kotlin.math.max
 import kotlin.math.round
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 /**
- * TrueType 文本绘制执行器(T.TT):把一条 [DrawTextCommand] 光栅化并组装为
+ * TrueType 文本绘制执行器:把一条 [DrawTextCommand] 光栅化并组装为
  * [GuiGlyphRenderState] quad 批次提交给 [GuiCommandSink]。
  *
- * 原生排版(用户拍板):字符推进与字形 bearing 全部使用字体自身度量
+ * 原生排版:字符推进与字形 bearing 全部使用字体自身度量
  * (与布局层 `cumFloatWidths` 严格同源)—— 字符间距由字体设计保证,任何
  * 字体文件都自然协调;代价是切换渲染器时文本宽度不同(测试场景整树重建)。
  *
@@ -45,7 +40,7 @@ internal object TrueTypeTextWriter {
      * 尝试用自研管线绘制一条文本命令。返回 true 表示已提交;
      * false 表示拒绝(调用方回退 `sink.addText` 原版渲染)。
      *
-     * 架构边界(P3 定案):本管线**只服务矢量字体**(minecraft:default 的 run,
+     * 架构边界(定案):本管线**只服务矢量字体**(minecraft:default 的 run,
      * 经系统字体链)。像素字体(compose_minecraft:fusion_pixel)归原版 FreeType
      * 渲染器 —— 由 `font/fusion_pixel.json`(size=12)声明,经 GuiStateBackend
      * 的分段回退路径渲染;度量由 [PixelFont] 提供。
@@ -56,7 +51,7 @@ internal object TrueTypeTextWriter {
         sink: GuiCommandSink,
         font: ResolvedFont? = null,
     ): Boolean {
-        // P2-B4(A3):字体绑定随命令到达;仅服务 STB_VECTOR 通道绑定(A2 单点分流)
+        // (A3):字体绑定随命令到达;仅服务 STB_VECTOR 通道绑定(A2 单点分流)
         val binding = font ?: FontResolver.resolveNative(cmd.style)
         if (binding.font.channel != FontChannel.STB_VECTOR) return reject(cmd, "channel=${binding.font.channel}")
         // 常规回退链(首 = 主字体,供字形查找与混淆池);粗体 run 先走粗体链
@@ -113,16 +108,16 @@ internal object TrueTypeTextWriter {
         var i = 0
         val n = cmd.text.length
         var prevCp = -1
-        // 缺字内联(T.TT):连续缺字字符累积为一段,交原版字形渲染(unifont 兜底),
+        // 缺字内联:连续缺字字符累积为一段,交原版字形渲染(unifont 兜底),
         // 其余字符保持 TTF —— 单个缺字不再拖垮整个 run
         var vanillaStart = -1f
         val vanillaText = StringBuilder()
-        // P3 基线补偿:原版把字形基线硬编码在 行顶+7(GlyphBitmap.getTop),
+        //  基线补偿:原版把字形基线硬编码在 行顶+7(GlyphBitmap.getTop),
         // 像素/系统字体布局基线更高 —— 回退段提交 y 需补差值,否则上移
         // 位图终端绑定(unifont,网格 9):回退段 pose 比与其布局宽度缩放严格一致
         val bitmapTerminal = FontResolver.resolve(
             BuiltinFonts.uniFontTerminal.id,
-            moe.forpleuvoir.compose_minecraft.platform.render.text.MeasureSpec(binding.emPx, style = cmd.style),
+            MeasureSpec(binding.emPx, style = cmd.style),
         )
         fun flushVanilla() {
             if (vanillaStart < 0) return
@@ -171,7 +166,7 @@ internal object TrueTypeTextWriter {
             val syntheticBold = bold && renderFont !in boldChainFonts
             val glyph = GlyphCache.getOrCreate(
                 renderFont, drawCp, sizePx, syntheticBold,
-                // P2-B4 修正:布局已是最终像素空间,位图→命令坐标的除数 =
+                //  修正:布局已是最终像素空间,位图→命令坐标的除数 =
                 // 光栅化时附加的外部矩阵缩放(无变换即 1);旧公式 sizePx/base
                 // 是网格坐标系残留,会把位图压小 provEm/em 倍
                 rasterScale,
@@ -265,7 +260,7 @@ internal object TrueTypeTextWriter {
     /**
      * 屏幕像素对齐:把局部坐标吸附到「1/矩阵缩放」网格,使变换后的四边形
      * 边界落在整数屏幕像素上 —— 消除浮点落点 + LINEAR 采样造成的半像素模糊。
-     * internal:P3③ RasterBackend CPU 快照路径共用。
+     * internal: RasterBackend CPU 快照路径共用。
      */
     internal fun snap(v: Float, grid: Float): Float = round(v * grid) / grid
 

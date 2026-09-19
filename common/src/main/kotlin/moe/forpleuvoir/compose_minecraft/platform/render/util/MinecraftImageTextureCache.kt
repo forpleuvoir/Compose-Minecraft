@@ -11,9 +11,10 @@ import androidx.compose.ui.graphics.MinecraftImageBitmap
 import net.minecraft.client.gui.render.TextureSetup
 import org.lwjgl.system.MemoryUtil
 import java.nio.ByteOrder
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.MinecraftRenderContext
 
 /**
- * [MinecraftImageBitmap] → GPU 纹理上传与缓存(T.16 图片管线)。
+ * [MinecraftImageBitmap] → GPU 纹理上传与缓存(图片管线)。
  *
  * 平台适配点:
  * - [MinecraftImageBitmap] 是 CPU 像素缓冲(IntArray,0xAARRGGBB),绘制端
@@ -53,7 +54,7 @@ internal object MinecraftImageTextureCache {
     }
 
     /** 取位图纹理的 [TextureSetup](首次调用触发上传);必须在渲染线程调用。
-     *  默认 [FilterQuality.None](平台适配点 T.16:最近邻,MC 像素风;显式传 Low 得双线性) */
+     *  默认 [FilterQuality.None](平台适配点 :最近邻,MC 像素风;显式传 Low 得双线性) */
     fun textureSetup(image: MinecraftImageBitmap, filterQuality: FilterQuality = FilterQuality.None): TextureSetup {
         val entry = cache.getOrPut(image) { upload(image) }
         val sampler = RenderSystem.getSamplerCache().getClampToEdge(

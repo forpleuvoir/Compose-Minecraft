@@ -12,6 +12,7 @@ import net.minecraft.network.chat.Style
 import net.minecraft.network.chat.TextColor
 import net.minecraft.resources.Identifier
 import kotlin.math.roundToInt
+import androidx.compose.foundation.text.BasicText
 
 /**
  * MC [Style] 的 Kotlin 扩展:补齐 MC public getter <b>能力不足</b>的字段访问,并提供 Compose 侧
@@ -77,7 +78,7 @@ fun Style.withFont(font: Identifier?): Style = withFont(font?.let { FontDescript
 /**
  * 将当前的可变文本对象转换为一个扁平化的、不可变的文本列表。
  *
- * 平台适配点(T.3):递归展平 [MutableComponent] 的 siblings —— 每个子文本(含自身)
+ * 平台适配点:递归展平 [MutableComponent] 的 siblings —— 每个子文本(含自身)
  * 都被视为独立的 [Component],各自保留**自身样式**(不做父样式 applyTo 合并,
  * 与原版 `Component.visit` 的继承合并语义不同)。
  *
@@ -105,7 +106,7 @@ fun MutableComponent.flat(): List<Component> {
 }
 
 /**
- * 平台适配点(T.3):把任意 [Component] 展平为带自身样式的段列表。
+ * 平台适配点:把任意 [Component] 展平为带自身样式的段列表。
  * [MutableComponent] 走 [flat];不可变 [Component] 视为单段。
  */
 fun Component.flatten(): List<Component> =

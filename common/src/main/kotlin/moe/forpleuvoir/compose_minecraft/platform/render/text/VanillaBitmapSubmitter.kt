@@ -11,7 +11,7 @@ import net.minecraft.network.chat.FontDescription
 import kotlin.math.roundToInt
 
 /**
- * 位图通道(MC_FREETYPE / MC_BITMAP)统一提交助手(P2-B4,总设计 A4/I4):
+ * 位图通道(MC_FREETYPE / MC_BITMAP)统一提交助手(总设计 A4/I4):
  *
  * - 布局坐标为**最终像素空间**(emPx 绝对值);字形网格由 pose 承载缩放比
  *   `k = emPx / providerEmPx`(I3:缩放仅存在于位图通道 pose 的唯一一处);

@@ -151,7 +151,7 @@ class TextMeasurer(
         density: Density = this.defaultDensity,
         fontFamilyResolver: FontFamily.Resolver = this.defaultFontFamilyResolver,
         skipCache: Boolean = false,
-        // 平台适配点(T.26):文本渲染缩放(1f = 原样;经 TextLayoutInput/MultiParagraphIntrinsics 注入)
+        // 平台适配点:文本渲染缩放(1f = 原样;经 TextLayoutInput/MultiParagraphIntrinsics 注入)
         scale: Float = 1f,
     ): TextLayoutResult {
         val requestedTextLayoutInput =
@@ -246,7 +246,7 @@ class TextMeasurer(
         density: Density = this.defaultDensity,
         fontFamilyResolver: FontFamily.Resolver = this.defaultFontFamilyResolver,
         skipCache: Boolean = false,
-        // 平台适配点(T.26):文本渲染缩放(1f = 原样;透传给 AnnotatedString 重载)
+        // 平台适配点:文本渲染缩放(1f = 原样;透传给 AnnotatedString 重载)
         scale: Float = 1f,
     ): TextLayoutResult {
         return measure(

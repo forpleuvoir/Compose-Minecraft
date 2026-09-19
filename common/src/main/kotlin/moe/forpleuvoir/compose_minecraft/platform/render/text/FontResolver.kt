@@ -11,9 +11,9 @@ import net.minecraft.network.chat.Style
 import net.minecraft.resources.Identifier
 
 /**
- * 字体系统统一抽象(P1 重构,总设计 docs/text-measurement-redesign.md §3)。
+ * 字体系统统一抽象(重构,总设计 docs/text-measurement-redesign.md §3)。
  *
- * 定案原则(用户拍板):
+ * 设计原则:
  * 1. **pixel-font 只是当前默认字体,零特殊处理**;
  * 2. **所有字体一个概念**:像素 / 系统 stb 链 / 原版位图 / 自定义外部字体一律平权,
  *    只有 [FontChannel] 不同;
@@ -40,7 +40,7 @@ enum class FontChannel {
 }
 
 /**
- * 度量规格(P2-B5 泛化):**一切影响渲染宽度/行盒的样式属性的唯一载体**。
+ * 度量规格(泛化):**一切影响渲染宽度/行盒的样式属性的唯一载体**。
  *
  * 已知成员:
  * - [emPx]:最终像素 em;
@@ -56,7 +56,7 @@ data class MeasureSpec(
     val emPx: Float,
     val bold: Boolean = false,
     /** 渲染样式快照(mc.font 渲染通道的权威计宽输入;矢量通道可 null) */
-    val style: net.minecraft.network.chat.Style? = null,
+    val style: Style? = null,
 )
 
 /**
@@ -174,7 +174,7 @@ class ResolvedFont internal constructor(
 private const val MAX_CHAIN_DEPTH = 8
 
 /**
- * **归属链唯一实现**(font-system 修复 T.RF-H 升维):「一个码点由谁渲染」
+ * **归属链唯一实现**(font-system 修复  升维):「一个码点由谁渲染」
  * 的全部答案都从这里产生 —— 渲染端分段提交(GuiStateBackend.submitOwnedRun
  * 经 [ResolvedFont.ownerForChannel])与测量端归属化计宽
  * ([VanillaPipelineMetrics.advance])消费的是**同一个**解析结果,
@@ -222,7 +222,7 @@ object FontRegistry {
 }
 
 /**
- * 注册字体文件(P3,P3 定案接入统一字体体系):经 mc.font(FreeType)渲染,
+ * 注册字体文件(定案接入统一字体体系):经 mc.font(FreeType)渲染,
  * advance 直接询问 splitter 样式化计宽(TTF/OTF 一律权威同源);
  * 自然行盒/基线由注册时的 FreeType face 度量折算到网格。
  */
@@ -255,7 +255,7 @@ class CustomFreeTypeFont internal constructor(
     override fun metricsAt(spec: MeasureSpec): RunMetrics =
         FontMetrics.mcFont(
             this,
-            spec.copy(style = spec.style ?: net.minecraft.network.chat.Style.EMPTY.withFont(id)),
+            spec.copy(style = spec.style ?: Style.EMPTY.withFont(id)),
             native = natural,
         )
 }
@@ -264,7 +264,7 @@ class CustomFreeTypeFont internal constructor(
  * 唯一字体决策点(架构法则 A2)。
  *
  * 「默认字体是谁」的唯一配置点 = [defaultFontId](A8,无模式开关):
- * 过渡期(P1/P2)由旧配置项派生,P2 起改为直接赋值并删除旧开关。
+ * 过渡期由旧配置项派生, 起改为直接赋值并删除旧开关。
  */
 object FontResolver {
 
@@ -272,7 +272,7 @@ object FontResolver {
     private val warnedMissing = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<FontDescription, Boolean>())
 
     /**
-     * 当前默认字体 id(P2-B5,A8 唯一配置点;dev 对照场景直接改写此值)。
+     * 当前默认字体 id(A8 唯一配置点;dev 对照场景直接改写此值)。
      * **快照状态**:改写即触发读取它的组合失效并重排版 —— 默认字体的
      * 解析结果永远跟随此值,不存在需要手动刷新的第二份状态。
      */
@@ -313,9 +313,9 @@ object FontResolver {
         resolve(style.fontOriginal, spec.copy(bold = style.boldRaw == true))
 
     /**
-     * 按「run」解析(font-system 重构 T.RF-E:删除无消费的 text 参数):
+     * 按「run」解析(font-system 重构 :删除无消费的 text 参数):
      * 返回主字体绑定;不覆盖的字符由布局/渲染两侧经同一 [ResolvedFont.ownerForChannel]
-     * 链落至回退字体并使用该字体自己的度量(P3「逐字符归属」定案 —— 历史
+     * 链落至回退字体并使用该字体自己的度量(「逐字符归属」定案 —— 历史
      * 「整串退回」入口已废弃,KDoc 同步更正)。
      */
     fun resolveForRun(id: FontDescription?, spec: MeasureSpec): ResolvedFont {
@@ -326,8 +326,8 @@ object FontResolver {
     }
 
     /**
-     * P1 过渡入口:按字体的原生参考 em([PlatformFont.providerEmPx])解析 ——
-     * 数值与旧全局快照度量完全一致(纯结构迁移);P2 尺寸空间统一后,
+     *  过渡入口:按字体的原生参考 em([PlatformFont.providerEmPx])解析 ——
+     * 数值与旧全局快照度量完全一致(纯结构迁移); 尺寸空间统一后,
      * 全部消费点改传真实 emPx,本入口删除。
      * 未知 id 与 [resolve] 同语义:ERROR(一次)后退回默认,不抛出。
      */
@@ -345,7 +345,7 @@ object FontResolver {
     // ── 内部 ────────────────────────────────────────────────────────
 
     /**
-     * 位图优先解析(P2-B5「退回即全部退回」):STB 字体无法由 mc.font 渲染,
+     * 位图优先解析(「退回即全部退回」):STB 字体无法由 mc.font 渲染,
      * 强制原版通道时其 id 应替换为沿 fallback 链的首个非 STB 等价字体
      * (系统链 → minecraft:default);FreeType/位图字体原样返回。
      */
@@ -393,7 +393,7 @@ object BuiltinFonts {
         FontDescription.Resource(Identifier.fromNamespaceAndPath("compose_minecraft", "system_font"))
 
     /**
-     * 系统矢量字体链(stb:msyh/simhei/seguisym 等,P2-B5 定案:
+     * 系统矢量字体链(stb:msyh/simhei/seguisym 等, 定案:
      * 「stb 默认字体」= 系统字体链,**不是** minecraft:default)。
      */
     val systemChain: PlatformFont = SystemChainFont()
@@ -419,7 +419,7 @@ object BuiltinFonts {
 internal fun isControlCodepoint(cp: Int): Boolean = cp in 0x00..0x1F || cp == 0x7F
 
 /**
- * 度量工厂(P2-B5 去特判收口):目标 em 缩放、样式兜底、回退口径
+ * 度量工厂(去特判收口):目标 em 缩放、样式兜底、回退口径
  * 只在此实现一次;PlatformFont 实现只声明原生数据。
  */
 internal object FontMetrics {
@@ -432,7 +432,7 @@ internal object FontMetrics {
         native: RunMetrics,
     ): RunMetrics {
         val effSpec = if (spec.style != null) spec
-        else spec.copy(style = net.minecraft.network.chat.Style.EMPTY.withFont(font.id))
+        else spec.copy(style = Style.EMPTY.withFont(font.id))
         return VanillaPipelineMetrics.of(font, effSpec, native)
     }
 
@@ -486,7 +486,7 @@ private class FusionPixelFont(
 }
 
 /**
- * 系统矢量字体链(P2-B5 定案):stb 渲染器的默认字体 = 系统字体链
+ * 系统矢量字体链(定案):stb 渲染器的默认字体 = 系统字体链
  * (微软雅黑等),与原版位图 minecraft:default 是**两个平权字体**。
  * 缺字回退 minecraft:default 位图(终端)。
  */
@@ -533,7 +533,7 @@ private class VanillaBitmapFont(
 }
 
 /**
- * 原版管线权威度量(P2-B5 定案;T.RF-H 归属化升维)。
+ * 原版管线权威度量(定案; 归属化升维)。
  *
  * **advance 的唯一合法答案 =「渲染端真正画这个码点的字形集」的宽度**:
  * - 归属:owningGlyphOwner 链解析 —— 与渲染端分段提交
@@ -562,8 +562,8 @@ internal class VanillaPipelineMetrics private constructor(
     override fun advance(codepoint: Int): Float = cache.computeIfAbsent(codepoint) {
         val ch = String(Character.toChars(it))
         val owner = owningGlyphOwner(font, codepoint).font
-        val style = (spec.style ?: net.minecraft.network.chat.Style.EMPTY).withFont(owner.id)
-        moe.forpleuvoir.compose_minecraft.mc.font.splitter
+        val style = (spec.style ?: Style.EMPTY).withFont(owner.id)
+        mc.font.splitter
             .stringWidth(net.minecraft.network.chat.Component.literal(ch).setStyle(style)) *
             (spec.emPx / owner.providerEmPx)
     }
@@ -575,7 +575,7 @@ internal class VanillaPipelineMetrics private constructor(
 
     companion object {
         private val pool =
-            java.util.concurrent.ConcurrentHashMap<Pair<net.minecraft.network.chat.FontDescription, MeasureSpec>, VanillaPipelineMetrics>()
+            java.util.concurrent.ConcurrentHashMap<Pair<FontDescription, MeasureSpec>, VanillaPipelineMetrics>()
 
         fun of(
             font: PlatformFont,
@@ -588,7 +588,7 @@ internal class VanillaPipelineMetrics private constructor(
 }
 
 /**
- * 原版装饰几何(P2 收口):下划线/删除线厚度与阴影偏移 = 行高的九分比、
+ * 原版装饰几何(收口):下划线/删除线厚度与阴影偏移 = 行高的九分比、
  * 下限 1px —— 锚点对齐原版 Font(y+9 / y+4.5);网格行高动态取
  * mc.font.lineHeight(部分模组会修改),不写死。
  */

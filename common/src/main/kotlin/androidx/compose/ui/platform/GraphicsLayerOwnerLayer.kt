@@ -123,7 +123,7 @@ internal class GraphicsLayerOwnerLayer(
         if (maybeChangedFields and Fields.ShadowElevation != 0) {
             graphicsLayer.shadowElevation = scope.shadowElevation
         }
-        // T.14 平台扩展:阴影光源方向(不参与官方 Fields 位,每帧同步)
+        //  平台扩展:阴影光源方向(不参与官方 Fields 位,每帧同步)
         graphicsLayer.shadowLightDirectionX = scope.shadowLightDirection.x
         graphicsLayer.shadowLightDirectionY = scope.shadowLightDirection.y
         if (maybeChangedFields and Fields.AmbientShadowColor != 0) {

@@ -100,7 +100,7 @@ class GraphicsLayer internal constructor() {
     /** 由 set*Outline 设置的轮廓;null 时 [outline] 回退为图层尺寸矩形 */
     private var layerOutline: Outline? = null
 
-    /** 阴影光源方向(平台扩展 T.14):归一化向量,屏幕 y 向下,默认右上角 */
+    /** 阴影光源方向(平台扩展):归一化向量,屏幕 y 向下,默认右上角 */
     // 默认光源在「左上」(方向 (-1,-1)),与原版 MC 文本阴影(+1,+1 右下投影)
     // 保持同一光照约定 —— 平台所有阴影统一左上光源
     var shadowLightDirectionX: Float = -1f
@@ -421,7 +421,7 @@ class GraphicsLayer internal constructor() {
             ?: MinecraftCanvas(MinecraftImageBitmap(size.width, size.height))
         canvas.clearCommands()
         recordingCanvas = canvas
-        // 平台适配点(T.36 视口剔除):clip=true 的图层(如 clipToBounds / verticalScroll
+        // 平台适配点(视口剔除):clip=true 的图层(如 clipToBounds / verticalScroll
         // 的 scroll 容器)需在录制画布也施加局部裁剪(0,0,size)。否则嵌套图层(外层
         // clip 图层包裹内层 clip=false 内容图层)回放时,内层内容命令回放到外层录制
         // 画布读到的 currentClip 恒 null,回放阶段的文本视口剔除(replayFrom 的
@@ -449,7 +449,7 @@ class GraphicsLayer internal constructor() {
      */
     suspend fun toImageBitmap(): ImageBitmap {
         check(recordingCanvas != null) { "GraphicsLayer.record must be invoked before calling toImageBitmap" }
-        // 平台适配点(T.17):无离屏渲染(AGENTS.md 约束 #4),改为 CPU 光栅化 ——
+        // 平台适配点:无离屏渲染(AGENTS.md 约束 #4),改为 CPU 光栅化 ——
         // GraphicsLayerRasterizer 把录制命令(与 GPU 回放同一套三角化)光栅化到
         // CPU 像素缓冲,任意线程可调用。文本/阴影命令不支持,快照中缺失。
         val w = size.width
@@ -479,24 +479,24 @@ class GraphicsLayer internal constructor() {
         val recording = recordingCanvas ?: return
         // 阶段 C:应用图层变换后回放录制阶段记录的绘制命令。
         // 支持 translate/scale/rotationZ/alpha/clip/pivot(transformOrigin);
-        // rotationX/rotationY(3D 透视)T.15 补齐:命中测试端早已用
+        // rotationX/rotationY(3D 透视) 补齐:命中测试端早已用
         // prepareTransformationMatrix(含透视)计算,此处绘制端同语义实现。
         // 本平台 Canvas 变换为 post-concat(右乘),调用顺序即矩阵相乘顺序,
         // 对齐官方 Skia 绘制语义 T(topLeft+translation) * T(pivot) * R * S * T(-pivot),
         // 即 scale/rotationZ 绕 pivot 进行;pivot 未指定时默认图层中心。
         val pivotX = if (pivotOffset.isUnspecified) size.width / 2f else pivotOffset.x
         val pivotY = if (pivotOffset.isUnspecified) size.height / 2f else pivotOffset.y
-        // T.15:rotationX/rotationY 非零 → 3D 透视路径(行主序 4x4,含透视分量)。
+        // rotationX/rotationY 非零 → 3D 透视路径(行主序 4x4,含透视分量)。
         // 3D 变换无法用画布 2D 矩阵表达,全部收进 layer3D 矩阵:
         // 渲染端 map3D 的链为「局部 → 命令矩阵 → layer3D → 屏幕」,
         // 因此 layer3D 必须包含完整「图层局部 → 屏幕」变换(含 topLeft+translation)。
         val has3D = !rotationX.isNearZero() || !rotationY.isNearZero()
         canvas.save()
         if (has3D) {
-            // T.15 修复(旋转中心):layer3D **直接复用 prepareTransformationMatrix**
+            //  修复(旋转中心):layer3D **直接复用 prepareTransformationMatrix**
             // (与命中测试 GraphicsLayerOwnerLayer.updateMatrix 完全同一矩阵语义),
             // 保证「渲染的旋转中心 == 点击命中的区域」。此前手写构建顺序与官方
-            // 不一致,导致渲染旋转中心偏移而命中正确(AGENTS.md T.13 同类问题)。
+            // 不一致,导致渲染旋转中心偏移而命中正确(AGENTS.md  同类问题)。
             // 官方构建(Matrices.kt):
             //   T(-pivot) * Rz·Ry·Rx·S * [P] * T(pivot+translation)
             // 再附加 topLeft(图层在父坐标系的位置,命中测试的坐标已含 topLeft,
@@ -518,7 +518,7 @@ class GraphicsLayer internal constructor() {
                 // 附加 topLeft:图层位置(与 2D 路径 canvas.translate(topLeft) 对齐)
                 translate(topLeft.x.toFloat(), topLeft.y.toFloat())
             }
-            // T.15 修复:父画布矩阵(场景变换,列主序 2D)必须参与合成。
+            //  修复:父画布矩阵(场景变换,列主序 2D)必须参与合成。
             // 2D 路径经 replayFrom 的 concat 叠加;3D 路径的 map3D 链是
             // 「局部 → 命令矩阵 → layer3D → 屏幕」,因此把父画布矩阵行主序化
             // 右乘进 layer3D(点先图层变换,再场景变换)。
@@ -541,7 +541,7 @@ class GraphicsLayer internal constructor() {
             // 3D 下 clip:渲染端 render3D 忽略 scissor(透视四边形无法轴对齐裁剪),
             // 此处不设画布裁剪;记录命令自带的 clip 在渲染端同样不使用。
             drawShadow(canvas)
-            // T.15 修复(文本近似 2x2):文本的 2D 线性部分**不能**取 layer3D 的
+            //  修复(文本近似 2x2):文本的 2D 线性部分**不能**取 layer3D 的
             // 2x2 对角(layer3D[0]/layer3D[5])—— 该对角被「透视列 × 平移」耦合
             // 污染(prepareTransformationMatrix 的 T(p+t) 右乘 + 嵌套透传 parentRow
             // 右乘都会把第 3 列的透视分量混入 2x2),污染量与方块屏幕位置相关:
@@ -566,10 +566,10 @@ class GraphicsLayer internal constructor() {
                 timesAssign(Matrix().apply { rotateZ(rotationZ) })
                 translate(-pivotX, -pivotY)
             }
-            // 文本 2x2 传参按 **row-major 展平** [m00, m01, m10, m11](T.15 修复):
+            // 文本 2x2 传参按 **row-major 展平** [m00, m01, m10, m11](修复):
             // 渲染端 with3D 按列主序直接放置(approx2D[0]=m00, [1]=m01, [4]=m10,
             // [5]=m11),再经 toMatrix3x2f 交换 m01/m10(抵消 MC JOML 行主序
-            // transformPosition,见 AGENTS.md T.13),最终 JOML 2x2 = clean2D 2x2,
+            // transformPosition,见 AGENTS.md),最终 JOML 2x2 = clean2D 2x2,
             // 文本剪切方向与矩形 map3D(直接读 layer3D row-major)完全一致。
             // 若用列主序展平,文本 2x2 会被转置,双轴旋转的剪切方向与矩形相反
             // (视觉 = 文字歪斜方向反了)。单轴旋转时 2x2 为对角矩阵,不受影响。
@@ -580,7 +580,7 @@ class GraphicsLayer internal constructor() {
             )
             canvas.replayFrom3D(
                 recording, layer3D.values, text2D, alphaMultiplier = alpha,
-                // T.21:图层级颜色滤镜/混合(命令优先,图层回退)
+                // 图层级颜色滤镜/混合(命令优先,图层回退)
                 layerColorFilter = colorFilter?.nativeColorFilter,
                 layerBlendMode = blendMode,
             )
@@ -591,7 +591,7 @@ class GraphicsLayer internal constructor() {
             canvas.scale(scaleX, scaleY)
             canvas.translate(-pivotX, -pivotY)
             if (clip) {
-                // 平台适配点(T.9 修复):translate 之后画布已处于图层局部坐标系,
+                // 平台适配点(修复):translate 之后画布已处于图层局部坐标系,
                 // 裁剪矩形必须是局部 (0, 0, size);此前误用 topLeft 绝对坐标,
                 // 导致 clipToBounds 图层(如 BasicTextField 文本/光标)整体被裁剪消失。
                 canvas.clipRect(
@@ -601,13 +601,13 @@ class GraphicsLayer internal constructor() {
                     size.height.toFloat(),
                 )
             }
-            // 平台适配点(T.14):阴影 —— 基于 outline 的多层伪模糊(无离屏/无 Skia 模糊)。
+            // 平台适配点:阴影 —— 基于 outline 的多层伪模糊(无离屏/无 Skia 模糊)。
             // 在内容之前绘制,随图层变换;偏移向下,内层深外层浅。
             // Path outline(Outline.Generic)阴影后续阶段补齐。
             drawShadow(canvas)
             canvas.replayFrom(
                 recording, alphaMultiplier = alpha,
-                // T.21:图层级颜色滤镜/混合(命令优先,图层回退)
+                // 图层级颜色滤镜/混合(命令优先,图层回退)
                 layerColorFilter = colorFilter?.nativeColorFilter,
                 layerBlendMode = blendMode,
             )
@@ -616,7 +616,7 @@ class GraphicsLayer internal constructor() {
     }
 
     /**
-     * 绘制软阴影(T.14,CPU 离屏真模糊 + 方向性投影)。
+     * 绘制软阴影(CPU 离屏真模糊 + 方向性投影)。
      * 记录一条 [DrawShadowCommand]:内容矩形 + 扩散距离 + 投影偏移 + 圆角半径。
      * 投影偏移 = 光源反方向 × elevation × 0.5(光源方向默认右上角,
      * 经 [moe.forpleuvoir.compose_minecraft.platform.ui.LocalShadowLight]

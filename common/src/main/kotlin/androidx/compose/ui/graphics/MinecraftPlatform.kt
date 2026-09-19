@@ -56,10 +56,10 @@ class MinecraftPaint(
     override var shader: Shader? = null,
     override var pathEffect: PathEffect? = null,
     override var isAntiAlias: Boolean = true,
-    // 平台适配点(T.16):官方默认 Low(线性)。本平台默认 None(最近邻,MC 像素风);configurePaint 总会按调用参数覆盖
+    // 平台适配点:官方默认 Low(线性)。本平台默认 None(最近邻,MC 像素风);configurePaint 总会按调用参数覆盖
     override var filterQuality: FilterQuality = FilterQuality.None,
 ) : Paint {
-    // T.21:内部通道 —— 图层级/命令级 NativeColorFilter 注入(compose colorFilter 是
+    // 内部通道 —— 图层级/命令级 NativeColorFilter 注入(compose colorFilter 是
     // public ColorFilter?,而渲染端需要 NativeColorFilter?;回放时经此字段透传,
     // snapshot() 优先取它,见 Paint.snapshot())。不能放构造参数(public 构造
     // 暴露 internal 类型)。
@@ -540,7 +540,7 @@ internal class MinecraftPathMeasure : PathMeasure {
 /**
  * Minecraft 平台 ImageBitmap(CPU 像素缓冲,0xAARRGGBB)。
  *
- * 平台适配点(T.16):绘制端由 [moe.forpleuvoir.compose_minecraft.platform.render.MinecraftImageTextureCache]
+ * 平台适配点:绘制端由 [moe.forpleuvoir.compose_minecraft.platform.render.MinecraftImageTextureCache]
  * 在渲染线程按需上传为 GpuTexture(按位图身份缓存);本类只持 CPU 像素。
  */
 internal class MinecraftImageBitmap(
@@ -573,7 +573,7 @@ internal class MinecraftImageBitmap(
         }
     }
 
-    /** 平台适配点(T.16):上传在渲染线程按需执行(见 MinecraftImageTextureCache),此处无操作 */
+    /** 平台适配点:上传在渲染线程按需执行(见 MinecraftImageTextureCache),此处无操作 */
     override fun prepareToDraw() = Unit
 }
 
@@ -583,7 +583,7 @@ internal class NativeColorFilter internal constructor(
     val color: Color? = null,
     val colorMatrix: ColorMatrix? = null,
     val blendMode: BlendMode = BlendMode.SrcIn,
-    /** LightingColorFilter 的 add 分量(T.21):输出 = src × multiply + add */
+    /** LightingColorFilter 的 add 分量:输出 = src × multiply + add */
     val add: Color? = null,
 ) {
     override fun equals(other: Any?): Boolean =
@@ -611,16 +611,16 @@ internal class MinecraftCanvas internal constructor(
         val style: PaintingStyle,
         val strokeWidth: Float,
         val strokeCap: StrokeCap,
-        /** 图片采样质量(T.16):[FilterQuality.None] → 最近邻(平台默认),[FilterQuality.Low] → 双线性 */
+        /** 图片采样质量:[FilterQuality.None] → 最近邻(平台默认),[FilterQuality.Low] → 双线性 */
         val filterQuality: FilterQuality = FilterQuality.None,
         /**
-         * 颜色滤镜(T.21):渲染端对最终色应用。
+         * 颜色滤镜:渲染端对最终色应用。
          * [NativeColorFilter.colorMatrix] → 颜色矩阵;[color] 为调制色
          * (BlendModeColorFilter 的 tint / LightingColorFilter 的 multiply),
          * [add] 为 LightingColorFilter 的 add 分量。
          */
         val colorFilter: NativeColorFilter? = null,
-        /** 混合模式(T.21,draw 级):渲染端按 BlendMode 选择 blend;SrcOver = 默认 alpha 合成 */
+        /** 混合模式(draw 级):渲染端按 BlendMode 选择 blend;SrcOver = 默认 alpha 合成 */
         val blendMode: BlendMode = BlendMode.SrcOver,
         /** 渐变着色器(平台适配点):LinearGradient/RadialGradient/SweepGradient,非 null 时覆盖 color */
         val shader: Shader? = null,
@@ -640,7 +640,7 @@ internal class MinecraftCanvas internal constructor(
         /**
          * 图层级 3D 变换矩阵(行主序 4x4,含透视分量;null = 普通 2D 命令)。
          *
-         * 平台适配点(T.15):GraphicsLayer 的 rotationX/rotationY(3D 透视)无法用
+         * 平台适配点:GraphicsLayer 的 rotationX/rotationY(3D 透视)无法用
          * 2D 画布矩阵表达,由 [GraphicsLayer.draw] 3D 分支构建行主序 4x4 矩阵后
          * 经 [MinecraftCanvas.replayFrom3D] 附加到纯色几何命令;
          * 渲染端 [moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderContext]
@@ -740,7 +740,7 @@ internal class MinecraftCanvas internal constructor(
     ) : DrawCommand
 
     /**
-     * 顶点网格绘制命令(T.23):`Canvas.drawVertices`。
+     * 顶点网格绘制命令:`Canvas.drawVertices`。
      *
      * - [vertexMode]:Triangles / TriangleStrip / TriangleFan;
      * - [positions]:交错 x,y 平铺(顶点数 = size / 2);
@@ -777,7 +777,7 @@ internal class MinecraftCanvas internal constructor(
         val dstHeight: Int,
     ) : DrawCommand
 
-    /** 文本绘制命令(由 [MinecraftParagraph] 记录)。平台适配点(T.1):携带 MC 样式快照 */
+    /** 文本绘制命令(由 [MinecraftParagraph] 记录)。平台适配点:携带 MC 样式快照 */
     class DrawTextCommand(
         override val matrix: FloatArray,
         override val clip: Rect?,
@@ -790,13 +790,13 @@ internal class MinecraftCanvas internal constructor(
         /** 渐变着色器(平台适配点):非 null 时文本颜色由渐变采样决定,覆盖 style 色 */
         val shader: Shader? = null,
         /**
-         * 渲染后端定向选择(T.TT,设计文档 §3.1.1):[TextRenderBackend.VANILLA]
+         * 渲染后端定向选择(设计文档 §3.1.1):[TextRenderBackend.VANILLA]
          * 强制原版渲染;[TextRenderBackend.DEFAULT] 跟随全局开关分流。
-         * 组合期由文本组件随 scale 一起捕获盖章(P2 接入 LocalTextRenderBackend)。
+         * 组合期由文本组件随 scale 一起捕获盖章(接入 LocalTextRenderBackend)。
          */
         val backend: TextRenderBackend = TextRenderBackend.DEFAULT,
         /**
-         * 字体绑定(P2-B4,总设计 A3「绑定随数据走」):布局期解析的
+         * 字体绑定(总设计 A3「绑定随数据走」):布局期解析的
          * ResolvedFont 随命令到达渲染端 —— 度量/通道/回退两端同源,
          * 结构上不可能分叉;null = 渲染端按 style 现场解析(兼容路径)。
          */
@@ -806,7 +806,7 @@ internal class MinecraftCanvas internal constructor(
     }
 
     /**
-     * 渐变矩形命令(T.14 阴影):顶部/底部双色垂直渐变,渲染端经 MC 原生
+     * 渐变矩形命令(阴影):顶部/底部双色垂直渐变,渲染端经 MC 原生
      * ColoredRectangleRenderState(GUI pipeline)提交 —— 与 blit 矩形同排序组,
      * 阴影先记录先绘制,层级正确。
      */
@@ -826,7 +826,7 @@ internal class MinecraftCanvas internal constructor(
     }
 
     /**
-     * 阴影命令(T.14 CPU 离屏真模糊):携带内容矩形(局部)与扩散距离,
+     * 阴影命令(CPU 离屏真模糊):携带内容矩形(局部)与扩散距离,
      * 渲染端经 [moe.forpleuvoir.compose_minecraft.platform.render.MinecraftShadowRenderer] 提交。
      * [offsetX]/[offsetY] 为投影偏移(光源反方向,局部单位):阴影本体 =
      * 内容矩形平移该偏移后的矩形。
@@ -848,9 +848,9 @@ internal class MinecraftCanvas internal constructor(
         val cornerRadius: Float,
         /** Path 轮廓段(非空 = Path 阴影,left/top/right/bottom 忽略) */
         val pathSegments: List<MinecraftPath.PathSegmentData>? = null,
-        /** ambient 阴影颜色(0xAARRGGBB,T.18;默认黑 = 官方默认) */
+        /** ambient 阴影颜色(0xAARRGGBB,;默认黑 = 官方默认) */
         val ambientColorArgb: Int = 0xFF000000.toInt(),
-        /** spot 阴影颜色(0xAARRGGBB,T.18;默认黑 = 官方默认) */
+        /** spot 阴影颜色(0xAARRGGBB,;默认黑 = 官方默认) */
         val spotColorArgb: Int = 0xFF000000.toInt(),
     ) : DrawCommand {
         override val paint: PaintSnapshot? = null
@@ -859,7 +859,7 @@ internal class MinecraftCanvas internal constructor(
     internal val drawCommands = ArrayList<DrawCommand>()
 
     /**
-     * 文本渲染后端覆盖(P2 LocalTextRenderBackend):绘制节点在调用
+     * 文本渲染后端覆盖(LocalTextRenderBackend):绘制节点在调用
      * paragraph.paint 前设置、finally 恢复;null = 跟随全局开关。
      * recordTextDraw 落章时读取,随命令进入分流层。
      */
@@ -907,7 +907,7 @@ internal class MinecraftCanvas internal constructor(
         )
     }
 
-    /** 记录一段垂直渐变矩形(T.14 阴影,渲染端经 ColoredRectangleRenderState 提交) */
+    /** 记录一段垂直渐变矩形(阴影,渲染端经 ColoredRectangleRenderState 提交) */
     internal fun recordGradientRect(
         left: Float,
         top: Float,
@@ -930,7 +930,7 @@ internal class MinecraftCanvas internal constructor(
         )
     }
 
-    /** 记录一段阴影(T.14 CPU 离屏真模糊,渲染端经 MinecraftShadowRenderer 提交) */
+    /** 记录一段阴影(CPU 离屏真模糊,渲染端经 MinecraftShadowRenderer 提交) */
     internal fun recordShadow(
         left: Float,
         top: Float,
@@ -973,7 +973,7 @@ internal class MinecraftCanvas internal constructor(
     internal fun replayFrom(
         source: MinecraftCanvas,
         alphaMultiplier: Float = 1f,
-        // T.21:图层级颜色滤镜/混合(官方 GraphicsLayer.colorFilter/blendMode)。
+        // 图层级颜色滤镜/混合(官方 GraphicsLayer.colorFilter/blendMode)。
         // draw 级近似:命令自身带 colorFilter/blendMode 时优先用命令的;
         // 命令未带时回退到图层级(官方语义是"图层内容整体后处理",
         // 本平台无离屏,逐命令应用,组合情况以命令为准,见 AGENTS.md)。
@@ -982,12 +982,12 @@ internal class MinecraftCanvas internal constructor(
     ) {
         for (command in source.commands()) {
             save()
-            // 平台适配点(T.9 修复):命令 clip 处于**录制画布的根空间**(录制画布
+            // 平台适配点(修复):命令 clip 处于**录制画布的根空间**(录制画布
             // 以单位矩阵起始),回放时须经目标画布的**基矩阵**(concat 之前)换算到
             // 目标根空间;按 concat 后的矩阵换算会叠加命令自身矩阵造成双重变换。
             val base = Matrix(currentMatrix.values.copyOf())
             concat(Matrix(command.matrix.copyOf()))
-            // 平台适配点(T.35 修复):command.clip 压栈必须与 save()/restore() 严格配对。
+            // 平台适配点(修复):command.clip 压栈必须与 save/restore 严格配对。
             // 此前 clipStack.addLast 是不平衡的额外压栈,restore() 只弹 save() 那一层,
             // 每回放一条带 clip 的命令就泄漏一层裁剪到 clipStack —— 后续兄弟元素被错误
             // 裁剪(多行文本触发,因 clipToBounds 图层录制命令全部携带 clip)。
@@ -1006,15 +1006,15 @@ internal class MinecraftCanvas internal constructor(
                     strokeWidth = snapshot.strokeWidth,
                     strokeCap = snapshot.strokeCap,
                     filterQuality = snapshot.filterQuality,
-                    // T.21:图层级/命令级混合透传(命令优先,图层回退)
+                    // 图层级/命令级混合透传(命令优先,图层回退)
                     blendMode = if (snapshot.blendMode == BlendMode.SrcOver) layerBlendMode else snapshot.blendMode,
                     shader = snapshot.shader,
                 ).apply {
-                    // T.21:图层级/命令级滤镜透传(命令优先,图层回退)经内部通道注入
+                    // 图层级/命令级滤镜透传(命令优先,图层回退)经内部通道注入
                     nativeColorFilter = snapshot.colorFilter ?: layerColorFilter
                 }
                 if (command.layer3D != null) {
-                    // T.15 修复:3D 命令(带 layer3D)必须**透传** layer3D。
+                    //  修复:3D 命令(带 layer3D)必须**透传** layer3D。
                     // 嵌套图层时,子图层 3D 命令先进入父图层录制画布,父图层
                     // drawLayer 经 replayFrom 回放;若走 drawXxx 重新构造会丢失
                     // layer3D(变成普通 2D 命令),渲染端 render3D 永不触发
@@ -1205,7 +1205,7 @@ internal class MinecraftCanvas internal constructor(
                         else                       -> Unit
                     }
             } else if (command is DrawTextCommand) {
-                // 平台适配点(T.36):回放阶段视口剔除 —— 文本命令在回放阶段才拿到
+                // 平台适配点:回放阶段视口剔除 —— 文本命令在回放阶段才拿到
                 // 目标画布的完整裁剪(窗口/视口图层 clip);paint() 录制阶段 clip 恒 null
                 // (滚动容器内容图层 clip=false),故此处按行的屏幕 y 范围判断是否完全
                 // 在裁剪外,在外的行跳过(不生成 text item),避免 ComposeGuiRenderer.prepare
@@ -1214,7 +1214,7 @@ internal class MinecraftCanvas internal constructor(
                 if (clip == null || !isTextLineOutsideY(currentMatrix, command, clip)) {
                     // 平台适配点:文本命令同样叠加图层级 alpha(经颜色 alpha 通道应用),
                     // 否则 graphicsLayer 的 alpha 对图层内文本不生效。
-                    // T.TT:shader(渐变画刷)必须透传 —— 滚动容器(verticalScroll 等)
+                    // shader(渐变画刷)必须透传 —— 滚动容器(verticalScroll 等)
                     // 会走图层捕获→回放路径,丢失 shader 会导致渐变文本退化为纯色。
                     recordTextDraw(
                         command.text, command.x, command.y, command.style,
@@ -1252,15 +1252,15 @@ internal class MinecraftCanvas internal constructor(
     }
 
     /**
-     * 平台适配点(T.36):判断文本命令的行(局部 y∈[command.y, command.y+行高])
+     * 平台适配点:判断文本命令的行(局部 y∈[command.y, command.y+行高])
      * 经 [m] 映射到目标画布空间后,是否完全在 [clip] 的 y 范围之外(垂直视口外)。
-     * 行高按命令样式经 FontResolver 解析(P1):原版 9px 固定 / TrueType 为
+     * 行高按命令样式经 FontResolver 解析:原版 9px 固定 / TrueType 为
      * 字体真实行高;文本 scale 已含在命令矩阵,映射后自然放大。
      * 只按 y 剔除(垂直滚动主场景),x 方向交给渲染端 scissor(行宽未知且不误剔可见行)。
      */
     private fun isTextLineOutsideY(m: Matrix, command: DrawTextCommand, clip: Rect): Boolean {
-        // T.TT 语义一致模式:布局度量恒原版(9px),两种渲染器一致
-        // P1:度量按命令样式解析(唯一决策点 FontResolver)
+        //  语义一致模式:布局度量恒原版(9px),两种渲染器一致
+        // 度量按命令样式解析(唯一决策点 FontResolver)
         val lineHeight = FontResolver.resolveNative(command.style).metrics.lineHeight
         val top = m.map(Offset(command.x, command.y)).y
         val bottom = m.map(Offset(command.x, command.y + lineHeight)).y
@@ -1270,7 +1270,7 @@ internal class MinecraftCanvas internal constructor(
     }
 
     /**
-     * 3D 版回放(T.15):把 [source] 的绘制命令回放到本画布,并附加图层级
+     * 3D 版回放:把 [source] 的绘制命令回放到本画布,并附加图层级
      * 3D 变换 [layer3D](行主序 4x4,含透视分量)。
      *
      * 纯色几何命令(矩形/圆角/圆/椭圆/弧/线/路径/点)携带 [layer3D],
@@ -1280,7 +1280,7 @@ internal class MinecraftCanvas internal constructor(
      * 图片命令保持原样(第一版不支持图片渲染)。
      *
      * [text2D] 是文本 2D 近似的干净线性部分(row-major 展平 [m00, m01, m10, m11],
-     * T.15 修复):由 GraphicsLayer 按 S·Rx·Ry·Rz(内旋)的 2x2 计算
+     *  修复):由 GraphicsLayer 按 S·Rx·Ry·Rz(内旋)的 2x2 计算
      * (单轴退化为 cosθ × scale 对角,双轴含真实剪切),配合 with3D 的列主序
      * 放置与 toMatrix3x2f 的 m01/m10 交换,最终 JOML 2x2 = clean2D 2x2,
      * 文本剪切方向与矩形 map3D 一致(详见 GraphicsLayer.draw 注释)。
@@ -1290,7 +1290,7 @@ internal class MinecraftCanvas internal constructor(
         layer3D: FloatArray,
         text2D: FloatArray = floatArrayOf(1f, 0f, 0f, 1f),
         alphaMultiplier: Float = 1f,
-        // T.21:图层级颜色滤镜/混合,规则同 replayFrom(命令优先,图层回退)
+        // 图层级颜色滤镜/混合,规则同 replayFrom(命令优先,图层回退)
         layerColorFilter: NativeColorFilter? = null,
         layerBlendMode: BlendMode = BlendMode.SrcOver,
     ) {
@@ -1303,7 +1303,7 @@ internal class MinecraftCanvas internal constructor(
     }
 
     /**
-     * 把 [layer3D](行主序 4x4,含透视)附加到命令上(T.15)。
+     * 把 [layer3D](行主序 4x4,含透视)附加到命令上。
      *
      * - 纯色几何:原样拷贝,携带 [layer3D],渲染端走 CPU 透视顶点变换
      *   (父画布矩阵已由 GraphicsLayer.draw 右乘进 layer3D);
@@ -1320,7 +1320,7 @@ internal class MinecraftCanvas internal constructor(
     ): DrawCommand? {
         // approx2D 的 2x2 = 图层旋转缩放组合的干净线性部分,由 GraphicsLayer
         // 按 S·Rx·Ry·Rz(内旋,点先 X 再 Y 再 Z)计算并以 **row-major 展平**
-        // [m00, m01, m10, m11] 传入 [text2D](T.15 修复):
+        // [m00, m01, m10, m11] 传入 [text2D](修复):
         // - 此处按列主序放置(approx2D[0]=m00, [1]=m01, [4]=m10, [5]=m11),
         //   渲染端 toMatrix3x2f 交换 m01/m10 后,JOML 2x2 = clean2D 2x2,
         //   文本剪切方向与矩形 map3D(直接读 layer3D row-major)一致;
@@ -1344,7 +1344,7 @@ internal class MinecraftCanvas internal constructor(
             val r1 = approx2D[1] * m[0] + approx2D[5] * m[1]
             val r4 = approx2D[0] * m[4] + approx2D[4] * m[5]
             val r5 = approx2D[1] * m[4] + approx2D[5] * m[5]
-            // 平移部分(T.15 修复):文本位置 = layer3D 对「m 平移点(文本在图层内
+            // 平移部分(修复):文本位置 = layer3D 对「m 平移点(文本在图层内
             // 的位置)」的**透视映射**(与矩形 map3D 同一公式、含 w 除法)。
             // 此前用 approx2D(纯 2D,无透视)算平移,双轴旋转(rotationX+rotationY)
             // 下透视 w 变化大,文本位置偏离矩形(视觉 = 文本到处飞/飞出方块)。
@@ -1369,7 +1369,7 @@ internal class MinecraftCanvas internal constructor(
         // 纯色几何命令的 paint 恒非空(接口约定);文本/阴影/渐变不走此分支。
         fun paint3D(): PaintSnapshot {
             val p = paint ?: return PaintSnapshot(Color.Black, 1f, PaintingStyle.Fill, 0f, StrokeCap.Butt)
-            // T.21:图层级滤镜/混合回退(命令优先,图层回退,与 replayFrom 2D 分支一致)
+            // 图层级滤镜/混合回退(命令优先,图层回退,与 replayFrom 2D 分支一致)
             val effFilter = p.colorFilter ?: layerColorFilter
             val effBlend = if (p.blendMode == BlendMode.SrcOver) layerBlendMode else p.blendMode
             return if (alphaMultiplier == 1f && p.colorFilter === effFilter && p.blendMode == effBlend) {
@@ -1473,7 +1473,7 @@ internal class MinecraftCanvas internal constructor(
             strokeWidth = strokeWidth,
             strokeCap = strokeCap,
             filterQuality = filterQuality,
-            // T.21:colorFilter 透传(compose ColorFilter 内部即 NativeColorFilter,
+            // colorFilter 透传(compose ColorFilter 内部即 NativeColorFilter,
             // 渲染端对最终色应用颜色矩阵/调制色);回放注入的 nativeColorFilter 优先。
             // (receiver 是 Paint 接口,须 cast 到 MinecraftPaint 才能读内部通道)
             colorFilter = (this as? MinecraftPaint)?.nativeColorFilter ?: colorFilter?.nativeColorFilter,
@@ -1494,10 +1494,10 @@ internal class MinecraftCanvas internal constructor(
         clipStack.addLast(null)
     }
 
-    /** 当前矩阵(画布矩阵栈顶)。T.15:3D 分支需读取父画布矩阵(场景变换)。 */
+    /** 当前矩阵(画布矩阵栈顶)。:3D 分支需读取父画布矩阵(场景变换)。 */
     internal val currentMatrix: Matrix get() = matrixStack.last()
 
-    /** 当前裁剪矩形(屏幕空间)。T.36:回放阶段视口剔除需读取,与 [currentMatrix] 配合反算行屏幕范围。 */
+    /** 当前裁剪矩形(屏幕空间)。:回放阶段视口剔除需读取,与 [currentMatrix] 配合反算行屏幕范围。 */
     internal val currentClip: Rect? get() = clipStack.last()
 
     override fun save() {
@@ -1577,7 +1577,7 @@ internal class MinecraftCanvas internal constructor(
         if (clipOp == ClipOp.Difference) {
             throw UnsupportedOperationException("clipRect(Difference) is not supported in v1")
         }
-        // 平台适配点(T.9 修复):裁剪一律换算到**屏幕空间**再入栈。
+        // 平台适配点(修复):裁剪一律换算到**屏幕空间**再入栈。
         // 不同矩阵状态下的局部矩形不能直接相交(会得到退化矩形,如 336x0,
         // 导致 MC enableScissor 崩溃);统一换算为屏幕空间后相交才有效。
         val screen = Matrix(currentMatrix.values.copyOf()).map(Rect(left, top, right, bottom))
@@ -1697,7 +1697,7 @@ internal class MinecraftCanvas internal constructor(
 
     override fun drawVertices(vertices: Vertices, blendMode: BlendMode, paint: Paint) {
         validatePaint(paint)
-        // T.23:drawVertices 的 blendMode 是独立参数,优先于 paint.blendMode
+        // drawVertices 的 blendMode 是独立参数,优先于 paint.blendMode
         // (官方 Skia 语义:drawVertices(vertices, blendMode, paint) 的 blendMode 覆盖画笔);
         // SrcOver 时直接用画笔快照,非 SrcOver 时覆盖快照的 blendMode。
         val snap = paint.snapshot()
@@ -1760,7 +1760,7 @@ internal class MinecraftCanvas internal constructor(
     override fun disableZ() = Unit
 
     private fun validatePaint(paint: Paint) {
-        // T.22:blendMode 支持 17 种可表达模式(渲染端经 BlendPipelines 切换 pipeline),
+        // blendMode 支持 17 种可表达模式(渲染端经 BlendPipelines 切换 pipeline),
         // 其余 12 种高级模式(Overlay/Difference/...)渲染端回退 SrcOver —— 记录端不拦截。
     }
 }
@@ -1785,7 +1785,7 @@ fun Canvas.recordCustomDraw(
 }
 
 /**
- * 自定义绘制命令(T.37):扩展点,用于承载非标准 Compose 绘制的自定义渲染内容。
+ * 自定义绘制命令:扩展点,用于承载非标准 Compose 绘制的自定义渲染内容。
  *
  * 由 [MinecraftRenderPlugin] 机制消费,内置标签:
  * - `"mc_texture"`:MC 纹理渲染,data 为 [TextureDrawData]

@@ -47,7 +47,7 @@ fun BitmapPainter(
     image: ImageBitmap,
     srcOffset: IntOffset = IntOffset.Zero,
     srcSize: IntSize = IntSize(image.width, image.height),
-    // 平台适配点(T.16):官方默认 Low(线性,放大糊)。本平台默认 None(最近邻,MC 像素风)
+    // 平台适配点:官方默认 Low(线性,放大糊)。本平台默认 None(最近邻,MC 像素风)
     filterQuality: FilterQuality = FilterQuality.None,
 ): BitmapPainter =
     BitmapPainter(image, srcOffset, srcSize).apply { this.filterQuality = filterQuality }
@@ -78,7 +78,7 @@ class BitmapPainter(
     // parameter and we cannot introduce a secondary constructor that includes this parameter
     // due to how Kotlin handles constructors with inline class parameters to maintain Java
     // compatibility. See https://youtrack.jetbrains.com/issue/KT-31980
-    // 平台适配点(T.16):官方默认 Low(线性)。本平台默认 None(最近邻,MC 像素风)
+    // 平台适配点:官方默认 Low(线性)。本平台默认 None(最近邻,MC 像素风)
     internal var filterQuality: FilterQuality = FilterQuality.None
 
     private val size: IntSize = validateSize(srcOffset, srcSize)

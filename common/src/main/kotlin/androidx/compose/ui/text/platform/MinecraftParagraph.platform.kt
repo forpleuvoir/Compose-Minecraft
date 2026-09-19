@@ -49,18 +49,18 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Minecraft 平台文本后端(文本系统 MC 化,T.2 + T.5 + T.6)
+// Minecraft 平台文本后端(文本系统 MC 化, +  +)
 //
 // 平台适配点(与官方 Paragraph.skiko.kt 的差异):
 // - 样式类型为 MC [Style](能力字段 1:1),TextStyle 已完全移除;
-// - 度量统一用 MC Font(T.TT 起:度量来源可切换,原版 splitter / TrueType HMetrics);
-// - 光标/命中/词界位置用**前缀精确宽度** Font.width(前缀)(T.5,同 EditBox.getScreenX);
+// - 度量统一用 MC Font(起:度量来源可切换,原版 splitter / TrueType HMetrics);
+// - 光标/命中/词界位置用**前缀精确宽度** Font.width(前缀)(同 EditBox.getScreenX);
 // - 命中测试用 Font.plainSubstrByWidth(同 EditBox.findClickedPositionInText);
-// - 水平滚动恢复原版 ScrollState 模型(displayPos 截断已移除,T.6 修复);
+// - 水平滚动恢复原版 ScrollState 模型(displayPos 截断已移除, 修复);
 // - 富文本(AnnotatedString 多 SpanStyle)第一版不做,只支持统一 [Style]。
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** 一行文本的布局结果(P2-B3:行盒/基线 = 行内字符绑定字体的最大自然度量) */
+/** 一行文本的布局结果(行盒/基线 = 行内字符绑定字体的最大自然度量) */
 internal data class MinecraftTextLine(
     val start: Int,
     val end: Int,
@@ -86,7 +86,7 @@ internal data class PlaceholderSpan(
 )
 
 /**
- * 平台适配点(T.3):MC [Component] 展平后的样式段 —— [text] 使用 [style] 绘制。
+ * 平台适配点:MC [Component] 展平后的样式段 —— [text] 使用 [style] 绘制。
  * 由 `BasicText(component)` 经 `component.flatten()` 展平得到,
  * 每段 style 已是"Component 自身属性优先、缺失用 defaultStyle 补"的合并结果(MC applyTo 语义)。
  */
@@ -101,7 +101,7 @@ data class StyleSegment(
 )
 
 /**
- * Minecraft 字形度量布局模型(P1 重构:度量按 run 的字体解析,总设计 I1/I2)。
+ * Minecraft 字形度量布局模型(重构:度量按 run 的字体解析,总设计 I1/I2)。
  *
  * 布局与渲染统一使用同源字形度量:
  * - 行宽 = 每字符 advance 累积(`RunMetrics.advance`,逐码点精确);
@@ -116,7 +116,7 @@ internal class MinecraftTextLayout(
     /** 平台适配点(InlineContent):占位符排版原子(按声明序;布局时按 start 排序)。 */
     val placeholders: List<PlaceholderSpan> = emptyList(),
     /**
-     * 基础字体绑定(P2-B3,总设计 A3/I2):段级字号缺省、省略号等基础 run,以及
+     * 基础字体绑定(总设计 A3/I2):段级字号缺省、省略号等基础 run,以及
      * **空文本占位行**的度量来源 —— 空文本无字符索引可取,故由调用方显式传入。
      */
     internal val baseFont: ResolvedFont,
@@ -140,7 +140,7 @@ internal class MinecraftTextLayout(
      * `cumFloatWidths[b] - cumFloatWidths[a]`。TrueType 度量(stbtt HMetrics)同为
      * 逐码点累加、无字距,前缀和语义不变。
      *
-     * 性能(T.34):替代每次 `font.width(text.substring(start, end+1))` 的 O(n) 子串创建
+     * 性能:替代每次 `font.width(text.substring(start, end+1))` 的 O(n) 子串创建
      * + O(n) 宽度计算,降为 O(1) 数组查表。computeLines 从 O(n²) 降为 O(n)。
      */
     private val cumFloatWidths: FloatArray = run {
@@ -153,7 +153,7 @@ internal class MinecraftTextLayout(
         while (i < n) {
             val cp = text.codePointAt(i)
             val cc = Character.charCount(cp)
-            // P2-B3:字符增量 = 该字符绑定字体的 advance + kern(绝对 emPx,
+            // 字符增量 = 该字符绑定字体的 advance + kern(绝对 emPx,
             // 与绘制端 pen 推进严格同源);字偶距由提供字形的字体计算
             fonts(i).metrics.let { m -> inc[i] = m.advance(cp) + m.kern(prevCp, cp) }
             if (cc == 2) inc[i + 1] = 0f
@@ -237,9 +237,9 @@ internal class MinecraftTextLayout(
     }
 
     /**
-     * 前缀精确宽度(T.5):文本 [from, to) 的 MC 字形宽度。
+     * 前缀精确宽度:文本 [from, to) 的 MC 字形宽度。
      * 替换第一版的 avgCharWidth 近似,与 MC EditBox.getScreenX 同源。
-     * 平台适配点(T.11 修复):行尾可能含 `\n`(exclusive end),宽度按不含换行符的文本计算。
+     * 平台适配点(修复):行尾可能含 `\n`(exclusive end),宽度按不含换行符的文本计算。
      */
     fun prefixWidth(from: Int, to: Int): Float {
         if (to <= from) return 0f
@@ -277,13 +277,13 @@ internal class MinecraftTextLayout(
             return result
         }
         val wrap = maxWidth.isFinite() && maxWidth > 0
-        // UAX #14 断点表(font-system 重构 T.RF-B):整串一次构建,懒加载 ——
+        // UAX #14 断点表(font-system 重构):整串一次构建,懒加载 ——
         // 仅存在受限宽度分段时才付 BreakIterator 的 O(n) 成本
         var breakOffsets: IntArray? = null
         var segStart = 0
         while (segStart < text.length) {
             val nl = text.indexOf('\n', segStart)
-            // 行尾含换行符(exclusive end,官方 getLineEnd 语义,T.11)
+            // 行尾含换行符(exclusive end,官方 getLineEnd 语义)
             val segEnd = if (nl == -1) text.length else nl + 1
             if (segStart >= segEnd) {
                 result.add(MinecraftTextLine(segStart, segEnd, 0f))
@@ -305,7 +305,7 @@ internal class MinecraftTextLayout(
                 break
             }
         }
-        // P2-B3:行盒/基线 = 行内字符绑定字体的最大自然度量(换行符不计)
+        // 行盒/基线 = 行内字符绑定字体的最大自然度量(换行符不计)
         return result.map { line ->
             val contentEnd = if (line.end > line.start && text[line.end - 1] == '\n') line.end - 1 else line.end
             var box = 0f
@@ -339,12 +339,12 @@ internal class MinecraftTextLayout(
     }
 
     /**
-     * 单个 `\n` 分段内的贪心换行填充(font-system 重构,T.RF-B):
+     * 单个 `\n` 分段内的贪心换行填充(font-system 重构):
      * - 断点候选 = UAX #14 边界 ∪ 占位符原子端点(原子整体判定,不可截半);
      * - 在不超过 maxWidth 的最后一个候选处切行;软切行的行尾空白随断点吞并
      *   (迭代器边界在空白段之后 —— 与官方 Skia 视觉一致,且不产生行首空白);
-     * - 无任何候选可入本行时按字符硬切、至少推进 1(T.12 防推进死循环);
-     * - 宽度查询全部走 [substringWidth] 前缀和 O(1)(T.34 语义保留)。
+     * - 无任何候选可入本行时按字符硬切、至少推进 1(防推进死循环);
+     * - 宽度查询全部走 [substringWidth] 前缀和 O(1)(语义保留)。
      */
     private fun appendWrappedLines(
         result: MutableList<MinecraftTextLine>,
@@ -392,7 +392,7 @@ internal class MinecraftTextLayout(
         var start = segStart
         var ci = 0
         while (start < contentEnd) {
-            // 占位符宽于行宽 → 独占一行(强制推进防御,同 T.12)
+            // 占位符宽于行宽 → 独占一行(强制推进防御,同)
             val startSpan = spanStartingAt(start)
             if (startSpan != null && startSpan.width > maxWidth) {
                 result.add(MinecraftTextLine(start, startSpan.end, startSpan.width))
@@ -426,7 +426,7 @@ internal class MinecraftTextLayout(
                     start = lastFit
                 }
                 else -> {
-                    // 首个候选即超宽:按字符硬切(至少推进 1 字符,T.12)
+                    // 首个候选即超宽:按字符硬切(至少推进 1 字符)
                     var k = 1
                     while (start + k < contentEnd &&
                         substringWidth(start, start + k + 1) <= maxWidth
@@ -442,7 +442,7 @@ internal class MinecraftTextLayout(
 
 /**
  * Minecraft 平台 ParagraphIntrinsics 实现。
- * 平台适配点(T.2):样式参数 TextStyle → MC [Style];
+ * 平台适配点:样式参数 TextStyle → MC [Style];
  * 排版方向固定 LTR(MC 文本第一版不支持 BiDi),fontSize/字号被忽略。
  */
 internal class MinecraftParagraphIntrinsics(
@@ -452,9 +452,9 @@ internal class MinecraftParagraphIntrinsics(
     placeholders: List<AnnotatedString.Range<Placeholder>>,
     private val density: Density,
     private val fontFamilyResolver: FontFamily.Resolver,
-    /** 平台适配点(T.3):MC Component 展平后的多段样式;空 = 单样式(旧行为)。 */
+    /** 平台适配点:MC Component 展平后的多段样式;空 = 单样式(旧行为)。 */
     internal val segments: List<StyleSegment> = emptyList(),
-    /** 平台适配点(T.10):文本缩放(1f = 原样;布局尺寸与字形矩阵同步缩放)。 */
+    /** 平台适配点:文本缩放(1f = 原样;布局尺寸与字形矩阵同步缩放)。 */
     internal val scale: Float = 1f,
 ) : ParagraphIntrinsics {
     val textDirection: ResolvedTextDirection = ResolvedTextDirection.Ltr
@@ -474,7 +474,7 @@ internal class MinecraftParagraphIntrinsics(
     }
 
     /**
-     * 基础字体绑定(P2-B3):按基础字号 emPx([scale])解析 —— 未显式指定
+     * 基础字体绑定:按基础字号 emPx([scale])解析 —— 未显式指定
      * 字体/字号的字符使用;段级字号字符使用各自的 [ResolvedFont](I1/I2)。
      */
     internal val resolvedFont: ResolvedFont =
@@ -484,7 +484,7 @@ internal class MinecraftParagraphIntrinsics(
         )
 
     /**
-     * 每字符字体绑定(P2-B3,取代 charScales 相对系数体系):
+     * 每字符字体绑定(取代 charScales 相对系数体系):
      * 段级字号 = 该段独立 emPx 的字体解析;未指定段字号的字符继承基础绑定。
      */
     internal val charFonts: List<ResolvedFont> = run {
@@ -523,7 +523,7 @@ internal class MinecraftParagraphIntrinsics(
 
 /**
  * Minecraft 平台 Paragraph 实现。
- * 平台适配点(T.5):精确前缀度量;水平滚动交还原版 ScrollState 模型(T.6 修复)。
+ * 平台适配点:精确前缀度量;水平滚动交还原版 ScrollState 模型(修复)。
  */
 internal class MinecraftParagraph(
     private val intrinsics: MinecraftParagraphIntrinsics,
@@ -533,7 +533,7 @@ internal class MinecraftParagraph(
 ) : Paragraph {
 
     private val layout: MinecraftTextLayout = run {
-        // 平台适配点(T.10):缩放后可用宽度按 1/scale 换算(布局在缩放前空间度量,绘制时矩阵放大)
+        // 平台适配点:缩放后可用宽度按 1/scale 换算(布局在缩放前空间度量,绘制时矩阵放大)
         val maxWidth =
             if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat()
             else Float.POSITIVE_INFINITY
@@ -587,7 +587,7 @@ internal class MinecraftParagraph(
 
     override val width: Float get() = layout.width
 
-    /** 行盒高(最终像素空间,P2-B3)= 该行绑定字体的最大自然行盒 */
+    /** 行盒高(最终像素空间)= 该行绑定字体的最大自然行盒 */
     private fun lineBoxHeight(lineIndex: Int): Float =
         lineAt(lineIndex).lineBoxPx
 
@@ -701,7 +701,7 @@ internal class MinecraftParagraph(
 
     private fun lineForOffset(offset: Int): Int {
         val clamped = offset.coerceIn(0, intrinsics.text.length)
-        // 平台适配点(T.11 修复):半开区间 [start, end) —— computeLines 的行尾含 `\n`(end = nl+1),
+        // 平台适配点(修复):半开区间 [start, end) —— computeLines 的行尾含 `\n`(end = nl+1),
         // 行边界连续且不重叠;闭区间 `<=` 会让行尾/行首(如 `\n` 后的首字符)归属错行。
         // offset == text.length(末尾)时归最后一行。
         for (i in layout.lines.indices) {
@@ -716,11 +716,11 @@ internal class MinecraftParagraph(
         return layout.lines.size - 1
     }
 
-    /** 行的绘制起点(无截断 —— 原 displayPos 水平截断已移除,T.6 修复)。 */
+    /** 行的绘制起点(无截断 —— 原 displayPos 水平截断已移除, 修复)。 */
     private fun lineDrawStart(lineIndex: Int, line: MinecraftTextLine): Int = line.start
 
     override fun getPathForRange(start: Int, end: Int): Path {
-        // 平台适配点(T.11 修复):实现选区 Path —— 官方 SkiaParagraph 语义:
+        // 平台适配点(修复):实现选区 Path —— 官方 SkiaParagraph 语义:
         // 取选区覆盖的每行矩形(RectWidthMode.TIGHT:从选中起始 x 到选中结束 x),
         // 全部 addRect 进同一个 Path,一次绘制(替代原空 Path() 占位)。
         require(start in 0..end && end <= intrinsics.text.length) {
@@ -748,7 +748,7 @@ internal class MinecraftParagraph(
             val right = layout.prefixWidth(line.start, lineEnd)
             val top = lineTop(lineIndex)
             val bottom = lineTop(lineIndex) + lineBoxHeight(lineIndex)
-            // 平台适配点(T.26):坐标 API 统一 ×scale —— 布局在 1x 空间度量,绘制经矩阵
+            // 平台适配点:坐标 API 统一 ×scale —— 布局在 1x 空间度量,绘制经矩阵
             // 放大;选区/光标/命中测试在放大空间工作,坐标必须与视觉一致
             path.addRect(Rect(left, top, right, bottom))
         }
@@ -759,7 +759,7 @@ internal class MinecraftParagraph(
         val lineIndex = lineForOffset(offset)
         val line = lineAt(lineIndex)
         val start = lineDrawStart(lineIndex, line)
-        // T.5:前缀精确宽度(EditBox.getScreenX 同源)
+        // 前缀精确宽度(EditBox.getScreenX 同源)
         val x = layout.prefixWidth(start, offset.coerceIn(start, line.end))
         val top = lineTop(lineIndex)
         return Rect(x, top, x, top + lineBoxHeight(lineIndex))
@@ -785,7 +785,7 @@ internal class MinecraftParagraph(
 
     override fun getLineEnd(lineIndex: Int, visibleEnd: Boolean): Int {
         val end = lineAt(lineIndex).end
-        // 平台适配点(T.11 修复):visibleEnd=true 时排除行尾换行符
+        // 平台适配点(修复):visibleEnd=true 时排除行尾换行符
         // (官方语义:不计算行尾换行/空白;jumpByLinesOffset 等用它定位行尾)。
         if (!visibleEnd) return end
         val line = lineAt(lineIndex)
@@ -822,12 +822,12 @@ internal class MinecraftParagraph(
     }
 
     override fun getOffsetForPosition(position: Offset): Int {
-        // 平台适配点(T.26):position 为放大空间坐标(点击/光标),换算回 1x 布局空间定位
+        // 平台适配点:position 为放大空间坐标(点击/光标),换算回 1x 布局空间定位
         val lineIndex = getLineForVerticalPosition(position.y)
         val line = lineAt(lineIndex)
         val start = lineDrawStart(lineIndex, line)
-        // T.5/T.6:前缀宽度定位(EditBox.findClickedPositionInText 同源)
-        // 平台适配点(T.11 修复):行尾排除 `\n`(exclusive end 含换行符),定位不落入换行符。
+        // /:前缀宽度定位(EditBox.findClickedPositionInText 同源)
+        // 平台适配点(修复):行尾排除 `\n`(exclusive end 含换行符),定位不落入换行符。
         val lineEndExclusive = if (line.end > start && intrinsics.text[line.end - 1] == '\n') {
             line.end - 1
         } else {
@@ -851,7 +851,7 @@ internal class MinecraftParagraph(
         granularity: androidx.compose.ui.text.TextGranularity,
         inclusionStrategy: androidx.compose.ui.text.TextInclusionStrategy,
     ): TextRange {
-        // 对照官方桌面语义(font-system 重构 T.RF-D):CMP 1.11 的
+        // 对照官方桌面语义(font-system 重构):CMP 1.11 的
         // SkiaParagraph.getRangeForRect 同样未实现(TODO CMP-1255,返回
         // TextRange.Zero)。此前自研占位返回全串范围会让框选退化为「全选」,
         // 与官方契约(KDoc:「无命中文本时返回 TextRange.Zero」)不符 ——
@@ -887,7 +887,7 @@ internal class MinecraftParagraph(
             return TextRange(offset.coerceIn(0, text.length))
         }
         // 词界语义对照官方桌面(SkiaParagraph.skiko.kt getWordBoundary,font-system
-        // 重构 T.RF-C):空白偏移 → 空域或前字符的词;其余交给 ICU BreakIterator
+        // 重构):空白偏移 → 空域或前字符的词;其余交给 ICU BreakIterator
         //(getWordInstance,UAX #29)—— 替代旧 isLetterOrDigit 手写规则,
         // 双击选词在中日韩/复合词场景与官方一致。
         val iterator = java.text.BreakIterator.getWordInstance()
@@ -938,7 +938,7 @@ internal class MinecraftParagraph(
         blendMode: BlendMode,
     ) {
         if (brush is ShaderBrush) {
-            // T.TT:必须用「未缩放」段落盒创建 —— 渲染端逐字形采样用的是命令局部坐标
+            // 必须用「未缩放」段落盒创建 —— 渲染端逐字形采样用的是命令局部坐标
             // (未乘 scale);若用缩放后尺寸,t 会被压缩到 0..1/scale(实测:渐变恒为首色)
             val size = androidx.compose.ui.geometry.Size(
                 layout.width,
@@ -996,7 +996,7 @@ internal class MinecraftParagraph(
                             )
                         }
                     }
-                    // 行顶按该行盒高累计(P2-B3)
+                    // 行顶按该行盒高累计
                     rowTop += line.lineBoxPx
                 }
         } else {
@@ -1010,10 +1010,10 @@ internal class MinecraftParagraph(
             ?: throw UnsupportedOperationException(
                 "MinecraftParagraph.paint only supports MinecraftCanvas, actual: ${canvas::class.simpleName}"
             )
-        // T.1/T.2:记录完整 MC 样式快照;paint 传入的 color 覆盖样式色
+        // /:记录完整 MC 样式快照;paint 传入的 color 覆盖样式色
         val style = intrinsics.style.withColor(color.copy(alpha = color.alpha * alpha))
         val effectiveAlpha = color.alpha * alpha
-        // P2-B3(A4 尺寸空间唯一):布局坐标即最终像素,不再施加画布缩放;
+        // (A4 尺寸空间唯一):布局坐标即最终像素,不再施加画布缩放;
         // 字号语义由每字符字体绑定(ResolvedFont.emPx)承载。
         val lineCount = visibleLineCount
         var rowTop = 0f
@@ -1021,7 +1021,7 @@ internal class MinecraftParagraph(
             val line = layout.lines[i]
             val start = lineDrawStart(i, line)
             if (line.end > start) {
-                // T.6:整行绘制;行尾可能含 \n(exclusive end),绘制时去掉
+                // 整行绘制;行尾可能含 \n(exclusive end),绘制时去掉
                 val contentEnd = if (intrinsics.text[line.end - 1] == '\n') line.end - 1 else line.end
                 val appendEllipsis = ellipsizedLastLine != null && i == visibleLineCount - 1
                 val drawLimit =
@@ -1062,7 +1062,7 @@ internal class MinecraftParagraph(
     }
 
     /**
-     * 按 [StyleSegment] 边界把行内文本切分绘制(P2-B3 绑定式):
+     * 按 [StyleSegment] 边界把行内文本切分绘制(绑定式):
      * 所有段共享行基线;段原点 = 行基线 − 段字体基线(行顶语义,渲染端内部加锚点)。
      */
     private fun recordSegmentedTextDraw(
@@ -1115,7 +1115,7 @@ internal class MinecraftParagraph(
         }
     }
 
-    /** 记录一段指定字体绑定的文本(最终像素坐标;P2-B3 无矩阵缩放包裹) */
+    /** 记录一段指定字体绑定的文本(最终像素坐标; 无矩阵缩放包裹) */
     private fun drawStyledRun(
         mc: MinecraftCanvas,
         text: String,

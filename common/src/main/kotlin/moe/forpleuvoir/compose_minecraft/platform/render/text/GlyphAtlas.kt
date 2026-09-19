@@ -8,10 +8,10 @@ import net.minecraft.client.gui.render.TextureSetup
 import org.lwjgl.system.MemoryUtil
 
 /**
- * 字形纹理图集(T.TT,设计文档 §3):R8 单通道分页管理。
+ * 字形纹理图集(设计文档 §3):R8 单通道分页管理。
  *
  * - 页尺寸 1024×1024,`GpuFormat.R8_UNORM`(coverage 单通道,显存 1/4 of RGBA);
- * - 打包:shelf(货架)算法 —— x 向追加、行满换行、页满翻页;P3① 页粒度 LRU:
+ * - 打包:shelf(货架)算法 —— x 向追加、行满换行、页满翻页; 页粒度 LRU:
  *   水位超限时整页「退役」([retirePage],本帧不再分配、帧末 [flushRetiredPages]
  *   重置游标原地复用,不销毁纹理 —— 延迟到帧末保证本帧已提交元素的 UV 引用安全);
  * - 上传:`CommandEncoder.writeToTexture(ByteBuffer, …, destX, destY, w, h)`
@@ -53,7 +53,7 @@ internal object GlyphAtlas {
         var rowHeight = 0
 
         /**
-         * P3① 页退役标记:true = 已被 LRU 淘汰,等待帧末重置游标复用。
+         *  页退役标记:true = 已被 LRU 淘汰,等待帧末重置游标复用。
          * 标记期间 [allocate] 跳过本页 —— 淘汰发生在渲染帧的收集阶段时,
          * 本帧早前已提交元素仍引用页内旧槽位 UV,必须保证其内容在本帧
          * draw 结束前不被覆盖(延迟重置语义,见 [flushRetiredPages])。
@@ -164,7 +164,7 @@ internal object GlyphAtlas {
             .also { whiteTexel = it }
     }
 
-    // ── P3① 页粒度 LRU:退役 / 复用 ────────────────────────────────────────
+    // ──  页粒度 LRU:退役 / 复用 ────────────────────────────────────────
 
     /**
      * 整页退役:标记 [Page.pendingReset],本帧剩余时间不再分配;帧末

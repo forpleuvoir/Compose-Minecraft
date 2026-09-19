@@ -15,7 +15,7 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.text.withColor
 import net.minecraft.network.chat.Style
 
 /**
- * 父屏幕能力测试(T.25):从 dev 菜单进入本屏(parent = dev 菜单 ComposeScreen),
+ * 父屏幕能力测试:从 dev 菜单进入本屏(parent = dev 菜单 ComposeScreen),
  * 验证:
  * 1. 「← 返回」或 Esc 关闭时自动 `setScreen(parent)` 回到 dev 菜单(而非主菜单/游戏内);
  * 2. 「渲染父屏」开关运行时切换 —— 开时半透明背景下方透出 dev 菜单内容

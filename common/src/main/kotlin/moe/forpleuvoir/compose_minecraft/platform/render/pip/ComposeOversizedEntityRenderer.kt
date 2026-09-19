@@ -11,7 +11,6 @@ import com.mojang.blaze3d.textures.FilterMode
 import com.mojang.blaze3d.textures.GpuTexture
 import com.mojang.blaze3d.textures.GpuTextureView
 import com.mojang.blaze3d.vertex.PoseStack
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.render.GuiRenderer
 import net.minecraft.client.gui.render.TextureSetup
 import net.minecraft.client.renderer.Projection
@@ -30,7 +29,7 @@ import org.joml.Quaternionfc
 import org.joml.Vector3fc
 
 /**
- * 实体画中画渲染器(T.37,参照原版 [net.minecraft.client.gui.render.pip.GuiEntityRenderer] +
+ * 实体画中画渲染器(参照原版 [net.minecraft.client.gui.render.pip.GuiEntityRenderer] +
  * [net.minecraft.client.gui.render.pip.PictureInPictureRenderer] 的实现):
  * 把实体渲染进独立 PIP 纹理,再 blit 到 Compose 渲染器(1:1 像素管道)。
  *

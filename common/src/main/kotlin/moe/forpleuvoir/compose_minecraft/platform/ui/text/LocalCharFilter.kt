@@ -2,6 +2,7 @@ package moe.forpleuvoir.compose_minecraft.platform.ui.text
 
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.staticCompositionLocalOf
+import moe.forpleuvoir.compose_minecraft.platform.screen.MinecraftComposeScene
 
 /**
  * 字符过滤开关(文本输入计划 §5,平台只提供开关、不做具体过滤策略):

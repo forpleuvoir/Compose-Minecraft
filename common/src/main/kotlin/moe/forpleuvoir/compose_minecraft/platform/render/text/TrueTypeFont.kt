@@ -6,7 +6,6 @@ import org.lwjgl.stb.STBTruetype.stbtt_GetCodepointKernAdvance
 import org.lwjgl.stb.STBTruetype.stbtt_GetCodepointHMetrics
 import org.lwjgl.stb.STBTruetype.stbtt_GetFontVMetrics
 import org.lwjgl.stb.STBTruetype.stbtt_GetFontOffsetForIndex
-import org.lwjgl.stb.STBTruetype.stbtt_ScaleForPixelHeight
 import kotlin.math.ceil
 import org.lwjgl.stb.STBTruetype.stbtt_FreeBitmap
 import org.lwjgl.stb.STBTruetype.stbtt_GetCodepointBitmap
@@ -31,7 +30,7 @@ class RasterizedGlyph internal constructor(
 )
 
 /**
- * stb_truetype 字体封装(T.TT,D2:零新依赖,MC 运行时自带 lwjgl-stb)。
+ * stb_truetype 字体封装(D2:零新依赖,MC 运行时自带 lwjgl-stb)。
  *
  * - 解析 TTF/TTC([load] 自动遍历 TTC 字体索引);
  * - 光栅化:[rasterize] 任意 px 字号的灰度位图(**矢量红利:非整数
@@ -201,7 +200,7 @@ class TrueTypeFont private constructor(
     fun hasGlyph(codepoint: Int): Boolean = stbtt_FindGlyphIndex(info, codepoint) != 0
 
     /**
-     * 混淆字形池(T.TT):拉丁可打印区 + CJK 统一表意文字采样(步长 7)。
+     * 混淆字形池:拉丁可打印区 + CJK 统一表意文字采样(步长 7)。
      * 懒构建一次;只查字形存在性,无光栅化开销。
      */
     private val asciiObfuscationPool: List<Int> by lazy {

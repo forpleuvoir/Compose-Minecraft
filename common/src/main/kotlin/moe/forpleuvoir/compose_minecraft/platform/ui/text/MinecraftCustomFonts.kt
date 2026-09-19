@@ -8,7 +8,6 @@ import com.mojang.logging.LogUtils
 import moe.forpleuvoir.compose_minecraft.mixin.FontManagerAccessor
 import moe.forpleuvoir.compose_minecraft.mixin.FontSetAccessor
 import moe.forpleuvoir.compose_minecraft.mixin.MinecraftAccessor
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.font.FontOption
 import net.minecraft.client.gui.font.FontSet
 import net.minecraft.client.gui.font.GlyphStitcher
@@ -21,11 +20,12 @@ import org.lwjgl.util.freetype.FreeType
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposeGuiRenderer
 
 private val LOGGER = LogUtils.getLogger()
 
 /**
- * 自定义字体文件注册接入(T.32):把任意 ttf/otf/ttc 字体文件(系统目录、
+ * 自定义字体文件注册接入:把任意 ttf/otf/ttc 字体文件(系统目录、
  * 资源包旁挂载、业务自带等)注册为 MC 可渲染字体。
  *
  * MC 的字体渲染体系只能画「资源字体」(FontManager 按 font/<name>.json 装配的
@@ -235,7 +235,7 @@ object MinecraftCustomFonts {
                     setOf(),
                 )
                 accessor.fontSets()[identifier] = fontSet
-                // P3:同步接入平台字体体系(度量=splitter 权威计宽,行盒=FreeType 自然值)
+                // 同步接入平台字体体系(度量=splitter 权威计宽,行盒=FreeType 自然值)
                 val info = runCatching { readFontInfo(path).metrics }.getOrNull()
                 val platform = (moe.forpleuvoir.compose_minecraft.platform.render.text.FontRegistry[net.minecraft.network.chat.FontDescription.Resource(identifier)]
                     as? moe.forpleuvoir.compose_minecraft.platform.render.text.CustomFreeTypeFont)

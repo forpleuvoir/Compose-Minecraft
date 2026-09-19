@@ -11,7 +11,6 @@ import com.mojang.blaze3d.textures.FilterMode
 import com.mojang.blaze3d.textures.GpuTexture
 import com.mojang.blaze3d.textures.GpuTextureView
 import com.mojang.blaze3d.vertex.PoseStack
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.render.GuiRenderer
 import net.minecraft.client.gui.render.TextureSetup
 import net.minecraft.client.renderer.Projection
@@ -24,9 +23,14 @@ import net.minecraft.client.renderer.state.gui.BlitRenderState
 import net.minecraft.client.renderer.state.gui.GuiElementRenderState
 import net.minecraft.client.renderer.state.gui.pip.OversizedItemRenderState
 import net.minecraft.client.renderer.texture.OverlayTexture
+import moe.forpleuvoir.compose_minecraft.platform.render.plugins.McItemPlugin
+import net.minecraft.client.gui.render.GuiItemAtlas
+import net.minecraft.client.gui.render.pip.OversizedItemRenderer
+import net.minecraft.client.gui.render.pip.PictureInPictureRenderer
+import net.minecraft.client.renderer.state.gui.GuiRenderState
 
 /**
- * 画中画渲染器(T.37,参照原版 [OversizedItemRenderer]/[PictureInPictureRenderer] 的实现):
+ * 画中画渲染器(参照原版 [OversizedItemRenderer]/[PictureInPictureRenderer] 的实现):
  * 渲染 **oversized 物品**(方块等模型超出 16 槽位的 3D 物品)到独立 PIP 纹理,再 blit 到 GUI。
  *
  * 与 [McItemPlugin] 的普通物品(atlas blit)互补:普通物品 → [GuiItemAtlas] 烘焙;
@@ -71,7 +75,7 @@ class ComposeOversizedItemRenderer(
         val poseStack = PoseStack()
         poseStack.translate(width / 2f, getTranslateY(height, guiScale), 0f)
         // 模型按目标尺寸适配:PIP 纹理 = size,scale = size(模型 16 单位 GUI 视觉 → size 像素)。
-        // 原版只对 oversized 用 scale=16 居中大纹理,我们按 size 铺满离屏纹理。
+        // 原版只对 oversized 用 scale=16 居中大纹理,本平台按 size 铺满离屏纹理。
         val scale = guiScale * width.toFloat()
         poseStack.scale(scale, scale, -scale)
         renderToTexture(renderState, poseStack)
@@ -130,6 +134,8 @@ class ComposeOversizedItemRenderer(
         return !itemStackRenderState.isAnimated() && itemStackRenderState.modelIdentity == modelOnTextureIdentity
     }
 
+    // 存疑(未修复):guiScale 形参未参与换算,恒返回 height / 2f,而原版同名方法含
+    // guiScale 换算。当前行为正常,复现"放大 guiScale 后物品纵向偏移"时优先看此处。
     /** 原版 [OversizedItemRenderer.getTranslateY]。 */
     private fun getTranslateY(height: Int, guiScale: Int): Float = height / 2f
 

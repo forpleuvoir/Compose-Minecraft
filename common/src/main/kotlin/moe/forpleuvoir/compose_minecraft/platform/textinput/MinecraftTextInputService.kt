@@ -15,9 +15,9 @@ import androidx.compose.ui.text.input.SetSelectionCommand
 import androidx.compose.ui.text.input.TextFieldValue
 import moe.forpleuvoir.compose_minecraft.platform.textinput.imblocker.IMBlockerCompat
 import moe.forpleuvoir.compose_minecraft.platform.textinput.imblocker.IMBlockerFocusSession
-import net.minecraft.client.Minecraft
 import net.minecraft.client.input.PreeditEvent
 import kotlin.math.roundToInt
+import com.mojang.blaze3d.platform.TextInputManager
 
 /**
  * MC 平台文本输入服务(IME Service,实施计划已随实现落地移除,状态以代码为准)。
@@ -27,9 +27,9 @@ import kotlin.math.roundToInt
  *   使 TextField 聚焦时弹出系统 IME;
  * - 把 MC 的 preedit 组合态回调([PreeditEvent])转换成 Compose 标准 [EditCommand]
  *   (SetComposingRegionCommand + SetComposingTextCommand),组合区在缓冲区中渲染为下划线;
- * - 候选窗跟随光标:组合更新时把光标矩形(根坐标 = 场景像素,T.24 1:1 渲染)交给
+ * - 候选窗跟随光标:组合更新时把光标矩形(根坐标 = 场景像素, 1:1 渲染)交给
  *   [TextInputManager.setTextInputArea](其内部乘 guiScale 转物理像素,
- *   T.31:场景像素化后这里先除回 GUI 单位,净效果 = 像素直传)。
+ *   场景像素化后这里先除回 GUI 单位,净效果 = 像素直传)。
  *
  * 提交语义(与 charTyped 并存、无重复):
  * MC 的 GLFW 分支(TuxTheAstronaut/minecraft-glfw)在 IME 提交时,WM_IME_COMPOSITION 中
@@ -223,6 +223,8 @@ open class MinecraftTextInputService : PlatformTextInputService {
     }
 
     /** charTyped 计数:组合期间上屏的字符属于 IME 提交文本(组合结束时用于定位光标) */
+    // 存疑(未修复):codePoint 形参未使用 —— 字符值不参与逻辑,只借回调证明焦点归属。
+    // 当前行为正常,复现"组合文本计数错位"时优先看此处。
     fun onCharTyped(codePoint: Int) {
         if (composing) {
             committedCharCount++
@@ -256,10 +258,10 @@ open class MinecraftTextInputService : PlatformTextInputService {
     /**
      * 候选窗跟随:组合更新时把光标矩形交给 MC TextInputManager。
      *
-     * T.24 后场景为 1:1 像素渲染(场景尺寸 = 窗口像素,根坐标即物理像素),而
+     * 场景为 1:1 像素渲染(场景尺寸 = 窗口像素,根坐标即物理像素),而
      * [TextInputManager.setTextInputArea] 内部把入参当 GUI 单位再乘 guiScale 转
      * 物理像素 —— 直接传像素会被二次放大,候选窗位置随 guiScale 偏移。
-     * 这里先除回 GUI 单位,净效果 = 像素直传(T.31)。
+     * 这里先除回 GUI 单位,净效果 = 像素直传。
      */
     @OptIn(ExperimentalComposeUiApi::class)
     private fun updateTextInputArea() {

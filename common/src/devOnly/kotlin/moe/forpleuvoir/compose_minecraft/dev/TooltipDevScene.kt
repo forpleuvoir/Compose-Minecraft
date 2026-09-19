@@ -10,9 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,7 +46,7 @@ import net.minecraft.world.item.component.BundleContents
 private class SlotSpec(val label: String, val lines: () -> TooltipLines)
 
 /**
- * 原版 tooltip 插件测试(T.39):悬停物品格触发,popup 跟随鼠标但偏移避开鼠标位置,
+ * 原版 tooltip 插件测试:悬停物品格触发,popup 跟随鼠标但偏移避开鼠标位置,
  * 避免闪烁。
  */
 @Composable

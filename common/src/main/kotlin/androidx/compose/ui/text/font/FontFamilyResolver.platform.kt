@@ -20,7 +20,7 @@ import androidx.compose.ui.text.ExperimentalTextApi
 import kotlin.coroutines.CoroutineContext
 
 /**
- * 平台默认 [Typeface] 哨兵实例(font-system 重构,T.RF-A)。
+ * 平台默认 [Typeface] 哨兵实例(font-system 重构)。
  *
  * Compose 层的 FontFamily 解析在 MC 上没有真实字形承载 —— 实际渲染由自有
  * 三通道体系(moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver)

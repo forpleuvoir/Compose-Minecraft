@@ -17,7 +17,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFont
-import androidx.compose.runtime.DisposableEffect
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalTextRenderBackend
 import androidx.compose.runtime.getValue
@@ -40,7 +39,7 @@ import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.Style
 
 /**
- * TrueType 文本渲染对照测试(T.TT,第一步:管线 + 开关 + 度量同源 + 回退)。
+ * TrueType 文本渲染对照测试(第一步:管线 + 开关 + 度量同源 + 回退)。
  *
  * - 顶部开关切换系统矢量链 / 原版位图 default(经 FontResolver.defaultFontId);
  * - 切换后整棵子树重建([key]):布局度量重新快照,宽度/行高按新来源计算;
@@ -54,7 +53,7 @@ fun TrueTypeTextDevScene() {
     // 本屏 = 自研 stb 渲染器对照(系统字体链):进入时切到 stb 模式,
     // 离开时恢复进入前的值(捕获与置位收拢在同一 DisposableEffect,避免
     // 组合期分步写入的时序隐患)
-    // P2-B5:对照屏字体作用域 —— 不动全局配置,经 LocalDefaultFont 局部覆盖
+    // 对照屏字体作用域 —— 不动全局配置,经 LocalDefaultFont 局部覆盖
     // (离开作用域自动恢复);顶部开关只是切换本屏提供的字体 id。
     val B = moe.forpleuvoir.compose_minecraft.platform.render.text.BuiltinFonts
     var bitmapMode by remember { mutableStateOf(false) }
@@ -233,7 +232,7 @@ fun TrueTypeTextDevScene() {
                     BasicTextField(
                         state = input,
                         textStyle = Style.EMPTY.withColor(Color.White),
-                        // P2-B5:默认字号随字体(16sp),对照须显式同字号
+                        // 默认字号随字体(16sp),对照须显式同字号
                         fontSize = 18.sp,
                         modifier = Modifier
                             .fillMaxWidth()

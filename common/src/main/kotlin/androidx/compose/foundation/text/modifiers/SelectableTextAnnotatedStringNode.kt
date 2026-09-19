@@ -62,9 +62,9 @@ internal class SelectableTextAnnotatedStringNode(
     overrideColor: ColorProducer? = null,
     autoSize: TextAutoSize? = null,
     private var onShowTranslation: ((TextAnnotatedStringNode.TextSubstitutionValue) -> Unit)? = null,
-    // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖)
+    // 平台适配点(富文本):spanStyles 切分后的段列表(全覆盖)
     segments: List<StyleSegment> = emptyList(),
-    // 平台适配点(T.29):字号渲染缩放(18sp → 2x),透传给内部节点
+    // 平台适配点:字号渲染缩放(18sp → 2x),透传给内部节点
     scale: Float = 1f,
 ) : DelegatingNode(), LayoutModifierNode, DrawModifierNode, GlobalPositionAwareModifierNode {
     override val shouldAutoInvalidate: Boolean
@@ -143,9 +143,9 @@ internal class SelectableTextAnnotatedStringNode(
         selectionController: SelectionController?,
         color: ColorProducer?,
         autoSize: TextAutoSize?,
-        // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖)
+        // 平台适配点(富文本):spanStyles 切分后的段列表(全覆盖)
         segments: List<StyleSegment>,
-        // 平台适配点(T.29):字号渲染缩放(18sp → 2x)
+        // 平台适配点:字号渲染缩放(18sp → 2x)
         scale: Float = 1f,
     ) {
         textAnnotatedStringNode.doInvalidations(

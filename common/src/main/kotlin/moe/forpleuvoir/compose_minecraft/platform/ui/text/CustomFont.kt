@@ -22,9 +22,10 @@ import androidx.compose.runtime.remember
 import net.minecraft.network.chat.FontDescription
 import net.minecraft.resources.Identifier
 import java.nio.file.Path
+import moe.forpleuvoir.compose_minecraft.platform.screen.MinecraftComposeScene
 
 /**
- * Compose 便捷接口(T.32):加载并注册一个自定义字体文件(ttf/otf/ttc,
+ * Compose 便捷接口:加载并注册一个自定义字体文件(ttf/otf/ttc,
  * 系统目录、资源包旁挂载、业务自带均可),返回可直接使用的 [FontDescription]:
  *
  * ```

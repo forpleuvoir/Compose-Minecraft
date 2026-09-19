@@ -92,7 +92,7 @@ import net.minecraft.network.chat.Style
  * @param text The text to be displayed.
  * @param modifier [Modifier] to apply to this layout node.
  * @param style Style configuration for the text such as color, font, line height etc.
- *   平台适配点(T.28):接受 Compose [TextStyle] —— 语义经
+ *   平台适配点:接受 Compose [TextStyle] —— 语义经
  *   [moe.forpleuvoir.compose_minecraft.platform.ui.text.toPlatformData]
  *   映射到平台:color/alpha/fontSize(sp,18sp = 2x 平台基准字号,9sp = 1x 原生像素)/
  *   fontWeight(≥600 加粗)/fontStyle(斜体)/textDecoration(下划线/删除线)生效;
@@ -151,32 +151,32 @@ fun BasicText(
 
     val fontFamilyResolver = LocalFontFamilyResolver.current
 
-    // 平台适配点(T.28):TextStyle → {MC Style, scale, alpha}。Compose 语义经
+    // 平台适配点:TextStyle → {MC Style, scale, alpha}。Compose 语义经
     // toPlatformData 映射:color/fontWeight/fontStyle/textDecoration/alpha/fontSize
     // (sp → 渲染缩放)+ PlatformSpanStyle 承载的 MC 渲染特性;平台无法表达的字段
     // (letterSpacing/background/lineHeight/...) 收集进 PlatformTextData.ignored(文档化忽略)。
-    // 已知边界(T.19):textModifier 分支(selection/onTextLayout/autoSize)暂不消费 scale/alpha。
+    // 已知边界:textModifier 分支(selection/onTextLayout/autoSize)暂不消费 scale/alpha。
     val density = LocalDensity.current
-    // 平台适配点(T.30):style 可空 —— 未显式传 style 用 LocalDefaultTextStyle 兜底;
+    // 平台适配点:style 可空 —— 未显式传 style 用 LocalDefaultTextStyle 兜底;
     // 未显式指定字体(platformStyle.font)补 LocalDefaultFont。
     val defaultTextStyle = LocalDefaultTextStyle.current
     val defaultFont = resolveDefaultFont()
-    // 默认字号 = 双模式统一解析(P3 像素化:经 resolveDefaultFontSize,
+    // 默认字号 = 双模式统一解析(像素化:经 resolveDefaultFontSize,
     // 原「TTF 16sp / 原版 18sp」后端分支随全局默认字体切换为 Fusion Pixel 而移除)
     val defaultFontSize = resolveDefaultFontSize()
     val effectiveStyle =
         remember(style, defaultTextStyle, defaultFont, defaultFontSize) {
             val withFont = (style ?: defaultTextStyle).withDefaultFont(defaultFont)
-            // 平台适配点(T.32):fontSize 未显式指定时补解析后的默认字号(显式 provide 优先)
+            // 平台适配点:fontSize 未显式指定时补解析后的默认字号(显式 provide 优先)
             if (withFont.fontSize.isUnspecified) withFont.merge(TextStyle(fontSize = defaultFontSize)) else withFont
         }
     val platformData = remember(effectiveStyle, density) { effectiveStyle.toPlatformData(density) }
     val mcStyle = platformData.mcStyle
     val scale = platformData.scale
     val textAlpha = platformData.alpha
-    // 平台适配点(T.TT):渐变画刷(TextStyle.brush 非 SolidColor),绘制走 brush 重载
+    // 平台适配点:渐变画刷(TextStyle.brush 非 SolidColor),绘制走 brush 重载
     val textBrush = platformData.brush
-    // 平台适配点(T.TT P2):子树级渲染后端定向(LocalTextRenderBackend)
+    // 平台适配点:子树级渲染后端定向(LocalTextRenderBackend)
     val textBackend = LocalTextRenderBackend.current
 
     BackgroundTextMeasurement(text = text, style = mcStyle, fontFamilyResolver = fontFamilyResolver)
@@ -223,7 +223,7 @@ fun BasicText(
 /**
  * MC 化的 BasicText:直接输入 MC [Component](富文本,可含多段样式)。
  *
- * 平台适配点(T.3):把 [Component] 按 [flatten] 展平为带自身样式的段列表,
+ * 平台适配点:把 [Component] 按 [flatten] 展平为带自身样式的段列表,
  * 每段与 [defaultStyle] 按属性合并 —— 段样式缺失的属性用 [defaultStyle] 补缺
  * (MC `Style.applyTo` 语义:自身属性优先、缺失用参数补)。布局用拼接文本,
  * 绘制按段切分样式。
@@ -237,8 +237,8 @@ fun BasicText(
  * @param maxLines 最大可见行数。
  * @param minLines 最小可见行数。
  * @param color 覆盖文本颜色的颜色生产者(覆盖所有段)。
- * @param fontSize 平台适配点(T.19):字体大小,经渲染矩阵缩放实现(布局尺寸与字形
- *   矩阵同步缩放);仅支持 sp 单位。emPx = sp × density × fontScale(P2-B3 绝对像素空间),
+ * @param fontSize 平台适配点:字体大小,经渲染矩阵缩放实现(布局尺寸与字形
+ *   矩阵同步缩放);仅支持 sp 单位。emPx = sp × density × fontScale(绝对像素空间),
  *   **18sp = 2x 平台基准字号**(整数放大),9sp = 1x 原生像素;
  *   默认 18sp 与 [androidx.compose.foundation.text.input.BasicTextField] 默认一致。
  */
@@ -259,10 +259,10 @@ fun BasicText(
 
     val fontFamilyResolver = LocalFontFamilyResolver.current
 
-    // 平台适配点(T.19/T.26):fontSize(sp) → 渲染缩放(18sp = 2x 基准);布局/绘制端消费 scale
+    // 平台适配点:fontSize(sp) → 渲染缩放(18sp = 2x 基准);布局/绘制端消费 scale
     val scale = fontSize.toTextScale(LocalDensity.current)
 
-    // 平台适配点(T.30):默认字体 —— defaultStyle 未指定 font 时补 LocalDefaultFont
+    // 平台适配点:默认字体 —— defaultStyle 未指定 font 时补 LocalDefaultFont
     val defaultFont = resolveDefaultFont()
     val effectiveDefaultStyle =
         remember(defaultStyle, defaultFont) {
@@ -271,7 +271,7 @@ fun BasicText(
             if (defaultStyle.fontOriginal == null) defaultStyle.withFont(defaultFont) else defaultStyle
         }
 
-    // 平台适配点(T.3):展平为带自身样式的段;每段缺失属性用 defaultStyle 补缺(applyTo 语义)
+    // 平台适配点:展平为带自身样式的段;每段缺失属性用 defaultStyle 补缺(applyTo 语义)
     val segments =
         remember(component, effectiveDefaultStyle) {
             component.flatten().map { seg ->
@@ -304,7 +304,7 @@ fun BasicText(
  * you will instead want to use [androidx.compose.material.Text], which is a higher level Text
  * element that contains semantics and consumes style information from a theme.
  *
- * 平台适配点(T.29 富文本):官方 CMP 此重载为 internal(AnnotatedString 是内部实现通道),
+ * 平台适配点(富文本):官方 CMP 此重载为 internal(AnnotatedString 是内部实现通道),
  * 本平台提升为 public —— 富文本(spanStyles 逐段混排)的公开入口。段级支持
  * color/bold/italic/decoration/PlatformSpanStyle(MC 特性),段间无样式覆盖文本走
  * [style] 默认样式;字号(scale)逐段不同暂不支持(布局统一 base scale)。
@@ -368,29 +368,29 @@ fun BasicText(
 
     val fontFamilyResolver = LocalFontFamilyResolver.current
 
-    // 平台适配点(T.28):TextStyle → MC Style(见公开 String 版注释)
+    // 平台适配点:TextStyle → MC Style(见公开 String 版注释)
     val density = LocalDensity.current
-    // 平台适配点(T.30):style 可空 —— 未显式传 style 用 LocalDefaultTextStyle 兜底;
+    // 平台适配点:style 可空 —— 未显式传 style 用 LocalDefaultTextStyle 兜底;
     // 未显式指定字体(platformStyle.font)补 LocalDefaultFont。
     val defaultTextStyle = LocalDefaultTextStyle.current
     val defaultFont = resolveDefaultFont()
-    // 默认字号 = 双模式统一解析(P3 像素化:经 resolveDefaultFontSize,
+    // 默认字号 = 双模式统一解析(像素化:经 resolveDefaultFontSize,
     // 原「TTF 16sp / 原版 18sp」后端分支随全局默认字体切换为 Fusion Pixel 而移除)
     val defaultFontSize = resolveDefaultFontSize()
     val effectiveStyle =
         remember(style, defaultTextStyle, defaultFont, defaultFontSize) {
             val withFont = (style ?: defaultTextStyle).withDefaultFont(defaultFont)
-            // 平台适配点(T.32):fontSize 未显式指定时补解析后的默认字号(显式 provide 优先)
+            // 平台适配点:fontSize 未显式指定时补解析后的默认字号(显式 provide 优先)
             if (withFont.fontSize.isUnspecified) withFont.merge(TextStyle(fontSize = defaultFontSize)) else withFont
         }
     val platformData = remember(effectiveStyle, density) { effectiveStyle.toPlatformData(density) }
     val mcStyle = platformData.mcStyle
 
-    // 平台适配点(T.29 富文本):spanStyles 段 → 全覆盖 StyleSegment(段样式叠加 mcStyle,
+    // 平台适配点(富文本):spanStyles 段 → 全覆盖 StyleSegment(段样式叠加 mcStyle,
     // 段间无样式覆盖的文本用 mcStyle;渲染端 recordSegmentedTextDraw 要求段全覆盖)
     val segments = remember(text, style, density) { text.toStyleSegments(mcStyle) }
 
-    // 平台适配点(T.29):字号渲染缩放(18sp → 2x)。AnnotatedString 版走
+    // 平台适配点:字号渲染缩放(18sp → 2x)。AnnotatedString 版走
     // MultiParagraphLayoutCache,scale 必须透传到布局/绘制(否则字号恒 1x)
     val textScale = platformData.scale
 
@@ -765,9 +765,9 @@ private fun Modifier.textModifier(
     color: ColorProducer?,
     onShowTranslation: ((TextAnnotatedStringNode.TextSubstitutionValue) -> Unit)?,
     autoSize: TextAutoSize?,
-    // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖)
+    // 平台适配点(富文本):spanStyles 切分后的段列表(全覆盖)
     segments: List<StyleSegment> = emptyList(),
-    // 平台适配点(T.29):字号渲染缩放(18sp → 2x),透传给布局/绘制
+    // 平台适配点:字号渲染缩放(18sp → 2x),透传给布局/绘制
     scale: Float = 1f,
 ): Modifier {
     if (selectionController == null) {
@@ -831,9 +831,9 @@ private fun LayoutWithLinksAndInlineContent(
     color: ColorProducer?,
     onShowTranslation: ((TextAnnotatedStringNode.TextSubstitutionValue) -> Unit)?,
     autoSize: TextAutoSize?,
-    // 平台适配点(T.29 富文本):spanStyles 切分后的段列表(全覆盖)
+    // 平台适配点(富文本):spanStyles 切分后的段列表(全覆盖)
     segments: List<StyleSegment> = emptyList(),
-    // 平台适配点(T.29):字号渲染缩放(18sp → 2x)
+    // 平台适配点:字号渲染缩放(18sp → 2x)
     scale: Float = 1f,
 ) {
 
@@ -945,9 +945,9 @@ internal fun BackgroundTextMeasurement(
 }
 
 /**
- * 平台适配点(T.19/T.25):MC 字形 1x 行高(px)。
+ * 平台适配点:MC 字形 1x 行高(px)。
  *
- * MC 无原生字号系统,文字大小经渲染矩阵缩放实现(T.10 的 scale 链路)。
+ * MC 无原生字号系统,文字大小经渲染矩阵缩放实现(scale 链路)。
  * MC 字形为 8x8 位图,1x 行高固定 9px —— 位图非整数缩放会糊,常用字号应落在
  * 整数缩放上。**MC 平台的基准字号 = 18sp(2x,行高 18px)**:18sp 是 MC 界面
  * 自然的放大观感字号(16sp 是强行对齐 Compose 惯例,非本平台自然字号):
@@ -956,18 +956,18 @@ internal fun BackgroundTextMeasurement(
 // 基准行高动态跟随原版 Font.lineHeight(兼容修改行高的模组)
 
 /**
- * 平台适配点(T.19):TextUnit(sp) → 文本渲染缩放。
+ * 平台适配点:TextUnit(sp) → 文本渲染缩放。
  *
- * MC 无原生字号系统,文字大小经渲染矩阵缩放实现(T.10 的 scale 链路)。
+ * MC 无原生字号系统,文字大小经渲染矩阵缩放实现(scale 链路)。
  * 换算 = fontSizeToEmPx 唯一入口(1sp == 1px @density1)
  * (MC 平台基准字号;16sp ≈ 1.78x 非整数缩放、非自然字号,尽量避免);
  * 仅支持 sp 单位 —— em 需要基准字号链(TextStyle 已随平台移除),无法解析。
  */
-// 平台适配点(T.26):internal —— BasicTextField 同包复用(fontSize → 渲染缩放)
+// 平台适配点:internal —— BasicTextField 同包复用(fontSize → 渲染缩放)
 internal fun TextUnit.toTextScale(density: Density): Float {
     require(type == TextUnitType.Sp) {
         "Platform (T.19): fontSize only supports sp units (MC has no native font size system, em cannot be resolved)"
     }
-    // sp → px → 缩放:唯一换算入口(P2-B1 公式合一)
+    // sp → px → 缩放:唯一换算入口(公式合一)
     return density.fontSizeToEmPx(value)
 }

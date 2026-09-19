@@ -174,7 +174,7 @@ fun RotationTestDevScene() {
                     modifier = Modifier.padding(top = 6.dp),
                     style = Style.EMPTY.withColor(Color(0xFF455A64)).toTextStyle(),
                 )
-                // ── 3b. 阴影颜色演示(T.18):Modifier.shadow 的 ambientColor/spotColor ──
+                // ── 3b. 阴影颜色演示:Modifier.shadow 的 ambientColor/spotColor ──
                 // ambient(无偏移)= 蓝色、spot(投影偏移)= 橙红色;两张网格颜色各自生效。
                 Box(
                     Modifier

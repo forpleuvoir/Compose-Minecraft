@@ -13,16 +13,16 @@ import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 /**
- * 渲染端(GPU 回放 / 3D 顶点路径)颜色求值工具(P1 自 `MinecraftRenderContext` 原样搬移,2025-08)。
+ * 渲染端(GPU 回放 / 3D 顶点路径)颜色求值工具(自 `MinecraftRenderContext` 原样搬移)。
  *
  * 承载:渐变采样与顶点色([sampleGradient] / [gradientVertexColors] / [gradientTAt])、
- * 颜色滤镜([applyColorFilter],T.21 draw 级)、最终 0xAARRGGBB 求值([Color.toArgb])、
+ * 颜色滤镜([applyColorFilter], draw 级)、最终 0xAARRGGBB 求值([Color.toArgb])、
  * 逐顶点 alpha 缩放([scaleAlpha])。函数体逐字保留(可见性 private→internal)。
  *
  * 语义标注:
- * - [lerpColor] 使用 **RGB 直插(含 alpha)**（2026-09-15 与用户确认，覆盖原 2025-08 的
- *   "HSV 空间插值"方案）：非色相通道的渐变（饱和度 / 明度 / RGB 通道条 / 透明）两端各一个色标即可；
- *   色相渐变（彩虹 / hue sweep）由调用方给多个色标表达（如 0/60/…/360 共 7 个）；
+ * - [lerpColor] 使用 **RGB 直插(含 alpha)**,不采用 HSV 空间插值:
+ *   非色相通道的渐变(饱和度 / 明度 / RGB 通道条 / 透明)两端各一个色标即可;
+ *   色相渐变(彩虹 / hue sweep)由调用方给多个色标表达(如 0/60/…/360 共 7 个);
  * - 与 CPU 快照路径 `RasterGradientSampler.lerpColorARGB`（同为 RGB 直插）语义一致；
  * - 官方 `androidx.compose.ui.graphics.lerp` 为 Oklab 插值，与本对象不同；
  * - 快照路径另有 `RasterGradientSampler.kt` 的 `Color.toArgbInt`（truncate 取整），与
@@ -137,12 +137,12 @@ internal object ColorEvaluator {
                 var dy = shader.to.y - shader.from.y
                 var fromX = shader.from.x
                 var fromY = shader.from.y
-                var minX = Float.MAX_VALUE;
+                var minX = Float.MAX_VALUE
                 var maxX = -Float.MAX_VALUE
-                var minY = Float.MAX_VALUE;
+                var minY = Float.MAX_VALUE
                 var maxY = -Float.MAX_VALUE
                 var i = 0; while (i + 2 < vertices.size) {
-                    val vx = vertices[i];
+                    val vx = vertices[i]
                     val vy = vertices[i + 1]
                     if (vx < minX) minX = vx; if (vx > maxX) maxX = vx
                     if (vy < minY) minY = vy; if (vy > maxY) maxY = vy
@@ -161,7 +161,7 @@ internal object ColorEvaluator {
                 if (dot > 0f) {
                     val invDot = 1f / dot
                     for (i in 0 until vc) {
-                        val vx = vertices[i * 3];
+                        val vx = vertices[i * 3]
                         val vy = vertices[i * 3 + 1]
                         val t = ((vx - fromX) * dx + (vy - fromY) * dy) * invDot
                         colors[i] = sampleGradient(t, shader.colors, shader.colorStops, shader.tileMode, alphaMul, colorFilter)
@@ -174,7 +174,7 @@ internal object ColorEvaluator {
 
             is RadialGradientShaderData -> {
                 for (i in 0 until vc) {
-                    val vx = vertices[i * 3];
+                    val vx = vertices[i * 3]
                     val vy = vertices[i * 3 + 1]
                     val dx = vx - shader.center.x
                     val dy = vy - shader.center.y
@@ -185,7 +185,7 @@ internal object ColorEvaluator {
 
             is SweepGradientShaderData  -> {
                 for (i in 0 until vc) {
-                    val vx = vertices[i * 3];
+                    val vx = vertices[i * 3]
                     val vy = vertices[i * 3 + 1]
                     val dx = vx - shader.center.x
                     val dy = vy - shader.center.y
@@ -212,7 +212,7 @@ internal object ColorEvaluator {
     )
     fun lerpColor(a: Color, b: Color, t: Float): Color {
         val ct = t.coerceIn(0f, 1f)
-        // RGB 直插(与 CPU 光栅化路径 RasterGradientSampler.lerpColorARGB 一致,2026-09-15 与用户确认统一):
+        // RGB 直插(与 CPU 光栅化路径 RasterGradientSampler.lerpColorARGB 一致):
         // 只让单一通道线性变化的色标(饱和度条 / 明度条 / RGB 通道条 / 透明渐变)两端各一个即可 ——
         // HSV 插值在这些端点上会丢信息(如黑色反解为 h=0,s=0),把"只变一个通道"插成色相扫过一圈。
         // 色相渐变(彩虹 / hue sweep)由调用方用多个色标表达,如 0/60/…/360 共 7 个。

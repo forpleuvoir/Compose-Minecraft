@@ -52,7 +52,7 @@ import net.minecraft.network.chat.Style
  *   停住不动 = 已停画(跳过了 `GameRenderer.renderLevel`);
  * - 关闭动画是否播完才关屏:看内容是否完整演完退场,再回到 dev 菜单;
  * - 对话框关闭回调:关掉后本屏顶部会显示"上一个对话框关闭回调"的时间戳 ——
- *   本屏作为可复活父屏,场景与状态都被保留,所以这条能作为 T.25 的顺便验证。
+ *   本屏作为可复活父屏,场景与状态都被保留,所以这条顺便验证了可复活父屏能力。
  */
 @Composable
 fun ScreenLifecycleDevScene() {

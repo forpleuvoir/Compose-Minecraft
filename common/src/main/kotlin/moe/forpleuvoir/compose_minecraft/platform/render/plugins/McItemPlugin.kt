@@ -14,6 +14,7 @@ import net.minecraft.world.entity.player.Player
 import net.minecraft.world.item.ItemDisplayContext
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.level.Level
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
 
 /** 物品渲染数据:经 [ItemRenderState] 提交,渲染器 prepare 阶段统一 atlas 烘焙。 */
 data class ItemStackDrawData(
@@ -25,7 +26,7 @@ data class ItemStackDrawData(
 )
 
 /**
- * 内置物品插件(T.37):构造扁平化的 [ItemRenderState](pose + 物品渲染状态 + 局部坐标 +
+ * 内置物品插件:构造扁平化的 [ItemRenderState](pose + 物品渲染状态 + 局部坐标 +
  * 尺寸 + 调制色 + scissor)经 [GuiCommandSink.addItem] 提交。**不经 GuiGraphicsExtractor**
  * (避免其 guiScale 管线),atlas 烘焙与 blit 由渲染器 prepare 阶段统一完成(1:1 像素)。
  */

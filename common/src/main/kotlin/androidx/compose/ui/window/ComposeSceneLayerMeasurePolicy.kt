@@ -108,7 +108,7 @@ private fun Density.platformDefaultConstrains(
 // Ported from Android. See https://cs.android.com/search?q=abc_config_prefDialogWidth
 // Minecraft 平台适配点:官方 M3 的 580/440/320 是按手机 dp 定的,而本平台 ui 空间 = 窗口像素(1dp = 1px),
 // 且像素风 UI 的间距 / 字号整体偏大,默认宽度会把弹窗挤得极窄(取色器需要 712dp 级别)。
-// 用户 2026-09-15 要求整体放大约 2/3,取值取 16 的整数倍以贴合素材栅格。
+// 故在官方数值上整体放大约 2/3,取值取 16 的整数倍以贴合素材栅格。
 private fun Density.preferredDialogWidth(constraints: Constraints): Int {
     val smallestWidth = min(constraints.maxWidth, constraints.maxHeight).toDp()
     return when {

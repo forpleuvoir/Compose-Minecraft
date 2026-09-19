@@ -40,7 +40,7 @@ import net.minecraft.network.chat.TextColor
 import com.mojang.logging.LogUtils
 
 /**
- * Compose [TextStyle] → 平台渲染参数映射(T.28 文本 TextStyle 化)。
+ * Compose [TextStyle] → 平台渲染参数映射(文本 TextStyle 化)。
  *
  * 平台渲染能力 = MC `Style`(颜色/加粗/斜体/下划线/删除线)+ 渲染矩阵缩放
  * (字号,18sp = 2x 平台基准)+ 渲染 alpha(透明度)。[TextStyle] 里平台
@@ -71,18 +71,18 @@ data class PlatformTextData(
     val scale: Float,
     /** 文本透明度(spanStyle.alpha,默认 1f),与图层 alpha 相乘。 */
     val alpha: Float,
-    /** 平台适配点(T.TT):渐变画刷(spanStyle.brush,非 SolidColor),绘制端逐字形取色;null = 无。 */
+    /** 平台适配点:渐变画刷(spanStyle.brush,非 SolidColor),绘制端逐字形取色;null = 无。 */
     val brush: Brush? = null,
     /** 平台无法表达、被文档化忽略的字段名。 */
     val ignored: List<String>,
 )
 
-/** 平台默认字号(sp):随当前默认字体的 defaultSizeSp(A6/I5,P2-B5) */
+/** 平台默认字号(sp):随当前默认字体的 defaultSizeSp(A6/I5) */
 fun platformDefaultFontSizeSp(): Float =
     FontResolver.defaultFont().defaultSizeSp
 
 /**
- * 字号 → **最终像素 em(emPx)** 唯一换算入口(P2-B3,A4 尺寸空间唯一):
+ * 字号 → **最终像素 em(emPx)** 唯一换算入口(A4 尺寸空间唯一):
  * `emPx = sp × density × fontScale`(1sp == 1px @density1,**无基准除法**)。
  *
  * 全部调用点(TextStyleMapper/toTextScale/autoSize)已收敛至此;
@@ -98,6 +98,9 @@ fun TextStyle.toPlatformData(density: Density): PlatformTextData {
     val span = spanStyle
     val ignored = buildList {
         // 段落级:布局端不支持(MC 行高固定 9px×scale、单行方向、无首行缩进)
+        // 存疑(未修复):textAlign / textIndent / lineBreak / hyphens 为不可空类型,
+        // 其判空恒真 —— 此处实际语义是"设置过就记录",与其余项的判空语义不一致。
+        // 当前行为正常,复现"被丢弃样式统计不准"时优先看此处。
         if (paragraphStyle.textAlign != null) add("textAlign")
         if (paragraphStyle.textDirection != TextDirection.Unspecified) add("textDirection")
         if (!paragraphStyle.lineHeight.isUnspecified) add("lineHeight")
@@ -117,12 +120,12 @@ fun TextStyle.toPlatformData(density: Density): PlatformTextData {
         if (span.background != Color.Unspecified) add("background")
         if (span.shadow != null) add("shadow")
         if (span.drawStyle != null) add("drawStyle")
-        // T.28:PlatformSpanStyle 承载 MC 原版 Style 渲染特性(obfuscated/shadowColor/
+        // PlatformSpanStyle 承载 MC 原版 Style 渲染特性(obfuscated/shadowColor/
         // clickEvent/hoverEvent/insertion/font),已映射进 mcStyle;仅 blendRadius 忽略
         if (span.platformStyle?.blendRadius != null) add("platformSpanStyle.blendRadius")
         if (platformStyle != null) add("platformStyle")
     }
-    // fail-loud(font-system 重构 T.RF-F):被忽略字段逐字段去重告警一次,
+    // fail-loud(font-system 重构):被忽略字段逐字段去重告警一次,
     // 消除「静默失效」—— 业务样式写了却不生效时日志可见,而非无声吞掉
     ignored.forEach { name ->
         if (IGNORED_FIELD_WARNED.add(name)) {
@@ -148,7 +151,7 @@ fun TextStyle.toPlatformData(density: Density): PlatformTextData {
         if (decoration.contains(TextDecoration.Underline)) mcStyle = mcStyle.withUnderlined(true)
         if (decoration.contains(TextDecoration.LineThrough)) mcStyle = mcStyle.withStrikethrough(true)
     }
-    // T.28:MC 原版 Style 渲染/交互特性(经 PlatformSpanStyle 承载,双向不丢失)
+    // MC 原版 Style 渲染/交互特性(经 PlatformSpanStyle 承载,双向不丢失)
     span.platformStyle?.let { ps ->
         if (ps.obfuscated != null) mcStyle = mcStyle.withObfuscated(ps.obfuscated)
         if (ps.shadowColor != null) mcStyle = mcStyle.withShadowColor(ps.shadowColor.toArgb())
@@ -158,14 +161,14 @@ fun TextStyle.toPlatformData(density: Density): PlatformTextData {
         if (ps.font != null) mcStyle = mcStyle.withFont(ps.font)
     }
 
-    // 字号:sp → 渲染缩放(公式同 TextUnit.toTextScale,见 T.19/T.26);Unspecified/em → 平台默认
+    // 字号:sp → 渲染缩放(公式同 TextUnit.toTextScale,见);Unspecified/em → 平台默认
     val fontSizeSp =
         if (span.fontSize.isUnspecified || span.fontSize.type != TextUnitType.Sp) {
             platformDefaultFontSizeSp()
         } else {
             span.fontSize.value
         }
-    // 字号缩放 = 唯一换算入口(P2-B1 公式合一;像素 em 12 / stb 模式原版行高 9)
+    // 字号缩放 = 唯一换算入口(公式合一;像素 em 12 / stb 模式原版行高 9)
     val scale = density.fontSizeToEmPx(fontSizeSp)
 
     return PlatformTextData(
@@ -173,9 +176,9 @@ fun TextStyle.toPlatformData(density: Density): PlatformTextData {
         scale = scale,
         // 官方语义:未指定 alpha(无颜色/无 brush)时 span.alpha = Float.NaN
         // (TextForegroundStyle.Unspecified),须按 1f 处理,否则 NaN 直传渲染端
-        // 致 alphaByte=0 全透明空白(T.28)
+        // 致 alphaByte=0 全透明空白
         alpha = if (span.alpha.isNaN()) 1f else span.alpha,
-        // 平台适配点(T.TT):渐变画刷透传(SolidColor 已并入 color,其余 Brush
+        // 平台适配点:渐变画刷透传(SolidColor 已并入 color,其余 Brush
         // 由绘制端逐字形采样取色);null = 无
         brush = span.brush?.takeIf { it !is SolidColor },
         ignored = ignored,
@@ -183,7 +186,7 @@ fun TextStyle.toPlatformData(density: Density): PlatformTextData {
 }
 
 /**
- * MC `Style` → Compose [TextStyle] 尽力映射(T.28,反向工具)。
+ * MC `Style` → Compose [TextStyle] 尽力映射(反向工具)。
  * 颜色补全 alpha(TextColor 无 alpha,默认不透明);bold → FontWeight.Bold;
  * italic → FontStyle.Italic;underlined/strikethrough → TextDecoration;
  * MC 独有渲染特性(obfuscated/shadowColor/clickEvent/hoverEvent/insertion/font)
@@ -222,7 +225,7 @@ fun Style.toTextStyle(): TextStyle {
 // 复用 StyleExtensions 的 toRgb/toColor(同包 internal)
 
 /**
- * 段级映射(T.29 富文本):把 [SpanStyle] 增量应用到基础 MC [Style]。
+ * 段级映射(富文本):把 [SpanStyle] 增量应用到基础 MC [Style]。
  * 规则与 [TextStyle.toPlatformData] 的 mcStyle 构建一致(color/bold/italic/
  * decoration/platformStyle),**不含字号** —— 段级字号暂不参与布局
  * (布局统一 base scale,文档标注)。
@@ -256,7 +259,7 @@ fun SpanStyle.toMcStyle(base: Style): Style {
 }
 
 /**
- * 富文本(T.29):把 [AnnotatedString] 的 spanStyles(Compose 段样式)切分为
+ * 富文本:把 [AnnotatedString] 的 spanStyles(Compose 段样式)切分为
  * **全覆盖**的 [StyleSegment] 列表 —— 段间无样式覆盖的文本用 [baseStyle],
  * 满足渲染端 recordSegmentedTextDraw 的段覆盖要求(它只兜底行尾)。
  * 优先级:同一区间被多个 span 覆盖时,后声明者优先(与官方注解合并语义一致)。
@@ -293,7 +296,7 @@ fun AnnotatedString.toStyleSegments(baseStyle: Style): List<StyleSegment> {
 }
 
 /**
- * 默认字体填充(T.30):[TextStyle] 未显式指定字体(`spanStyle.platformStyle.font`
+ * 默认字体填充:[TextStyle] 未显式指定字体(`spanStyle.platformStyle.font`
  * 为 null)时补 [font];已指定则原样返回。保留其余字段与 platformStyle 的
  * 其它 MC 特性(obfuscated/shadowColor 等)。供 BasicText 组合端读取
  * [LocalDefaultFont] 后调用。

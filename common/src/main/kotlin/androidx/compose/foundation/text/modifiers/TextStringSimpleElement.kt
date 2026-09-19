@@ -43,15 +43,15 @@ internal class TextStringSimpleElement(
     private val maxLines: Int = Int.MAX_VALUE,
     private val minLines: Int = DefaultMinLines,
     private val color: ColorProducer? = null,
-    /** 平台适配点(T.3):MC Component 展平后的多段样式;空 = 单样式(旧行为)。 */
+    /** 平台适配点:MC Component 展平后的多段样式;空 = 单样式(旧行为)。 */
     private val segments: List<StyleSegment> = emptyList(),
-    /** 平台适配点(T.10):文本缩放;1f = 原样。 */
+    /** 平台适配点:文本缩放;1f = 原样。 */
     private val scale: Float = 1f,
-    /** 平台适配点(T.28):文本透明度(TextStyle.alpha,默认 1f),绘制时合成进颜色。 */
+    /** 平台适配点:文本透明度(TextStyle.alpha,默认 1f),绘制时合成进颜色。 */
     private val alpha: Float = 1f,
-    /** 平台适配点(T.TT):渐变画刷(TextStyle.brush 非 SolidColor),绘制走 brush 重载。 */
+    /** 平台适配点:渐变画刷(TextStyle.brush 非 SolidColor),绘制走 brush 重载。 */
     private val brush: Brush? = null,
-    /** 平台适配点(T.TT P2):子树级渲染后端定向 */
+    /** 平台适配点:子树级渲染后端定向 */
     private val backend: TextRenderBackend = TextRenderBackend.DEFAULT,
 ) : ModifierNodeElement<TextStringSimpleNode>() {
 
