@@ -287,11 +287,41 @@ build_project(rebuild=true)
   `m01=sx·sy`(row-major M 的 M01)是否正确是判断文本 2x2 转置的关键指纹。
 - **清理**:定位后移除 T15-* 调试打印与计数(debugProbeFrames 等)再提交。
 
+## 输入法(IME)与 IMBlocker 兼容
+
+平台默认走 MC 原生 IME 通道:`MinecraftTextInputService` 经 `mc.textInputManager()` 调用
+`startTextInput` / `stopTextInput` / `setTextInputArea`,preedit 经 `preeditUpdated` 转发成
+Compose 组合态。**但装了 IMBlocker 之后这条通道整体失效**:其 `TextInputManagerMixin` 把
+`setIMEInputMode` / `setTextInputArea` / `startTextInput` / `stopTextInput` 四个方法全部
+`@Inject(HEAD, cancellable) → ci.cancel()`,输入法开关与候选窗位置改由 IMBlocker 的焦点模型
+决定。Compose 文本框不是 MC 控件,IMBlocker 看不见它,故平台内置一层登记(soft dependency):
+
+- `platform/textinput/imblocker/IMBlockerCompat.kt` —— 反射分发层,不引用任何 IMBlocker 类型;
+  模组缺席时 `Class.forName` 失败即降级为 no-op(依赖为 `compileOnly`,不写进发布 POM),
+  加载状态打一条启动日志(`IMBlocker detected` / `absent`);
+- `platform/textinput/imblocker/IMBlockerFocusSession.kt` —— 全工程唯一直接引用 IMBlocker
+  类型的源码:`ComposeFocusableWidget : FocusableWidget`,登记进 `FocusContainer.MINECRAFT`
+  (7.3 的焦点是**候选制**,由容器在候选间定位真焦点,部分屏幕会走"字符模拟"定位);
+  **坐标契约**:文本框矩形与光标位置用**物理像素**(场景根坐标即窗口物理像素,光标取
+  `focusedRectInRoot()` 与 `textFieldRectInRoot()` 之差),`getFontHeight()` 用 **UI 像素**
+  (`物理字高 / guiScale`),`getGuiScale()` 取窗口 `guiScale` —— 候选窗高 = 两者相乘;
+- 四个入口:会话建立时 `bindRequest` 登记、会话结束注销;光标变化时 `updateCaretPosition`;
+  收到字符时 `onCharTyped`(IMBlocker 的焦点定位会向窗口发探测字符,收到即证明焦点归属,
+  否则它判定无人接收、把焦点退还给容器 → 输入法被关);`refreshFocus` 在点击 / 按键到达时
+  **按需重登记** —— 文本框若在屏幕打开时已自动聚焦,之后再点击不会触发 `startInputMethod`,
+  而候选可能已被 IMBlocker 换屏时的 `clearFocus()` 清掉(表现为第一次点击文本框不出输入法)。
+
+**开发与验证**:坐标 `maven.modrinth:WMDesFsZ`,版本 id 按 loader 变体取(common / neoforge
+用 `VyswcG4w`,fabric 用 `45vUAF8X`);仓库在 `buildSrc/.../multiloader-common.gradle` 的
+repositories 中声明(注意 `settings.gradle.kts` 里那个 Modrinth 仓库只管插件、不管依赖)。
+依赖为 `compileOnly`,要测就把 IMBlocker 放进运行实例的 `mods/`。
+
 ## 已知限制
 
 - 文本输入:charTyped 已接通(经 typed KeyEvent 转发);IME 组合态(preedit)已实现
   (`MinecraftTextInputService` 经 `preeditUpdated` 转发,下划线组合文本 + 候选窗
-  `setTextInputArea` 像素直传 T.31),候选窗口由系统输入法负责;指针图标已实现
+  `setTextInputArea` 像素直传 T.31),候选窗口由系统输入法负责;**装了 IMBlocker 时上述原生
+  通道会被其 mixin 取消,改由平台的 IMBlocker 兼容层驱动,详见「输入法(IME)与 IMBlocker 兼容」**;指针图标已实现
   (I9:Compose `PointerIcon` → MC 原版 `CursorTypes` ARROW/CROSSHAIR/IBEAM/
   POINTING_HAND,经 `GuiGraphicsExtractor.requestCursor` 走原版 per-frame 管线,
   尊重原版「允许光标变化」设置项);双击已支持(Compose 手势层自检:
