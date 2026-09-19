@@ -286,8 +286,8 @@ class ComposeScreen(
      * 也不渲染了。运行时切换 [disableWorldRender] 同样靠这里在一帧内生效。
      */
     private fun syncWorldBackdrop() {
-        // 关闭流程中也借回世界:出场动画期间应能透出世界(与旧实现 renderingLevel = isClosing 同义),
-        // 否则"禁用世界渲染的屏"一关就是硬切,业务还得自己记得为出场动画借一次
+        // 关闭流程中也借回世界:出场动画期间应能透出世界。
+        // 否则禁用世界渲染的屏关闭时全程无世界,业务还得自己为出场动画再借一次
         val needWorld = !disableWorldRender || closeCoordinator.isClosing
         if (needWorld) {
             if (worldBackdropHandle == null) {
@@ -697,11 +697,11 @@ class ComposeScreen(
         // (作为父屏被渲染时,本屏的 extractRenderState 会重新 sync 借回)
         releaseWorldBackdrop()
         if (reopenable) {
-            // 可复活:场景保留,本屏只是被上层盖住 —— 复位为"打开",**不能标记已关闭**:
-            // 否则它作为父屏被渲染时会在 extractRenderState 开头走收尾分支直接 return,
-            // 既不渲染也不推进组合(交叉过渡因此失效,父屏半透明露出也一起坏掉)。
-            // 但若"关闭已决定"(Closed)却在 performClose 之前就被抢占了,必须补一次关屏回调
-            // —— reset 会把 Closed 状态抹掉,不补的话业务的 dismiss 回调永远收不到。
+            // 可复活:场景保留,本屏只是被上层盖住,复位为"打开"。
+            // 不能标记为已关闭:该标记会让本屏作为父屏被渲染时(extractRenderState 开头)
+            // 走收尾分支直接 return,既不渲染也不推进组合。
+            // 若关闭已推进到 Closed 却尚未执行 performClose,先补发关屏回调 —— reset 会
+            // 复位已关闭状态,不补发则 onClosed 不触发。
             if (closeCoordinator.isClosed) {
                 closeCoordinator.invokeClosedCallback()
             }

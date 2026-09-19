@@ -316,6 +316,86 @@ Compose 组合态。**但装了 IMBlocker 之后这条通道整体失效**:其 `
 repositories 中声明(注意 `settings.gradle.kts` 里那个 Modrinth 仓库只管插件、不管依赖)。
 依赖为 `compileOnly`,要测就把 IMBlocker 放进运行实例的 `mods/`。
 
+## 屏幕生命周期(世界渲染 / 进出场动画 / 关闭流程)
+
+### 世界渲染开关
+
+- 默认照常渲染(与原版一致)。两级开关:全局 `ComposeScreenDefaults.disableWorldRenderByDefault`
+  (`var`,业务模组可绑定配置文件)与逐屏 `ComposeScreen.disableWorldRender`(运行时可切,赋值即同步借用计数)。
+- 借用登记处 `WorldBackdrop`:原子引用计数,`acquire()` 返回幂等句柄;组合级 `WorldBackdropEffect(active)`;
+  动画级 `WorldBackdropWhileAnimating(state)`(非 idle 期间持有)。**任一方借用即渲染** ——
+  子屏 `disableWorldRender = true` 但父屏(默认值)在借用时世界照旧渲染,这是计数语义的必然结果。
+- 生效点 `GameRendererMixin`:`@Inject(method = "renderLevel", at = HEAD, cancellable)`,条件 =
+  无人借用 **且** 当前屏是 `ComposeScreen`。26.2 已无 `shouldRenderLevel` 局部量,不能再改标志位;
+  `renderLevel` 只有两个调用点(`GameRenderer.render` 与 `Minecraft.grabPanoramixScreenshot`),
+  后者不在 Compose 屏场景故不受影响。
+- ⚠️ 整方法取消会一并跳过 `renderLevel` 内的雾 / 投影 / 深度设置(GUI 走自己的正交投影与清屏),
+  也会连带跳过其他模组对 `renderLevel` 的注入。
+- 借用时机在 `added()`(屏成为当前屏),不在构造 —— 只构造未打开的屏(如 `DialogComposeScreen()`
+  工厂返回后未 `setScreen`)不应占用引用。
+
+### 进出场动画
+
+- `ScreenAnimation`:`Default`(整屏自下而上滑入 + 淡入,出场反向)/ `Preset(durationMillis, slideFraction)` /
+  `Custom(wrapper)` / `None`;数值取全局 `ScreenAnimationDefaults`(全 `var`:`durationMillis` 220、
+  `slideFraction` 0.08、`fade`、`easing`);逐屏参数 `ComposeScreen.animation`(默认取
+  `ComposeScreenDefaults.animation`)。
+- 驱动模型:`ScreenAnimationHost` 在内容外层持**一个 `Animatable` 进度**,配合
+  **「请求信号 `animationSignal` + 目标进度 `animationTarget`」** —— 每次请求朝当前目标动画,
+  后到者胜(入场 0→1 与视觉退场 1→0 共用一个进度、一个协程入口,避免两个协程抢同一个 Animatable);
+  首次组合(信号为 0)从 0 入场。真正关闭的出场由挂起式参与者 `ScreenExitEffect` 驱动。
+- 位移与透明度写在**同一个 `graphicsLayer`** 内:本平台 `alpha(<1)` 等价于 clip 图层,
+  分开写会把 `translationY` 裁掉。
+- `ComposeScreen.animationProgress`(公开只读,1 = 完全显示)由宿主逐帧写入,业务可读来做联动。
+
+### 父子交叉过渡
+
+- **打开方向**:子屏 `added()` 时让父屏播一次视觉退场(`prepareExitAnimation`,只改画面、不动关闭流程);
+  `exitParentOnOpen` 可关掉,**`renderParentScreen = true` 时自动不生效** —— 父屏要常驻露出,
+  退场后即使被画出来也是全透明。
+- **关闭方向**:子屏 `requestClose()` 时让父屏入场(`prepareEnterAnimation`)。
+- 两方向都要求子屏把父屏**渲染出来**才看得见:`shouldRenderParent` = `renderParentScreen`
+  ∨ 关闭流程中 ∨ **本屏入场进行中(`animationProgress < 1`)**。第三条刻意取**本屏自己的**进度:
+  父屏的动画要靠本屏渲染它才会推进,取父屏的进度会形成"没渲染 → 没帧 → 进度不动 → 更不渲染"的死锁。
+- 运行期把 `renderParentScreen` 由 false 改为 true 时会把父屏叫回来(它可能已退场、进度停在 0)。
+- 观感调节:`ScreenAnimationDefaults.slideFraction = 0f` → 纯交叉淡入淡出(两侧同时滑动时容易看成"先后")。
+
+### 关闭流程(退出动画播完再关屏)
+
+- `ScreenCloseCoordinator`(Open / Closing / Closed)+ **句柄栅栏**;`ComposeScreen.onClose()` 与
+  `ComposeScreen.closeCurrent()` 改走 `requestClose()`;**真正的关屏**(`setScreen(parent)` 或
+  `super.onClose()`)在 `Closed` 之后由 `extractRenderState` 执行 —— 该处即游戏主线程。
+- 参与者三层,可并存:
+  1. 声明式 `rememberScreenVisibilityState()`:配合 `AnimatedVisibility(visibleState = …)`,
+     动画 `isIdle && !targetState` 视为完成;可复活屏按 `ScreenCloseCoordinator.generation` 重新入场;
+  2. 挂起式 `ScreenExitEffect { … }`:关闭时启动协程,块结束即完成,覆盖任意动画序列;
+  3. 零 API:无参与者时平台按"连续 2 帧场景无待处理工作"自动判定。
+- **统一 5 秒上限**:三层都受它约束。屏内存在无限动画(转圈、闪烁光标、`withFrameNanos` 循环)时
+  "静默"永不成立,只能靠该上限收尾 —— 要即时关闭就给屏配任何动画(平台动画本身已注册句柄)或自接前两层。
+- 关闭期间鼠标 / 键盘 / 滚轮输入一律吞掉(防连点);`onClosed(block)` 是**一次性**回调。
+- `removed()` 分流:可复活屏只复位状态(`closed = false` + `coordinator.reset()`,场景保留),
+  非可复活屏才销毁场景并强制收尾;`reset()` 前若已 Closed 会先补发关屏回调。
+- ⚠️ `performClose()` 运行在**本帧 GUI 提取阶段**,而 MC 这一帧提取的是正在关闭的屏 ——
+  换屏后必须对新屏**补一次提取**(`extractRenderStateWithTooltipAndSubtitles`),
+  否则新屏本帧无命令可画,会闪一帧空画面。
+
+### 对话框屏幕
+
+- `DialogComposeScreen(...)` 工厂 + `openDialogComposeScreen(...)`(主线程 `mc.execute` + 标记父屏可复活):
+  MC Screen 形态的对话框(与 T.33 场景内图层 Dialog 的区别:跨屏覆盖、独立持有输入与 IME 焦点)。
+- `DialogAnimation`:`Default`(遮罩淡入淡出 + 内容 fade / 缩放)/ `Preset(scrimColor, durationMillis,
+  initialScale)` / `Custom(wrapper)` / `None`;数值取全局 `DialogAnimationDefaults`(全 `var`);
+  默认种类取 `DialogComposeScreenDefaults.animation`,另有 `DialogComposeScreenDefaults.disableWorldRender`。
+- 屏级动画固定 `ScreenAnimation.None`(遮罩 + 面板缩放已覆盖进出场,否则叠加一次整屏滑动),
+  且 `exitParentOnOpen = false`(遮罩把父屏留在原地)。
+- `dismissOnBackPress` → `shouldCloseOnEsc()`;`dismissOnClickOutside` → 遮罩点击;`pauseGame` 默认继承父屏;
+  `onDismiss` 在真正关屏后触发。
+
+### 使用建议
+
+- 业务自接动画(第 2 / 3 层)时把 `animation` 设为 `ScreenAnimation.None`,否则平台滑动与业务动画会叠加。
+- `pauseGame` / `closeOnEsc` 为构造参数;`ComposeScreen` 是 final 类,可定制行为一律走构造参数(不开子类)。
+
 ## 已知限制
 
 - 文本输入:charTyped 已接通(经 typed KeyEvent 转发);IME 组合态(preedit)已实现
