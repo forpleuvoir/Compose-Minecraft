@@ -243,6 +243,18 @@ internal constructor(
             onClick: () -> Unit,
         ) -> Unit
 ) {
+
+    /**
+     * 平台适配点(文本右键菜单):业务自定义条目渲染的构造入口。
+     *
+     * [androidx.compose.foundation.LocalContextMenuRepresentation] 的实现方用它构造 scope，
+     * 执行条目构建块后自行渲染 —— 条目 UI 完全由业务决定，不绑定内置的
+     * [ContextMenuColors] 与 [ContextMenuItem]。
+     */
+    constructor(
+        itemUi: @Composable (label: String, enabled: Boolean, onClick: () -> Unit) -> Unit
+    ) : this({ _, label, enabled, _, _, onClick -> itemUi(label, enabled, onClick) })
+
     private val composables = mutableStateListOf<@Composable (colors: ContextMenuColors) -> Unit>()
 
     @Composable
@@ -250,7 +262,13 @@ internal constructor(
         composables.fastForEach { composable -> composable(colors) }
     }
 
-    internal fun clear() {
+    /** 公开渲染入口：在当前组合位置按构造时的条目渲染依次组合全部条目。 */
+    @Composable
+    fun Content() {
+        Content(DefaultContextMenuColors)
+    }
+
+    fun clear() {
         composables.clear()
     }
 
