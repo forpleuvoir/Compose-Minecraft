@@ -17,8 +17,14 @@ import net.minecraft.client.input.KeyEvent as MCKeyEvent
  */
 object ComposeInputBridge {
 
+    val scrollPx: Float
+        get() = MC_SCROLL_NOTCH_PX * scaleFactor
+
+    @Volatile
+    var scaleFactor: Float = 1f
+
     /** GLFW 滚轮一格(±1.0)对应的滚动像素(官方桌面 ≈53px/格;MC 原版列表语义 3 行偏慢,翻倍) */
-    const val MC_SCROLL_NOTCH_PX = 54f
+    private const val MC_SCROLL_NOTCH_PX = 54f
 
     /**
      * MC 滚轮事件 → Compose [Offset] 滚动量。
@@ -26,8 +32,8 @@ object ComposeInputBridge {
      * (内容向下移动),两者同号,不需要取反。
      */
     fun scrollDelta(scrollX: Double, scrollY: Double): Offset = Offset(
-        scrollX.toFloat() * MC_SCROLL_NOTCH_PX,
-        scrollY.toFloat() * MC_SCROLL_NOTCH_PX,
+        scrollX.toFloat() * scrollPx,
+        scrollY.toFloat() * scrollPx,
     )
 
     /** MC 修饰键位标志 → Compose [PointerKeyboardModifiers]。 */
