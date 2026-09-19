@@ -49,6 +49,10 @@ dependencies {
     implementation(libs.fabricKotlin)
     implementation(libs.modMenu) // ModMenu 依赖（集成代码后续再写）
 
+    // IMBlocker 输入法兼容(fabric 变体 7.3.2); soft dependency:
+    // compileOnly 只用于编译, 模组缺席时兼容层经反射降级为 no-op
+    compileOnly("maven.modrinth:WMDesFsZ:45vUAF8X")
+
     // ── Compose 平台 Mod 依赖打包(参考 ibuki_gourd 的 includeInternal(api(...)) 方式)──
     // common 模块编译依赖的 Compose Runtime/基础模块,随 mod jar 打入 META-INF/jars/。
     // 运行时由 fabric-language-kotlin 提供 kotlin/kotlinx-coroutines/atomicfu。

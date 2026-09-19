@@ -52,6 +52,12 @@ repositories {
         url = 'https://thedarkcolour.github.io/KotlinForForge/'
         content { includeGroup "thedarkcolour" }
     }
+    // Modrinth 模组 maven（IMBlocker：输入法兼容的可选依赖）
+    maven {
+        name = 'Modrinth'
+        url = 'https://api.modrinth.com/maven'
+        content { includeGroup "maven.modrinth" }
+    }
 }
 
 processResources {

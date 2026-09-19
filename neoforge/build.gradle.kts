@@ -126,6 +126,10 @@ dependencies {
     // Kotlin for Forge：neoforge.mods.toml 中 modLoader = "kotlinforforge"
     implementation(libs.forgeKotlin)
 
+    // IMBlocker 输入法兼容(neoforge 变体 7.3.2,与 common 同 id);
+    // soft dependency: compileOnly 只用于编译,模组缺席时兼容层经反射降级为 no-op
+    compileOnly("maven.modrinth:WMDesFsZ:VyswcG4w")
+
     /*
      * 当新旧坐标同时出现在依赖树中时，选择实际的 androidx 实现，
      * 不再保留旧的重定向模块。

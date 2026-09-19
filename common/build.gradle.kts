@@ -42,6 +42,13 @@ dependencies {
 
     // scene 移植(PlatformArchitectureComponentsOwner 等)依赖的导航事件库
     api(libs.navigationevent)
+
+    // IMBlocker 输入法兼容的可选依赖(soft dependency)。
+    // 版本 id 取 neoforge 变体: common 经 neoForm 编译 Minecraft, 与 neoforge 模块同源
+    // (沿用 ibuki_gourd 旧分工)。
+    // compileOnly: 兼容层经反射按需载入, 模组是否存在由运行时决定, 不写进发布 POM 的
+    // 依赖(否则下游模组会被迫连带解析 IMBlocker)。
+    compileOnly("maven.modrinth:WMDesFsZ:VyswcG4w")
 }
 
 // 仅用 neoForm 反编译 Minecraft 供 common 编译；AT 接线保留（文件不存在时自动跳过）

@@ -13,6 +13,8 @@ import androidx.compose.ui.text.input.SetComposingRegionCommand
 import androidx.compose.ui.text.input.SetComposingTextCommand
 import androidx.compose.ui.text.input.SetSelectionCommand
 import androidx.compose.ui.text.input.TextFieldValue
+import moe.forpleuvoir.compose_minecraft.platform.textinput.imblocker.IMBlockerCompat
+import moe.forpleuvoir.compose_minecraft.platform.textinput.imblocker.IMBlockerFocusSession
 import net.minecraft.client.Minecraft
 import net.minecraft.client.input.PreeditEvent
 import kotlin.math.roundToInt
@@ -67,6 +69,9 @@ open class MinecraftTextInputService : PlatformTextInputService {
     /** 候选窗锚点(旧版 API 经 [notifyFocusedRect] 缓存;新版直接读 request.focusedRectInRoot) */
     private var focusedRect: Rect? = null
 
+    /** IMBlocker 焦点登记句柄;仅在 IMBlocker 已加载且当前会话经新版 API 建立时非 null */
+    private var imBlockerSession: IMBlockerFocusSession? = null
+
     private val textInputManager get() = mc.textInputManager()
 
     /**
@@ -102,6 +107,8 @@ open class MinecraftTextInputService : PlatformTextInputService {
 
     override fun stopInput() {
         textInputManager.stopTextInput()
+        imBlockerSession?.close()
+        imBlockerSession = null
         request = null
         legacyOnEditCommand = null
         composing = false
@@ -139,6 +146,9 @@ open class MinecraftTextInputService : PlatformTextInputService {
         committedCharCount = 0
         focusedRect = null
         textInputManager.startTextInput()
+        // 换绑请求时旧会话必须先注销, 否则失效候选会留在 IMBlocker 的焦点表里
+        imBlockerSession?.close()
+        imBlockerSession = IMBlockerCompat.requestTextInputFocus(newRequest)
     }
 
     fun unbindRequest(newRequest: PlatformTextInputMethodRequest) {
@@ -217,6 +227,19 @@ open class MinecraftTextInputService : PlatformTextInputService {
         if (composing) {
             committedCharCount++
         }
+        // IMBlocker 的焦点探测也用字符回调:字符落到 Compose 即证明本候选才是真焦点
+        IMBlockerCompat.onCharTyped()
+    }
+
+    /**
+     * IMBlocker: 输入事件到达时按需重登记焦点候选。
+     *
+     * 文本框在屏幕打开时就已自动聚焦的情况下, 之后点击它不会再触发 [bindRequest]
+     * (Compose 侧焦点没变化), 若候选已被 IMBlocker 的换屏逻辑清掉就没人登记回来 ——
+     * 表现为"第一次点击文本框不出输入法"。
+     */
+    fun refreshImBlockerFocus() {
+        IMBlockerCompat.refreshFocus()
     }
 
     // ── 内部 ──
@@ -248,5 +271,7 @@ open class MinecraftTextInputService : PlatformTextInputService {
             (rect.right / scale).roundToInt(),
             (rect.bottom / scale).roundToInt(),
         )
+        // IMBlocker: 光标区变化后同步候选窗位置(组合期间每次 preedit 更新都会走到这里)
+        IMBlockerCompat.updateCaretPosition()
     }
 }

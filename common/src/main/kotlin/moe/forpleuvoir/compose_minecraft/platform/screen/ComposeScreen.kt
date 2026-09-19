@@ -210,6 +210,8 @@ class ComposeScreen(
      * 文本框选词),该标志仅经 [super.mouseClicked] 透传给 vanilla 子控件链。
      */
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
+        // IMBlocker: 文本框本就聚焦时不会再来一次 startInputMethod, 点击是候选被清后唯一的补救时机
+        composeScene?.imeService?.refreshImBlockerFocus()
         val consumed = composeScene?.sendPointerEvent(
             eventType = PointerEventType.Press,
             position = mousePosition,
@@ -272,6 +274,8 @@ class ComposeScreen(
      * 组合期间按键不达应用的行为一致)。
      */
     override fun keyPressed(event: MCKeyEvent): Boolean {
+        // IMBlocker: 自动聚焦的文本框若从未被点击, 首次按键(含切换输入法的组合键)也要能补救登记
+        composeScene?.imeService?.refreshImBlockerFocus()
         return composeScene?.imeService?.isComposing == true
                 && event.key in IME_COMPOSITION_KEYS
                 || composeScene?.sendKeyEvent(event.toCompose(KeyEventType.KeyDown)) == true
