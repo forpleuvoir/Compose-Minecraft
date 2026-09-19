@@ -593,17 +593,25 @@ internal class GuiStateBackend : GeometryBackend {
         MinecraftGuiTriangles.ensureCompiled()
         BlendPipelines.ensureCompiled()
         val shader = paint.shader
-        val vertexColors = if (shader != null) {
-            ColorEvaluator.gradientVertexColors(shader, vertices, paint.alpha, paint.colorFilter)
-        } else null
+        // alpha 作为透明度:按模式解算实际管线(替换/擦除族退化为 SrcOver)与提交颜色
+        val blendMode = BlendPipelines.fadeBlendMode(paint.blendMode)
+        val vertexColors: IntArray?
+        if (shader != null) {
+            val colors = ColorEvaluator.gradientVertexColors(shader, vertices, paint.alpha, paint.colorFilter)
+            val faded = IntArray(colors.size)
+            for (i in faded.indices) faded[i] = BlendPipelines.fadeColor(paint.blendMode, colors[i])
+            vertexColors = faded
+        } else {
+            vertexColors = null
+        }
         sink.addElement(
             GuiTriangleRenderState(
                 pose = command.matrix.toMatrix3x2f(),
-                colorArgb = paint.toArgb(),
+                colorArgb = BlendPipelines.fadeColor(paint.blendMode, paint.toArgb()),
                 scissor = scissor?.toScreenRectangle(),
                 vertices = vertices,
                 stroke = paint.style == PaintingStyle.Stroke,
-                blendMode = paint.blendMode,
+                blendMode = blendMode,
                 vertexColors = vertexColors,
             )
         )
@@ -628,8 +636,11 @@ internal class GuiStateBackend : GeometryBackend {
         if (vc < 3) return
         val alphaMul = paint.alpha
         val srcColors = command.colors
-        // 逐顶点:alpha 叠加 + colorFilter
-        val vertColors = IntArray(vc) { i -> ColorEvaluator.applyColorFilter(ColorEvaluator.scaleAlpha(srcColors[i], alphaMul), paint.colorFilter) }
+        // 逐顶点:alpha 叠加 + colorFilter;再按模式把 alpha 解算为透明度(见 fadeColor)
+        val vertColors = IntArray(vc) { i ->
+            val c = ColorEvaluator.applyColorFilter(ColorEvaluator.scaleAlpha(srcColors[i], alphaMul), paint.colorFilter)
+            BlendPipelines.fadeColor(paint.blendMode, c)
+        }
         // 预估输出:indices 非空按索引数,否则按顶点数
         val maxTris = if (command.indices.isNotEmpty()) command.indices.size else vc
         var out = FloatArray(maxTris * 9)
@@ -700,7 +711,7 @@ internal class GuiStateBackend : GeometryBackend {
                 colorArgb = -1, // 0xFFFFFFFF;vertexColors 优先,此值仅占位
                 scissor = scissor?.toScreenRectangle(),
                 vertices = out.copyOf(count),
-                blendMode = paint.blendMode,
+                blendMode = BlendPipelines.fadeBlendMode(paint.blendMode),
                 vertexColors = outColors.copyOf(count / 3),
             )
         )
@@ -724,9 +735,11 @@ internal class GuiStateBackend : GeometryBackend {
         paint: PaintSnapshot,
     ): BlitRenderState {
         // Java record 构造器无参数名,必须使用位置参数
+        // alpha 作为透明度:替换/擦除族退化为 SrcOver,颜色按模式解算(见 BlendPipelines.fadeColor)
+        val blendPipeline = BlendPipelines.guiFor(BlendPipelines.fadeBlendMode(paint.blendMode))
         return BlitRenderState(
             // blendMode ≠ SrcOver 时选对应 blend 变体 pipeline,否则默认 GUI
-            BlendPipelines.guiFor(paint.blendMode) ?: RenderPipelines.GUI,
+            blendPipeline ?: RenderPipelines.GUI,
             TextureSetup.noTexture(),
             matrix.toMatrix3x2f(),
             left.roundToInt(),
@@ -737,8 +750,8 @@ internal class GuiStateBackend : GeometryBackend {
             1f,
             0f,
             1f,
-            // 颜色滤镜经 PaintSnapshot.toArgb 应用(alpha + colorFilter)
-            paint.toArgb(),
+            // 颜色滤镜经 PaintSnapshot.toArgb 应用(alpha + colorFilter),再按模式解算透明度
+            BlendPipelines.fadeColor(paint.blendMode, paint.toArgb()),
             clip?.toScreenRectangle(),
         )
     }

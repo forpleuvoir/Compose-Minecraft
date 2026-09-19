@@ -60,8 +60,10 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
         val layer3D = command.layer3D ?: return
         val m2 = command.matrix
         val paint = command.paint ?: return
-        // 颜色滤镜经 PaintSnapshot.toArgb 应用(alpha + colorFilter)
-        val colorArgb = paint.toArgb()
+        // 颜色滤镜经 PaintSnapshot.toArgb 应用(alpha + colorFilter)。
+        // alpha 作为透明度:替换/擦除族退化为 SrcOver,颜色按模式解算(见 BlendPipelines.fadeColor)
+        val fadeMode = BlendPipelines.fadeBlendMode(paint.blendMode)
+        val colorArgb = BlendPipelines.fadeColor(paint.blendMode, paint.toArgb())
         var output = FloatArray(384)
         var count = 0
 
@@ -206,6 +208,15 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
                 if (vc >= 3) {
                     val alphaMul = paint.alpha
                     var outColors = IntArray(384)
+
+                    /** 逐顶点色:alpha 叠加 + colorFilter;再按模式解算透明度(见 fadeColor) */
+                    fun vertexColor(i: Int): Int {
+                        val c = ColorEvaluator.applyColorFilter(
+                            ColorEvaluator.scaleAlpha(command.colors[i], alphaMul), paint.colorFilter,
+                        )
+                        return BlendPipelines.fadeColor(paint.blendMode, c)
+                    }
+
                     fun emitV(ai: Int, bi: Int, ci: Int) {
                         val pa = map3D(m2, layer3D, command.positions[ai * 2], command.positions[ai * 2 + 1]) ?: return
                         val pb = map3D(m2, layer3D, command.positions[bi * 2], command.positions[bi * 2 + 1]) ?: return
@@ -217,9 +228,9 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
                         output[count] = pa[0]; output[count + 1] = pa[1]; output[count + 2] = OPAQUE_COVERAGE
                         output[count + 3] = pb[0]; output[count + 4] = pb[1]; output[count + 5] = OPAQUE_COVERAGE
                         output[count + 6] = pc[0]; output[count + 7] = pc[1]; output[count + 8] = OPAQUE_COVERAGE
-                        outColors[count / 3] = ColorEvaluator.applyColorFilter(ColorEvaluator.scaleAlpha(command.colors[ai], alphaMul), paint.colorFilter)
-                        outColors[count / 3 + 1] = ColorEvaluator.applyColorFilter(ColorEvaluator.scaleAlpha(command.colors[bi], alphaMul), paint.colorFilter)
-                        outColors[count / 3 + 2] = ColorEvaluator.applyColorFilter(ColorEvaluator.scaleAlpha(command.colors[ci], alphaMul), paint.colorFilter)
+                        outColors[count / 3] = vertexColor(ai)
+                        outColors[count / 3 + 1] = vertexColor(bi)
+                        outColors[count / 3 + 2] = vertexColor(ci)
                         count += 9
                     }
 
@@ -275,7 +286,7 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
                     colorArgb = colorArgb,
                     scissor = null,
                     vertices = output.copyOf(count),
-                    blendMode = paint.blendMode,
+                    blendMode = fadeMode,
                     vertexColors = outColors3D?.copyOf(count / 3),
                 )
             )

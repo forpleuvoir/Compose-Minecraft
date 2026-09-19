@@ -12,6 +12,7 @@ import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
 import com.mojang.logging.LogUtils
 import androidx.compose.ui.graphics.BlendMode
+import moe.forpleuvoir.compose_minecraft.platform.render.paint.ColorEvaluator
 import net.minecraft.client.renderer.BindGroupLayouts
 import net.minecraft.resources.Identifier
 import org.slf4j.Logger
@@ -44,6 +45,55 @@ import java.util.concurrent.ConcurrentHashMap
 internal object BlendPipelines {
 
     private val LOGGER: Logger = LogUtils.getLogger()
+
+    /**
+     * alpha 作为「透明度」的提交解算 —— 让颜色 alpha(元素/图层透明度)表现为与背景 dst 的
+     * 交叉淡入淡出,而不是把源色乘暗后留在画面上。
+     *
+     * 由来:alpha 只落在颜色 alpha 通道上,而自定义 blend pipeline 的因子在 pipeline 编译期
+     * 写死、并按 Skia 的预乘语义定义。要让「源贡献随 alpha 淡入淡出」在各模式下都成立,需要:
+     * - 加性 / 取亮族(Plus / Screen / Lighten)与 SrcAtop:源色预乘 alpha(其因子表本就是
+     *   预乘语义,dst 项天然随 alpha 收敛到背景);
+     * - 乘 / 取暗族(Modulate / Darken):源色朝**白**插值(白是这两族的单位元,dst 得以保留);
+     * - 替换 / 擦除族(Src / SrcIn / Clear / SrcOut / DstIn / DstAtop / DstOut / Xor):改用原版
+     *   SrcOver 管线,提交「黑源 + 按模式修正的 alpha」,等价于把 dst 按 (1−alpha) 保留 ——
+     *   alpha→0 时 dst 原样保留,不会留下黑块。
+     *
+     * alpha = 255 时全部退化为原值(不透明元素行为不变,含 dev 场景原期望)。
+     */
+    fun fadeBlendMode(mode: BlendMode): BlendMode = when (mode) {
+        BlendMode.Src, BlendMode.SrcIn, BlendMode.Clear, BlendMode.SrcOut,
+        BlendMode.DstIn, BlendMode.DstAtop, BlendMode.DstOut, BlendMode.Xor,
+        -> BlendMode.SrcOver
+
+        else -> mode
+    }
+
+    /** 按 [fadeBlendMode] 选定的管线语义,给出实际应提交的 0xAARRGGBB(直通语义) */
+    fun fadeColor(mode: BlendMode, argb: Int): Int {
+        val a = (argb ushr 24) and 0xFF
+        if (a == 255) return argb
+        return when (mode) {
+            BlendMode.Plus, BlendMode.Screen, BlendMode.Lighten, BlendMode.SrcAtop ->
+                ColorEvaluator.premultiplyRgb(argb)
+
+            // 单位元为白:rgb' = 255 − (255 − rgb) × a/255
+            BlendMode.Darken, BlendMode.Modulate ->
+                (a shl 24) or lerpToWhiteRgb(argb, a)
+
+            BlendMode.Clear, BlendMode.SrcOut -> a shl 24
+            BlendMode.DstIn, BlendMode.DstAtop -> (a * (255 - a) / 255) shl 24
+            BlendMode.DstOut, BlendMode.Xor -> (a * a / 255) shl 24
+
+            else -> argb
+        }
+    }
+
+    /** rgb 朝白插值(乘 / 取暗族的单位元) */
+    private fun lerpToWhiteRgb(argb: Int, a: Int): Int {
+        fun ch(v: Int) = 255 - ((255 - v) * a + 127) / 255
+        return (ch(argb shr 16 and 0xFF) shl 16) or (ch(argb shr 8 and 0xFF) shl 8) or ch(argb and 0xFF)
+    }
 
     /** SrcOver 用现成 pipeline,不建变体;不可表达的 12 种也返回 null(回退 SrcOver) */
     fun blendFunction(mode: BlendMode): BlendFunction? = when (mode) {

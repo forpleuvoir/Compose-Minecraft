@@ -35,6 +35,26 @@ internal object ColorEvaluator {
         val a = (((argb ushr 24) and 0xFF) * alpha).roundToInt().coerceIn(0, 255)
         return (argb and 0x00FFFFFF) or (a shl 24)
     }
+
+    /**
+     * RGB 按 alpha 预乘(保留 alpha 通道)。
+     *
+     * 用途:自定义 blend pipeline 组的混合因子表按 Skia 的**预乘 alpha**语义定义,而平台着色器
+     * (core/gui、position_tex_color、gui_triangles)输出**直通 alpha**。加性 / 取亮族
+     * (Plus / Screen / Lighten / SrcAtop)提交前须经本函数预乘,颜色 alpha(元素 / 图层透明度)
+     * 才会参与混合;其余模式的 alpha 解算见 `BlendPipelines.fadeColor`。
+     * SrcOver(原版 TRANSLUCENT 直通管线)保持直通语义,不要预乘。
+     */
+    fun premultiplyRgb(argb: Int): Int {
+        val a = (argb ushr 24) and 0xFF
+        if (a == 255) return argb
+        if (a == 0) return 0
+        val r = ((argb shr 16 and 0xFF) * a + 127) / 255
+        val g = ((argb shr 8 and 0xFF) * a + 127) / 255
+        val b = ((argb and 0xFF) * a + 127) / 255
+        return (a shl 24) or (r shl 16) or (g shl 8) or b
+    }
+
     fun gradientTAt(x: Float, y: Float, shader: Shader): Float {
         return when (shader) {
             is LinearGradientShaderData -> {
@@ -265,15 +285,17 @@ internal object ColorEvaluator {
                     else               -> (da shl 24) or (sr shl 16) or (sg shl 8) or sb
                 }
             }
-            // LightingColorFilter:out = src × multiply + add × 255
+            // LightingColorFilter:out.rgb = src.rgb × multiply + add × 255,**alpha 不变**
+            // (Skia SkColorFilters::Lighting:alpha 行缩放 1、偏移 0 —— 只作用于 RGB。
+            //  若把 add 的 alpha 也代入,不透明 add(0xFF…)会把源 alpha 顶成 255,
+            //  图层/屏幕动画的透明度在此滤镜下失效。)
             val add = filter.add
-            val a = ((argb ushr 24) and 0xFF)
             val r = ((argb shr 16) and 0xFF)
             val g = ((argb shr 8) and 0xFF)
             val b = (argb and 0xFF)
             fun mix(v: Int, mul: Float, aoff: Float): Int =
                 (v * mul + aoff * 255f).roundToInt().coerceIn(0, 255)
-            return (mix(a, c.alpha, add?.alpha ?: 0f) shl 24) or
+            return (argb and 0xFF000000.toInt()) or
                     (mix(r, c.red, add?.red ?: 0f) shl 16) or
                     (mix(g, c.green, add?.green ?: 0f) shl 8) or
                     mix(b, c.blue, add?.blue ?: 0f)

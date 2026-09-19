@@ -583,7 +583,7 @@ internal class NativeColorFilter internal constructor(
     val color: Color? = null,
     val colorMatrix: ColorMatrix? = null,
     val blendMode: BlendMode = BlendMode.SrcIn,
-    /** LightingColorFilter 的 add 分量:输出 = src × multiply + add */
+    /** LightingColorFilter 的 add 分量:输出 rgb = src × multiply + add(alpha 不变,同 Skia) */
     val add: Color? = null,
 ) {
     override fun equals(other: Any?): Boolean =
