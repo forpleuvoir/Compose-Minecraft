@@ -1,5 +1,6 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.plugins
 
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.unit.IntSize
 import com.mojang.blaze3d.pipeline.RenderPipeline
 import com.mojang.blaze3d.systems.RenderSystem
@@ -18,6 +19,7 @@ import net.minecraft.client.renderer.state.gui.BlitRenderState
 import net.minecraft.client.renderer.state.gui.TiledBlitRenderState
 import net.minecraft.resources.Identifier
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
+import moe.forpleuvoir.compose_minecraft.platform.render.util.BlendPipelines
 
 /**
  * 纹理子区域(像素坐标,相对纹理左上角)。[uStart]..[uEnd] 为水平范围、[vStart]..[vEnd] 为垂直范围,
@@ -127,9 +129,12 @@ object McTexturePlugin : MinecraftRenderPlugin {
         val w = sd.size.width
         val h = sd.size.height
         if (w <= 0 || h <= 0) return false
+        // 混合模式:纹理组 blend pipeline(替换/擦除族解算后退化为原版 SrcOver 管线)
+        val mode = context.paint?.blendMode ?: BlendMode.SrcOver
         context.sink.blitSprite(
-            sd.pipeline, sd.location, 0, 0, w, h,
-            tintColor(context),
+            BlendPipelines.texturedFor(BlendPipelines.fadeBlendMode(mode)) ?: sd.pipeline,
+            sd.location, 0, 0, w, h,
+            BlendPipelines.fadeColorForTexture(mode, tintColor(context)),
             context.matrix.toMatrix3x2f(),
             context.scissor?.toScreenRectangle(),
         )
@@ -147,8 +152,11 @@ object McTexturePlugin : MinecraftRenderPlugin {
 
         val pose = context.matrix.toMatrix3x2f()
         // 色调色:取自 context.paint(MinecraftPaint,含 replayFrom 烘焙的 alphaMultiplier),
-        // color 为着色器色彩调制器(默认白 = 纹理原色),alpha 为复合透明度
-        val color = tintColor(context)
+        // color 为着色器色彩调制器(默认白 = 纹理原色),alpha 为复合透明度;
+        // 混合模式下 tint 与 pipeline 均按模式解算(见 BlendPipelines.fadeColorForTexture / texturedFor)
+        val mode = context.paint?.blendMode ?: BlendMode.SrcOver
+        val color = BlendPipelines.fadeColorForTexture(mode, tintColor(context))
+        val pipeline = BlendPipelines.texturedFor(BlendPipelines.fadeBlendMode(mode)) ?: td.pipeline
 
         val w = td.size.width
         val h = td.size.height
@@ -160,7 +168,7 @@ object McTexturePlugin : MinecraftRenderPlugin {
                 val ts = td.tileSize
                 context.sink.addElement(
                     TiledBlitRenderState(
-                        td.pipeline, textureSetup, pose,
+                        pipeline, textureSetup, pose,
                         ts.width.coerceAtLeast(1), ts.height.coerceAtLeast(1),
                         0, 0, w, h,
                         u0(td, tw), u1(td, tw), v0(td, th), v1(td, th),
@@ -172,7 +180,7 @@ object McTexturePlugin : MinecraftRenderPlugin {
             // 九宫格模式:下沉到 GuiCommandSink.pushNineSliced 扩展(负值外扩语义保留)
             td.corner.isSpecified -> {
                 context.sink.pushNineSliced(
-                    td.pipeline,
+                    pipeline,
                     td.uv, td.corner,
                     td.size,
                     color, textureSetup,
@@ -185,7 +193,7 @@ object McTexturePlugin : MinecraftRenderPlugin {
             else                  -> {
                 context.sink.addElement(
                     BlitRenderState(
-                        td.pipeline, textureSetup, pose,
+                        pipeline, textureSetup, pose,
                         0, 0, w, h,
                         u0(td, tw), u1(td, tw), v0(td, th), v1(td, th),
                         color,

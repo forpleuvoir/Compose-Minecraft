@@ -22,10 +22,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.TextStyle
 import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.ui.draw.minecraftTexture
+import net.minecraft.resources.Identifier
 
 /**
  * 混合模式测试:17 种可表达的 BlendMode。
@@ -33,6 +36,9 @@ import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
  * 每块 = 灰色底(0xFF757575)+ 半透明红(0xCCE53935,alpha 0.66)叠加,
  * 红色块带对应 blendMode。矩形走 blit 组 pipeline(gui_blend_*),圆形走
  * 三角化组 pipeline(gui_triangles_blend_*) —— 双几何验证。
+ *
+ * 下半节同编号重复一遍,换成 MC 原生纹理(`minecraftTexture` + 图层级 blendMode),
+ * 覆盖带纹理的 blend pipeline(texturedFor)与 tint/alpha 解算。
  *
  * 预期效果(灰底 117,117,117;红 229,57,53 × 0.66):
  * - Clear: 红区透明 → 露出白背景
@@ -102,6 +108,29 @@ internal fun BlendModeDevScene() {
                     repeat(3 - row.size) { Spacer(Modifier.width(96.dp)) }
                 }
             }
+
+            Spacer(Modifier.height(10.dp))
+            BasicText(
+                text = "纹理 × 混合模式(同一批模式,换成 MC 原生纹理)",
+                style = TextStyle(fontSize = 16.sp),
+                color = { Color(0xFF1A1A1A) },
+            )
+            BasicText(
+                text = "图层级 blendMode → 纹理提交端选带纹理的 blend pipeline;调制色 alpha 0.8。条目同上一节编号。",
+                style = TextStyle(fontSize = 12.sp),
+                color = { Color(0xFF455A64) },
+            )
+            modes.chunked(3).forEachIndexed { rowIndex, row ->
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    row.forEachIndexed { colIndex, (mode, _) ->
+                        TextureBlendCell(nums[rowIndex * 3 + colIndex], mode)
+                    }
+                    repeat(3 - row.size) { Spacer(Modifier.width(96.dp)) }
+                }
+            }
         }
     }
 }
@@ -133,6 +162,37 @@ private fun BlendCell(num: String, mode: BlendMode, useCircle: Boolean) {
                     )
                 }
             }
+        }
+        Spacer(Modifier.height(2.dp))
+        BasicText(
+            text = "$num ${mode.toString()}",
+            style = TextStyle(fontSize = 13.sp),
+            color = { Color(0xFF1A1A1A) },
+        )
+    }
+}
+
+/**
+ * 纹理块的对照单元:同一灰底 + MC 原生纹理,blendMode 走**图层级**
+ * (`graphicsLayer { blendMode = … }` → replayFrom 透传到纹理提交端)。
+ */
+@Composable
+private fun TextureBlendCell(num: String, mode: BlendMode) {
+    Column(Modifier.width(96.dp)) {
+        Box(
+            Modifier
+                .size(96.dp, 72.dp)
+                .background(Color(0xFF757575))
+        ) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { blendMode = mode }
+                    .minecraftTexture(
+                        textureId = Identifier.parse("minecraft:textures/block/dirt.png"),
+                        color = Color(0xCCFFFFFF),
+                    )
+            )
         }
         Spacer(Modifier.height(2.dp))
         BasicText(

@@ -777,8 +777,10 @@ internal class GuiStateBackend : GeometryBackend {
         val u1 = (command.srcOffsetX + command.srcWidth).toFloat() / texW
         val v0 = command.srcOffsetY.toFloat() / texH
         val v1 = (command.srcOffsetY + command.srcHeight).toFloat() / texH
+        // 混合模式:纹理组 blend pipeline(替换/擦除族解算后退化为原版 SrcOver 管线)
+        val blendPipeline = BlendPipelines.texturedFor(BlendPipelines.fadeBlendMode(command.paint.blendMode))
         return BlitRenderState(
-            RenderPipelines.GUI_TEXTURED,
+            blendPipeline ?: RenderPipelines.GUI_TEXTURED,
             MinecraftImageTextureCache.textureSetup(image, command.paint.filterQuality),
             command.matrix.toMatrix3x2f(),
             command.dstOffsetX,
@@ -789,8 +791,12 @@ internal class GuiStateBackend : GeometryBackend {
             u1,
             v0,
             v1,
-            // 恒白色调制(官方 drawImage 语义:颜色不参与,仅 alpha 生效)
-            Color.White.toArgb(command.paint.alpha),
+            // 恒白色调制(官方 drawImage 语义:颜色不参与,仅 alpha 生效);
+            // 按模式解算 alpha(见 BlendPipelines.fadeColorForTexture)
+            BlendPipelines.fadeColorForTexture(
+                command.paint.blendMode,
+                Color.White.toArgb(command.paint.alpha),
+            ),
             clip?.toScreenRectangle(),
         )
     }

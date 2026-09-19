@@ -14,6 +14,7 @@ import com.mojang.logging.LogUtils
 import androidx.compose.ui.graphics.BlendMode
 import moe.forpleuvoir.compose_minecraft.platform.render.paint.ColorEvaluator
 import net.minecraft.client.renderer.BindGroupLayouts
+import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.resources.Identifier
 import org.slf4j.Logger
 import java.util.concurrent.ConcurrentHashMap
@@ -46,26 +47,47 @@ internal object BlendPipelines {
 
     private val LOGGER: Logger = LogUtils.getLogger()
 
-    /**
-     * alpha 作为「透明度」的提交解算 —— 让颜色 alpha(元素/图层透明度)表现为与背景 dst 的
-     * 交叉淡入淡出,而不是把源色乘暗后留在画面上。
-     *
-     * 由来:alpha 只落在颜色 alpha 通道上,而自定义 blend pipeline 的因子在 pipeline 编译期
-     * 写死、并按 Skia 的预乘语义定义。要让「源贡献随 alpha 淡入淡出」在各模式下都成立,需要:
-     * - 加性 / 取亮族(Plus / Screen / Lighten)与 SrcAtop:源色预乘 alpha(其因子表本就是
-     *   预乘语义,dst 项天然随 alpha 收敛到背景);
-     * - 乘 / 取暗族(Modulate / Darken):源色朝**白**插值(白是这两族的单位元,dst 得以保留);
-     * - 替换 / 擦除族(Src / SrcIn / Clear / SrcOut / DstIn / DstAtop / DstOut / Xor):改用原版
-     *   SrcOver 管线,提交「黑源 + 按模式修正的 alpha」,等价于把 dst 按 (1−alpha) 保留 ——
-     *   alpha→0 时 dst 原样保留,不会留下黑块。
-     *
-     * alpha = 255 时全部退化为原值(不透明元素行为不变,含 dev 场景原期望)。
-     */
-    fun fadeBlendMode(mode: BlendMode): BlendMode = when (mode) {
-        BlendMode.Src, BlendMode.SrcIn, BlendMode.Clear, BlendMode.SrcOut,
-        BlendMode.DstIn, BlendMode.DstAtop, BlendMode.DstOut, BlendMode.Xor,
-        -> BlendMode.SrcOver
+    /** 原版纹理着色器(顶点 / 片元同名,输出直通 alpha) */
+    private val VANILLA_TEXTURED_SHADER =
+        Identifier.fromNamespaceAndPath("minecraft", "core/position_tex_color")
 
+    /** 朝单位元(白)插值的纹理片元着色器;顶点着色器复用 [VANILLA_TEXTURED_SHADER] */
+    private val FADE_FRAGMENT_SHADER =
+        Identifier.fromNamespaceAndPath("compose_minecraft", "core/position_tex_color_fade")
+
+    /**
+     * 淡出策略 —— **唯一一张表**(模式 → alpha 作为透明度时的源色解算)。
+     *
+     * alpha 只落在颜色 alpha 通道上,而自定义 blend pipeline 的因子在 pipeline 编译期写死、
+     * 并按 Skia 的预乘语义定义。要让「源贡献随 alpha 与背景交叉淡入淡出」(而不是把源色乘暗
+     * 后留成黑块),每个模式都要朝自己的「单位元」收敛:
+     * - [PREMULTIPLY]:加性 / 取亮族 —— 源色预乘 alpha(dst 项随之收敛到背景);
+     * - [WHITE_LERP]:乘 / 取暗族 —— 源色朝**白**插值(白是这两族的单位元);
+     * - [SRC_OVER]:替换族 —— 等价于按 alpha 与背景做 SrcOver;
+     * - [BLACK_ALPHA] / [BLACK_ALPHA_SELF] / [BLACK_ALPHA_SQUARE]:擦除族 —— 提交黑源 +
+     *   按模式修正的 alpha,等价于把 dst 按 (1−α') 保留;
+     * - [NONE]:SrcOver(原生直通管线)与 12 种回退模式,无需解算。
+     *
+     * 三处消费方([fadeBlendMode] / [fadeColor] / [texturedFor])都从本表派生,不各自列模式。
+     * alpha = 255 时全部退化为原值(不透明元素行为不变)。
+     */
+    private enum class Fade {
+        NONE, PREMULTIPLY, WHITE_LERP, SRC_OVER, BLACK_ALPHA, BLACK_ALPHA_SELF, BLACK_ALPHA_SQUARE
+    }
+
+    private fun fade(mode: BlendMode): Fade = when (mode) {
+        BlendMode.Plus, BlendMode.Screen, BlendMode.Lighten, BlendMode.SrcAtop -> Fade.PREMULTIPLY
+        BlendMode.Darken, BlendMode.Modulate -> Fade.WHITE_LERP
+        BlendMode.Src, BlendMode.SrcIn -> Fade.SRC_OVER
+        BlendMode.Clear, BlendMode.SrcOut -> Fade.BLACK_ALPHA
+        BlendMode.DstIn, BlendMode.DstAtop -> Fade.BLACK_ALPHA_SELF
+        BlendMode.DstOut, BlendMode.Xor -> Fade.BLACK_ALPHA_SQUARE
+        else -> Fade.NONE
+    }
+
+    /** 实际用于选管线的模式:擦除 / 替换族退化为原版 SrcOver 管线 */
+    fun fadeBlendMode(mode: BlendMode): BlendMode = when (fade(mode)) {
+        Fade.SRC_OVER, Fade.BLACK_ALPHA, Fade.BLACK_ALPHA_SELF, Fade.BLACK_ALPHA_SQUARE -> BlendMode.SrcOver
         else -> mode
     }
 
@@ -73,19 +95,17 @@ internal object BlendPipelines {
     fun fadeColor(mode: BlendMode, argb: Int): Int {
         val a = (argb ushr 24) and 0xFF
         if (a == 255) return argb
-        return when (mode) {
-            BlendMode.Plus, BlendMode.Screen, BlendMode.Lighten, BlendMode.SrcAtop ->
-                ColorEvaluator.premultiplyRgb(argb)
+        return when (fade(mode)) {
+            Fade.PREMULTIPLY -> ColorEvaluator.premultiplyRgb(argb)
 
             // 单位元为白:rgb' = 255 − (255 − rgb) × a/255
-            BlendMode.Darken, BlendMode.Modulate ->
-                (a shl 24) or lerpToWhiteRgb(argb, a)
+            Fade.WHITE_LERP -> (a shl 24) or lerpToWhiteRgb(argb, a)
 
-            BlendMode.Clear, BlendMode.SrcOut -> a shl 24
-            BlendMode.DstIn, BlendMode.DstAtop -> (a * (255 - a) / 255) shl 24
-            BlendMode.DstOut, BlendMode.Xor -> (a * a / 255) shl 24
+            Fade.BLACK_ALPHA -> a shl 24
+            Fade.BLACK_ALPHA_SELF -> (a * (255 - a) / 255) shl 24
+            Fade.BLACK_ALPHA_SQUARE -> (a * a / 255) shl 24
 
-            else -> argb
+            Fade.NONE, Fade.SRC_OVER -> argb
         }
     }
 
@@ -151,6 +171,8 @@ internal object BlendPipelines {
     private val guiPipelines = ConcurrentHashMap<BlendMode, RenderPipeline>()
     private val trianglePipelines = ConcurrentHashMap<BlendMode, RenderPipeline>()
     private val strokePipelines = ConcurrentHashMap<BlendMode, RenderPipeline>()
+    private val texturedPipelines = ConcurrentHashMap<BlendMode, RenderPipeline>()
+    private val texturedFadePipelines = ConcurrentHashMap<BlendMode, RenderPipeline>()
 
     /**
      * blit 组 blend pipeline:core/gui shader + POSITION_COLOR + QUADS,
@@ -170,6 +192,48 @@ internal object BlendPipelines {
                 .build()
         }
     }
+
+    /**
+     * 纹理组 blend pipeline:与 [RenderPipelines.GUI_TEXTURED] 同构
+     * (GLOBALS + MATRICES_PROJECTION + SAMPLER0 + `core/position_tex_color` + POSITION_TEX_COLOR
+     * + QUADS),只把 ColorTargetState 换成该模式的混合函数 —— 混合函数属于 pipeline 层,
+     * 与着色器无关,所以每个模式**不需要各自写着色器**。
+     *
+     * 唯一的着色器差异:[Fade.WHITE_LERP] 族(乘 / 取暗)的淡出需要对**逐像素**源色做朝白插值
+     * (纯色路径由 [fadeColor] 在 CPU 侧完成,纹理的源色在纹理里),故该族换用
+     * `compose_minecraft:core/position_tex_color_fade`(顶点着色器仍是原版),其余模式用原版片元着色器。
+     *
+     * SrcOver 与 12 种不可表达模式返回 null(调用方保持原 pipeline)。
+     */
+    fun texturedFor(mode: BlendMode): RenderPipeline? {
+        val fn = blendFunction(mode) ?: return null
+        val policy = fade(mode)
+        return if (policy == Fade.WHITE_LERP) {
+            texturedFadePipelines.computeIfAbsent(mode) { buildTextured(mode, fn, FADE_FRAGMENT_SHADER) }
+        } else {
+            texturedPipelines.computeIfAbsent(mode) { buildTextured(mode, fn, VANILLA_TEXTURED_SHADER) }
+        }
+    }
+
+    /**
+     * 纹理路径提交的调制色:[Fade.WHITE_LERP] 族保持 rgb 不变(插值在着色器里做,alpha 仍携带
+     * 透明度),其余族与纯色路径同一解算([fadeColor])。
+     */
+    fun fadeColorForTexture(mode: BlendMode, argb: Int): Int =
+        if (fade(mode) == Fade.WHITE_LERP) argb else fadeColor(mode, argb)
+
+    private fun buildTextured(mode: BlendMode, fn: BlendFunction, fragmentShader: Identifier): RenderPipeline =
+        RenderPipeline.builder()
+            .withLocation(Identifier.fromNamespaceAndPath("compose_minecraft", "pipeline/gui_textured_blend_${mode.toString().lowercase()}"))
+            .withBindGroupLayout(BindGroupLayouts.GLOBALS)
+            .withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
+            .withVertexShader(VANILLA_TEXTURED_SHADER)
+            .withFragmentShader(fragmentShader)
+            .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
+            .withColorTargetState(ColorTargetState(fn))
+            .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX_COLOR)
+            .withPrimitiveTopology(PrimitiveTopology.QUADS)
+            .build()
 
     /**
      * 三角化组 blend pipeline(填充):自写 gui_triangles shader + TRIANGLES,
@@ -234,6 +298,8 @@ internal object BlendPipelines {
         pipelines += guiPipelines.values
         pipelines += trianglePipelines.values
         pipelines += strokePipelines.values
+        pipelines += texturedPipelines.values
+        pipelines += texturedFadePipelines.values
         for (p in pipelines) {
             if (!compiledPipelines.add(p)) continue
             try {
