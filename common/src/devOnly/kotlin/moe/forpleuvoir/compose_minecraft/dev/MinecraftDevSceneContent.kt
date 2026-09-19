@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -146,15 +147,43 @@ fun MinecraftDevSceneContent() {
                 subtitle = "关闭时返回父屏(dev 菜单);渲染父屏开关(半透明背景透出 dev 菜单)",
                 onClick = {
                     val holder = arrayOfNulls<ComposeScreen>(1)
+                    // 开关用快照状态承载:读它才会触发重组(普通 var 不会,界面文案/背景不跟着变)
+                    val renderParent = mutableStateOf(false)
                     holder[0] = ComposeScreen.open(
                         content = {
                             ParentDevSceneContent(
-                                renderParent = holder[0]?.renderParentScreen == true,
+                                renderParent = renderParent.value,
                                 onToggleRenderParent = {
-                                    val s = holder[0]
-                                    if (s != null) s.renderParentScreen = !s.renderParentScreen
+                                    val next = !renderParent.value
+                                    renderParent.value = next
+                                    // 写屏属性同上(关闭它会让父屏重新入场,避免"画出来但全透明")
+                                    holder[0]?.renderParentScreen = next
                                 },
-                                onClose = { holder[0]?.onClose() },
+                                onClose = { holder[0]?.requestClose() },
+                            )
+                        },
+                        parent = mc.gui.screen(),
+                    )
+                },
+            )
+
+            DevMenuButton(
+                title = "父屏幕能力:开屏即渲染父屏 (renderParentScreen = true)",
+                subtitle = "打开时就常驻露出父屏;父屏**不退场**(与渲染父屏互斥);关闭时父屏入场交叉",
+                onClick = {
+                    val holder = arrayOfNulls<ComposeScreen>(1)
+                    val renderParent = mutableStateOf(true)
+                    holder[0] = ComposeScreen.open(
+                        renderParentScreen = true,
+                        content = {
+                            ParentDevSceneContent(
+                                renderParent = renderParent.value,
+                                onToggleRenderParent = {
+                                    val next = !renderParent.value
+                                    renderParent.value = next
+                                    holder[0]?.renderParentScreen = next
+                                },
+                                onClose = { holder[0]?.requestClose() },
                             )
                         },
                         parent = mc.gui.screen(),
@@ -226,6 +255,12 @@ fun MinecraftDevSceneContent() {
                 title = "字体缺字回退测试 (P3 像素化)",
                 subtitle = "Fusion Pixel 覆盖内像素字形;阿拉伯文/泰文/Emoji 等未覆盖文字退回原版字形,附 default 对照组",
                 onClick = { ComposeScreen.open { FontFallbackDevScene() } },
+            )
+
+            DevMenuButton(
+                title = "屏幕生命周期测试 (世界渲染 / 关闭动画 / 对话框)",
+                subtitle = "disableWorldRender 运行时切换、关闭动画三层 API(声明式/挂起式/零 API)、对话框动画与 Esc/遮罩",
+                onClick = { ComposeScreen.open { ScreenLifecycleDevScene() } },
             )
         }
     }
