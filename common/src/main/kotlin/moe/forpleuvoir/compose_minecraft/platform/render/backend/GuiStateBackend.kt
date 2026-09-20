@@ -619,10 +619,12 @@ internal class GuiStateBackend : GeometryBackend {
         val w = hairlineWidthPx(paint.strokeWidth, max(sx, sy))
         if (w > 1.01f) return false
         val hw = w / 2f
-        val x0 = (left * sx + matrix[12] - hw).roundToInt()
-        val y0 = (top * sy + matrix[13] - hw).roundToInt()
-        val x1 = (right * sx + matrix[12] + hw).roundToInt()
-        val y1 = (bottom * sy + matrix[13] + hw).roundToInt()
+        // 每边取覆盖最大的像素列/行;整数坐标并列(50/50)时统一打破向矩形内侧,
+        // 四边都压在填充之上,半透明描边四边的底色才一致。GUI 坐标非负,截断即 floor。
+        val x0 = (left * sx + matrix[12] - hw + 0.5f + 1e-3f).toInt()
+        val y0 = (top * sy + matrix[13] - hw + 0.5f + 1e-3f).toInt()
+        val x1 = (right * sx + matrix[12] - hw + 0.5f - 1e-3f).toInt() + 1
+        val y1 = (bottom * sy + matrix[13] - hw + 0.5f - 1e-3f).toInt() + 1
         if (x1 - x0 <= 2 || y1 - y0 <= 2) {
             // 极小矩形:整个区域都是边框 → 整体填充
             blitAxisRect(sink, scissor, x0, y0, x1, y1, paint)
