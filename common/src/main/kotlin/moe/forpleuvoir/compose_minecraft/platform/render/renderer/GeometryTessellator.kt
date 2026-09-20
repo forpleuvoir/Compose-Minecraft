@@ -1760,7 +1760,8 @@ internal object GeometryTessellator {
         var hasPoint = false
 
         fun flush(closed: Boolean) {
-            if (current.size >= 6) {
+            // 至少保留两点:开放二点子路径 = 单线段描边;fill 分支自行跳过 <6
+            if (current.size >= 4) {
                 result.add(SubPath(current.toFloatArray(), closed))
             }
             current = ArrayList()
