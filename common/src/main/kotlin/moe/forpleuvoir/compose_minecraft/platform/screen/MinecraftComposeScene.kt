@@ -3,7 +3,10 @@ import moe.forpleuvoir.compose_minecraft.mc
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.MinecraftCanvas
@@ -122,9 +125,13 @@ class MinecraftComposeScene(
      * 构造即查询 containerSize,而 scene 尚未赋值完成,见 windowInfo 处注释),
      * 由 [renderFrame] 每帧与 resize 同源同步;场景构造期间保持 IntSize.Zero。
      *
+     * **快照状态**:窗口尺寸变化即失效订阅它的作用域,因此 Dialog/Popup 的图层内容会重组,
+     * 按新尺寸重算居中位置与 [androidx.compose.ui.node.RootNodeOwner] 的 rectManager 窗口范围;
+     * 赋值恒等(IntSize 结构相等)时不触发失效。
+     *
      * 平台开放点:public —— 自定义 PlatformContext 的 windowInfo 读取。
      */
-    var sceneContainerSize = IntSize.Zero
+    var sceneContainerSize: IntSize by mutableStateOf(IntSize.Zero)
         private set
 
     /**
