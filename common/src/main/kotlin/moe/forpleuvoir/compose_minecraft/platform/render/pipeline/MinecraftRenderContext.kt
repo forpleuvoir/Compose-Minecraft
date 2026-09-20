@@ -2,6 +2,7 @@ package moe.forpleuvoir.compose_minecraft.platform.render.pipeline
 
 import androidx.compose.ui.graphics.MinecraftCanvas
 import moe.forpleuvoir.compose_minecraft.platform.render.backend.CommandDispatcher
+import moe.forpleuvoir.compose_minecraft.platform.render.backend.ConnectedLineMerger
 import moe.forpleuvoir.compose_minecraft.platform.render.backend.GuiStateBackend
 import moe.forpleuvoir.compose_minecraft.platform.render.backend.PerspectiveBackend
 
@@ -27,7 +28,8 @@ internal class MinecraftRenderContext {
     /** 把 [canvas] 中的命令逐条提交到 [sink](像素坐标,场景 1:1 窗口像素) */
     fun render(canvas: MinecraftCanvas, sink: GuiCommandSink) {
         guiBackend.sink = sink
-        for (command in canvas.commands()) {
+        // 同帧首尾相接的连续 drawLine 先合并为折线(消除逐段 butt 端帽接缝)
+        for (command in ConnectedLineMerger.merge(canvas.commands())) {
             // 3D 命令(图层 rotationX/rotationY,携带行主序含透视的 layer3D)
             // 走 CPU 顶点透视变换路径(纯色几何 → 屏幕三角形,实心无 AA)。
             if (command.layer3D != null) {

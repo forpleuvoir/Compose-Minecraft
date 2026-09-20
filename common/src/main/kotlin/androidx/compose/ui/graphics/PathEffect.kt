@@ -78,11 +78,47 @@ interface PathEffect {
     }
 }
 
-internal fun actualCornerPathEffect(radius: Float): PathEffect =
-    throw UnsupportedOperationException("PathEffect.cornerPathEffect is not supported in v1")
+// 平台适配点:dash/corner 的纯数据实现(几何在 GeometryTessellator 描边链路展开)。
+// chain/stamped 维持占位(抛异常),需求出现再实现。
 
-internal fun actualDashPathEffect(intervals: FloatArray, phase: Float): PathEffect =
-    throw UnsupportedOperationException("PathEffect.dashPathEffect is not supported in v1")
+/**
+ * 虚线效果(纯数据):[intervals] 偶数位 on、奇数位 off(局部坐标 px),
+ * 奇数组按 Skia 语义复制拼接为偶数对;[phase] 为模式起点偏移(mod 总和)。
+ * [normalized] 恒为偶数组;intervals 总和 ≤ 0 视为无效(渲染端按实线处理)。
+ */
+internal class DashPathEffect(intervals: FloatArray, val phase: Float) : PathEffect {
+    val normalized: FloatArray = run {
+        // 负值无意义(Skia 视为非法),钳到 0;奇数组按 Skia 语义复制拼接为偶数对
+        val clamped = FloatArray(intervals.size) { intervals[it].coerceAtLeast(0f) }
+        if (clamped.size % 2 == 0) clamped else clamped + clamped
+    }
+
+    val total: Float = normalized.sum()
+
+    override fun equals(other: Any?): Boolean =
+        other is DashPathEffect && phase == other.phase && normalized.contentEquals(other.normalized)
+
+    override fun hashCode(): Int = 31 * normalized.contentHashCode() + phase.hashCode()
+
+    override fun toString(): String = "DashPathEffect(intervals=${normalized.contentToString()}, phase=$phase)"
+}
+
+/** 尖角倒圆效果(纯数据):折线拐角替换为半径 [radius] 的圆弧(Skia SkCornerPathEffect 语义) */
+internal class CornerPathEffect(val radius: Float) : PathEffect {
+    override fun equals(other: Any?): Boolean = other is CornerPathEffect && radius == other.radius
+
+    override fun hashCode(): Int = radius.hashCode()
+
+    override fun toString(): String = "CornerPathEffect(radius=$radius)"
+}
+
+internal fun actualCornerPathEffect(radius: Float): PathEffect =
+    CornerPathEffect(radius)
+
+internal fun actualDashPathEffect(intervals: FloatArray, phase: Float): PathEffect {
+    require(intervals.isNotEmpty()) { "intervals must not be empty" }
+    return DashPathEffect(intervals, phase)
+}
 
 internal fun actualChainPathEffect(outer: PathEffect, inner: PathEffect): PathEffect =
     throw UnsupportedOperationException("PathEffect.chainPathEffect is not supported in v1")

@@ -2,6 +2,7 @@ package moe.forpleuvoir.compose_minecraft.platform.render.pipeline
 
 import androidx.compose.ui.graphics.MinecraftCanvas
 import moe.forpleuvoir.compose_minecraft.platform.render.backend.CommandDispatcher
+import moe.forpleuvoir.compose_minecraft.platform.render.backend.ConnectedLineMerger
 import moe.forpleuvoir.compose_minecraft.platform.render.backend.RasterBackend
 
 /**
@@ -22,7 +23,8 @@ internal object GraphicsLayerRasterizer {
     fun rasterize(canvas: MinecraftCanvas, width: Int, height: Int): IntArray {
         val out = IntArray(width * height)
         val backend = RasterBackend(out, width, height)
-        for (cmd in canvas.commands()) {
+        // 同帧首尾相接的连续 drawLine 先合并为折线(与 GPU 回放路径一致)
+        for (cmd in ConnectedLineMerger.merge(canvas.commands())) {
             CommandDispatcher.dispatch(cmd, backend)
         }
         return out

@@ -77,6 +77,23 @@ internal class RasterBackend(
                     fill = paint.style == PaintingStyle.Fill,
                     strokeWidth = paint.strokeWidth,
                     sink = s,
+                    join = paint.strokeJoin,
+                    miterLimit = paint.strokeMiterLimit,
+                    pathEffect = paint.pathEffect,
+                )
+            }
+        } else if (paint.style == PaintingStyle.Stroke) {
+            // 描边矩形走三角化描边带(与 GPU 回放一致;实心 quad 会覆盖内部内容)
+            tessellate(out, width, height, cmd) { s ->
+                GeometryTessellator.roundRect(
+                    cmd.left, cmd.top, cmd.right, cmd.bottom,
+                    0f, 0f,
+                    fill = false,
+                    strokeWidth = paint.strokeWidth,
+                    sink = s,
+                    join = paint.strokeJoin,
+                    miterLimit = paint.strokeMiterLimit,
+                    pathEffect = paint.pathEffect,
                 )
             }
         } else {
@@ -99,6 +116,9 @@ internal class RasterBackend(
                 fill = cmd.paint.style == PaintingStyle.Fill,
                 strokeWidth = cmd.paint.strokeWidth,
                 sink = s,
+                join = cmd.paint.strokeJoin,
+                miterLimit = cmd.paint.strokeMiterLimit,
+                pathEffect = cmd.paint.pathEffect,
             )
         }
     }
@@ -110,6 +130,9 @@ internal class RasterBackend(
                 fill = cmd.paint.style == PaintingStyle.Fill,
                 strokeWidth = cmd.paint.strokeWidth,
                 sink = s,
+                join = cmd.paint.strokeJoin,
+                miterLimit = cmd.paint.strokeMiterLimit,
+                pathEffect = cmd.paint.pathEffect,
             )
         }
     }
@@ -121,6 +144,9 @@ internal class RasterBackend(
                 fill = cmd.paint.style == PaintingStyle.Fill,
                 strokeWidth = cmd.paint.strokeWidth,
                 sink = s,
+                join = cmd.paint.strokeJoin,
+                miterLimit = cmd.paint.strokeMiterLimit,
+                pathEffect = cmd.paint.pathEffect,
             )
         }
     }
@@ -133,6 +159,9 @@ internal class RasterBackend(
                 fill = cmd.paint.style == PaintingStyle.Fill,
                 strokeWidth = cmd.paint.strokeWidth,
                 sink = s,
+                join = cmd.paint.strokeJoin,
+                miterLimit = cmd.paint.strokeMiterLimit,
+                pathEffect = cmd.paint.pathEffect,
             )
         }
     }
@@ -144,6 +173,9 @@ internal class RasterBackend(
                 cmd.paint.strokeWidth,
                 cmd.paint.strokeCap,
                 sink = s,
+                join = cmd.paint.strokeJoin,
+                miterLimit = cmd.paint.strokeMiterLimit,
+                pathEffect = cmd.paint.pathEffect,
             )
         }
     }
@@ -156,6 +188,9 @@ internal class RasterBackend(
                 strokeWidth = cmd.paint.strokeWidth,
                 cap = cmd.paint.strokeCap,
                 sink = s,
+                join = cmd.paint.strokeJoin,
+                miterLimit = cmd.paint.strokeMiterLimit,
+                pathEffect = cmd.paint.pathEffect,
             )
         }
     }
@@ -167,6 +202,9 @@ internal class RasterBackend(
                 cmd.paint.strokeWidth,
                 cmd.paint.strokeCap,
                 sink = s,
+                join = cmd.paint.strokeJoin,
+                miterLimit = cmd.paint.strokeMiterLimit,
+                pathEffect = cmd.paint.pathEffect,
             )
         }
     }

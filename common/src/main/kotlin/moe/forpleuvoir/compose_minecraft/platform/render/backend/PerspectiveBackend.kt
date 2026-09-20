@@ -125,6 +125,9 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
                             fill = false,
                             strokeWidth = paint.strokeWidth,
                             sink = sink,
+                            join = paint.strokeJoin,
+                            miterLimit = paint.strokeMiterLimit,
+                            pathEffect = paint.pathEffect,
                         )
                     }
                 }
@@ -142,6 +145,9 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
                             fill = paint.style == PaintingStyle.Fill,
                             strokeWidth = paint.strokeWidth,
                             sink = sink,
+                            join = paint.strokeJoin,
+                            miterLimit = paint.strokeMiterLimit,
+                            pathEffect = paint.pathEffect,
                         )
                     }
                 }
@@ -152,6 +158,9 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
                     fill = paint.style == PaintingStyle.Fill,
                     strokeWidth = paint.strokeWidth,
                     sink = sink,
+                    join = paint.strokeJoin,
+                    miterLimit = paint.strokeMiterLimit,
+                    pathEffect = paint.pathEffect,
                 )
             }
 
@@ -161,6 +170,9 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
                     fill = paint.style == PaintingStyle.Fill,
                     strokeWidth = paint.strokeWidth,
                     sink = sink,
+                    join = paint.strokeJoin,
+                    miterLimit = paint.strokeMiterLimit,
+                    pathEffect = paint.pathEffect,
                 )
             }
 
@@ -171,6 +183,9 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
                     fill = paint.style == PaintingStyle.Fill,
                     strokeWidth = paint.strokeWidth,
                     sink = sink,
+                    join = paint.strokeJoin,
+                    miterLimit = paint.strokeMiterLimit,
+                    pathEffect = paint.pathEffect,
                 )
             }
 
@@ -180,6 +195,9 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
                     command.paint.strokeWidth,
                     command.paint.strokeCap,
                     sink = sink,
+                    join = paint.strokeJoin,
+                    miterLimit = paint.strokeMiterLimit,
+                    pathEffect = paint.pathEffect,
                 )
             }
 
@@ -190,6 +208,9 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
                     strokeWidth = paint.strokeWidth,
                     cap = paint.strokeCap,
                     sink = sink,
+                    join = paint.strokeJoin,
+                    miterLimit = paint.strokeMiterLimit,
+                    pathEffect = paint.pathEffect,
                 )
             }
 
@@ -199,6 +220,9 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
                     command.paint.strokeWidth,
                     command.paint.strokeCap,
                     sink = sink,
+                    join = paint.strokeJoin,
+                    miterLimit = paint.strokeMiterLimit,
+                    pathEffect = paint.pathEffect,
                 )
             }
 

@@ -3,9 +3,13 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.renderer
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.CornerPathEffect
+import androidx.compose.ui.graphics.DashPathEffect
 import androidx.compose.ui.graphics.MinecraftPath
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.acos
@@ -13,8 +17,10 @@ import kotlin.math.atan2
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
+import kotlin.math.tan
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 几何三角化器(抗锯齿版,第二版)
@@ -47,20 +53,25 @@ import kotlin.math.sqrt
 //   3. 内部填充:收缩轮廓内部凸 → 形心扇形 / 凹 → 耳切,顶点 coverage =
 //      到原始轮廓的真距离(≥ 1.5px,与内缩带 +1.5 同处饱和区,无缝);
 // - 描边 = 带展开:每段带四边形 coverage 用「到对侧轮廓边的垂直距离」
-//   (真距离近似),外/内轮廓边各带 1.5px fringe;圆 join 两侧(外凸弧 + 内凹弧)
-//   均细分发射,闭合路径首尾 join 由顶点环自然闭合;
+//   (真距离近似),外/内轮廓边各带 1.5px fringe;**fringe 与轮廓同构** ——
+//   每个截面携带自己的法线,fringe 两端各用各的法线外推,相邻段共享
+//   边界边(弯曲顶点处凸侧无楔形裂缝、凹侧无重叠双混合,与填充外扩带
+//   的连续 miter 轮廓同构;旧实现整段单法线外推是圆/弧描边毛刺的根因);
+//   join 支持 Round/Bevel/Miter(Skia 截断判据),闭合路径首尾 join 由
+//   顶点环自然闭合;
 // - 自交路径:交点切分 → EvenOdd 子环,每个子环独立三环填充;
 //   切分失败兜底只画外扩带(不输出错误三角形);
 // - 近共线简化:flatten 后先剔除贝塞尔细分冗余点(贪心直线段延伸),
 //   从根源消除耳切失败与角帽噪音(第一版毛刺主因)。
 //
 // 已知简化(与 Skia 语义差异,文档记录):
-// - join 统一用圆 join(Paint 快照未携带 strokeJoin);
 // - strokeWidth 在局部坐标展开,矩阵缩放会等比影响线宽(未做设备空间补偿);
 // - strokeWidth == 0 按 hairline 1px 处理;
 // - 三角形绕序统一视觉顺时针;pipeline 侧已关闭背面剔除,不依赖绕序正确性;
 // - aaScale 用矩阵最大轴缩放 × guiScale,非均匀缩放下 AA 宽度在次轴略偏;
-// - 凹多边形内缩壳在窄缝(< 2px)处可能翻面,内部填充跳过(壳带仍覆盖过渡区)。
+// - 凹多边形内缩壳在窄缝(< 2px)处可能翻面,内部填充跳过(壳带仍覆盖过渡区);
+// - dash 闭合路径在接缝点若被 on 区间跨过,该 on 段会在接缝处分成两截
+//   (端帽重合,视觉接近无缝);零长度 on 区间不画圆点(Skia 圆帽才有点)。
 // ─────────────────────────────────────────────────────────────────────────────
 
 internal object GeometryTessellator {
@@ -144,9 +155,9 @@ internal object GeometryTessellator {
 
     /**
      * 描边细分段数:按**段长 ≤ 2 物理像素**(取与 [arcSegments] 的较大者)。
-     * 描边带是分段三角形拼接,段边界(coverage 场拼接)处有折角 —— 段角越大
-     * 拼接跳变越明显(外圈毛刺/台阶)。段长 2px 是细分密度与性能的折中
-     * (1px 段长对毛刺无进一步改善但帧数大幅下降,已回退)。
+     * 段长 2px 是细分密度与性能的折中(更密对边缘质量无进一步改善但
+     * 帧数大幅下降);段边界处的 coverage 场连续性由逐截面法线 fringe
+     * 保证(见 StrokeEmitter),不依赖更短的段长。
      */
     private fun strokeSegments(radiusPx: Float): Int {
         val byAngle = arcSegments(radiusPx)
@@ -905,12 +916,16 @@ internal object GeometryTessellator {
         private var prevIy = 0f
         private var prevCx = 0f
         private var prevCy = 0f
+        private var prevNx = 0f
+        private var prevNy = 0f
         private var firstOx = 0f
         private var firstOy = 0f
         private var firstIx = 0f
         private var firstIy = 0f
         private var firstCx = 0f
         private var firstCy = 0f
+        private var firstNx = 0f
+        private var firstNy = 0f
         private var hasPrev = false
 
         fun reset() {
@@ -923,35 +938,44 @@ internal object GeometryTessellator {
          * 用段中心剖分,避免中心线点 cA=cB=顶点 的退化三角形);不同 = 边带
          * (直线段,用中心线点剖分,段边界场连续无分段线)。
          */
-        fun emit(px: Float, py: Float, mx: Float, my: Float) {
-            val ox = px + mx * h
-            val oy = py + my * h
-            val ix = px - mx * h
-            val iy = py - my * h
+        fun emit(px: Float, py: Float, mx: Float, my: Float) = emitScaled(px, py, mx, my, 1f)
+
+        /**
+         * 带法线缩放的截面发射(miter join 专用):点对距离中心线 ±h·[scale]
+         * (miter 尖点位于真实轮廓上,coverage 仍取 0,中心 +h 不变)。
+         */
+        fun emitScaled(px: Float, py: Float, mx: Float, my: Float, scale: Float) {
+            val hs = h * scale
+            val ox = px + mx * hs
+            val oy = py + my * hs
+            val ix = px - mx * hs
+            val iy = py - my * hs
             if (!hasPrev) {
                 firstOx = ox; firstOy = oy; firstIx = ix; firstIy = iy
                 firstCx = px; firstCy = py
+                firstNx = mx; firstNy = my
             } else {
-                emitSegment(prevOx, prevOy, prevIx, prevIy, ox, oy, ix, iy, mx, my, prevCx, prevCy, px, py)
+                emitSegment(
+                    prevOx, prevOy, prevIx, prevIy, ox, oy, ix, iy,
+                    prevNx, prevNy, mx, my,
+                    prevCx, prevCy, px, py,
+                )
             }
             prevOx = ox; prevOy = oy; prevIx = ix; prevIy = iy
             prevCx = px; prevCy = py
+            prevNx = mx; prevNy = my
             hasPrev = true
         }
 
         /** 闭合:最后一个点对 → 第一个点对之间的带段(直线段,中心线点剖分) */
         fun close() {
             if (hasPrev) {
-                emitSegment(prevOx, prevOy, prevIx, prevIy, firstOx, firstOy, firstIx, firstIy, 0f, 0f, prevCx, prevCy, firstCx, firstCy)
+                emitSegment(
+                    prevOx, prevOy, prevIx, prevIy, firstOx, firstOy, firstIx, firstIy,
+                    prevNx, prevNy, firstNx, firstNy,
+                    prevCx, prevCy, firstCx, firstCy,
+                )
             }
-        }
-
-        /** 闭合段的实际法线:由外轮廓边方向计算(发射时为占位 0,0) */
-        private fun closeNormal(oX: Float, oY: Float, poX: Float, poY: Float): Pair<Float, Float> {
-            val dx = oX - poX
-            val dy = oY - poY
-            val len = sqrt(dx * dx + dy * dy)
-            return if (len > 1e-6f) (-dy / len) to (dx / len) else 1f to 0f
         }
 
         /**
@@ -964,12 +988,18 @@ internal object GeometryTessellator {
          *   对称时 M = 顶点 V,不退化、覆盖完整(四边形绕 M 的 4 三角形),
          *   且相邻弧段共享 M=V → 无分段线、无缝隙(中心线点剖分在弧段
          *   cA=cB=V 会退化成零面积三角形 → 带中央缝隙 → 转角毛刺)。
-         * [mx, my] 为段法线(闭合段为 0,0 时由边方向计算,仅 fringe 使用)。
+         *
+         * fringe(修复:弯曲描边顶点毛刺):**fringe 与轮廓同构** —— 每个截面
+         * 携带自己的法线(nA/nB),fringe 四边形两端各用各的法线外推,
+         * 相邻段共享边界边。旧实现整段只用段末法线外推:弯曲路径顶点处
+         * 凸侧 fringe 间留楔形裂缝(缺口状毛刺)、凹侧 fringe 重叠双混合
+         * (凸起状毛刺);逐截面法线后裂缝/重叠在结构上消失(与填充外扩带
+         * 的连续 miter 轮廓同构)。
          */
         private fun emitSegment(
             poX: Float, poY: Float, piX: Float, piY: Float,
             oX: Float, oY: Float, iX: Float, iY: Float,
-            mx: Float, my: Float,
+            nAX: Float, nAY: Float, nBX: Float, nBY: Float,
             cAX: Float, cAY: Float, cBX: Float, cBY: Float,
         ) {
             val hc = h * sink.aaScale // 中心 coverage = 半宽(屏幕像素)
@@ -991,22 +1021,27 @@ internal object GeometryTessellator {
                 sink.triangle(piX, piY, 0f, cAX, cAY, hc, cBX, cBY, hc)
                 sink.triangle(piX, piY, 0f, cBX, cBY, hc, iX, iY, 0f)
             }
-            // 外 fringe(0 → -1.5):外轮廓外侧 1.5px 渐隐(任意斜角 fwidth≤1.41 下边缘归零)
-            val (fx, fy) = if (mx != 0f || my != 0f) mx to my else closeNormal(oX, oY, poX, poY)
-            sink.triangle(poX, poY, 0f, oX, oY, 0f, oX + fx * w, oY + fy * w, -1.5f)
-            sink.triangle(poX, poY, 0f, oX + fx * w, oY + fy * w, -1.5f, poX + fx * w, poY + fy * w, -1.5f)
-            // 内 fringe(0 → -1.5):内轮廓向带外(圆孔方向)渐隐 ——
+            // 双侧 fringe(0 → -1.5):逐截面法线外推,相邻段共享边界边。
+            // 顶点收拢侧的重叠由 vertexJoin 的亚像素 miter 截面消除(见
+            // emitBevel),这里两侧 fringe 恒发射。
+            sink.triangle(poX, poY, 0f, oX, oY, 0f, oX + nBX * w, oY + nBY * w, -1.5f)
+            sink.triangle(poX, poY, 0f, oX + nBX * w, oY + nBY * w, -1.5f, poX + nAX * w, poY + nAY * w, -1.5f)
             // 方向与符号必须与 coverage 语义一致(带外为负),否则内圈实心/颜色加深
-            sink.triangle(iX, iY, 0f, piX, piY, 0f, iX - fx * w, iY - fy * w, -1.5f)
-            sink.triangle(iX, iY, 0f, iX - fx * w, iY - fy * w, -1.5f, piX - fx * w, piY - fy * w, -1.5f)
+            sink.triangle(iX, iY, 0f, piX, piY, 0f, piX - nAX * w, piY - nAY * w, -1.5f)
+            sink.triangle(iX, iY, 0f, piX - nAX * w, piY - nAY * w, -1.5f, iX - nBX * w, iY - nBY * w, -1.5f)
         }
     }
 
     /**
-     * 轮廓带展开(任意折线,圆 join,闭合路径无端帽,开放路径按 [cap] 端帽)。
+     * 轮廓带展开入口(任意折线):先按 [pathEffect] 做几何预处理
+     * (corner 倒圆 / dash 弧长切分),再交给 [strokeBand] 带展开。
      * [pts] 为 [x, y] 平铺中心线顶点。
      */
-    private fun strokeRing(ptsIn: FloatArray, closed: Boolean, strokeWidth: Float, cap: StrokeCap, sink: Sink) {
+    private fun strokeRing(
+        ptsIn: FloatArray, closed: Boolean, strokeWidth: Float,
+        cap: StrokeCap, join: StrokeJoin, miterLimit: Float, pathEffect: PathEffect?,
+        sink: Sink,
+    ) {
         // 闭合路径首尾重复点(flatten Close 补齐)去掉末点,避免零长度闭合边
         var pts = ptsIn
         if (closed && ptsIn.size >= 6 &&
@@ -1014,6 +1049,30 @@ internal object GeometryTessellator {
         ) {
             pts = ptsIn.copyOf(ptsIn.size - 2)
         }
+        if (pts.size / 2 < 2) return
+        if (pathEffect is CornerPathEffect && pathEffect.radius > 0f) {
+            pts = roundCorners(pts, closed, pathEffect.radius, sink.aaScale)
+        }
+        if (pathEffect is DashPathEffect && pathEffect.total > 0f) {
+            // dash(Skia 语义):沿折线弧长按 on/off 区间切段,每段 on 子折线
+            // 独立带展开(端帽用 Paint cap);off 区间不画。
+            for (piece in dashSplit(pts, closed, pathEffect.normalized, pathEffect.phase)) {
+                strokeBand(piece, false, strokeWidth, cap, join, miterLimit, sink)
+            }
+            return
+        }
+        strokeBand(pts, closed, strokeWidth, cap, join, miterLimit, sink)
+    }
+
+    /**
+     * 轮廓带展开(任意折线,[join] 拐角样式,闭合路径无端帽,开放路径按 [cap] 端帽)。
+     * [pts] 为 [x, y] 平铺中心线顶点。
+     */
+    private fun strokeBand(
+        pts: FloatArray, closed: Boolean, strokeWidth: Float,
+        cap: StrokeCap, join: StrokeJoin, miterLimit: Float,
+        sink: Sink,
+    ) {
         val n = pts.size / 2
         if (n < 2) return
         val h = effectiveWidth(strokeWidth) / 2f
@@ -1038,41 +1097,91 @@ internal object GeometryTessellator {
         val em = StrokeEmitter(sink, h, w)
         em.reset()
 
-        /** 顶点 join:法线从 (in) 旋转到 (out) 的短弧,按弦长 ~2px 细分发射(弧段) */
-        fun vertexArc(px: Float, py: Float, inX: Float, inY: Float, outX: Float, outY: Float) {
+        /** 顶点 join(Skia 语义):Round 法线旋转弧 / Bevel 斜切 / Miter 角平分线延长(超限退化 Bevel) */
+        fun vertexJoin(px: Float, py: Float, inX: Float, inY: Float, outX: Float, outY: Float) {
             val cross = inX * outY - inY * outX
             val dot = inX * outX + inY * outY
             var angle = atan2(cross.toDouble(), dot.toDouble())
             if (angle > PI) angle -= 2.0 * PI
             if (angle < -PI) angle += 2.0 * PI
-            val k = max(1, ceil(abs(angle) * h * aaScale / 2.0).toInt())
-            // 修复(border 2px 每边只渲染一半):必须发射 in 法线起点(t=0)。
-            // 原实现 for(i in 1..k) 从不发射起点:当 k=1(如 2px 矩形的 90° 角,
-            // h=1 → ceil(π/2·1/2)=1)时每个角只发 out 法线单点,相邻直边段两端
-            // 的带法线是相邻两边法线(跳 90°)→ 带为斜平行四边形,每条边只盖一半。
-            // 先发 in 起点后,直边段两端法线一致(该边法线)→ 平直完整。
-            if (abs(angle) > 1e-4f) {
+            if (abs(angle) < 1e-4f) return // 近共线:不发射(直边段两端法线一致即可)
+            /**
+             * 斜切 join:in/out 两个截面,其间带段以 M=顶点 剖分即平面斜切。
+             *
+             * 偏转角很小(圆/弧密采样顶点)时斜切与 miter 的视觉差为亚像素
+             * (尖点凸出量 h·(1/cos(θ/2)−1)),但双截面在收拢侧结构性重叠:
+             * 相邻两边带段的 fringe 四边形都探入截面间的楔形区,再叠 join
+             * 弧段 fringe → 三层 SrcOver 叠加 → 顶点深色珠子(圆描边内圈
+             * 毛刺);扇出侧 fringe 边界自然收敛相接,无此问题。
+             * 故尖点凸出量 < 0.25 屏幕像素时改用单 miter 截面:两侧边带段
+             * 共享同一截面,轮廓边与 fringe 边界边严格相接,无重叠无缺口。
+             */
+            fun emitBevel(px: Float, py: Float, inX: Float, inY: Float, outX: Float, outY: Float) {
+                var mx = inX + outX
+                var my = inY + outY
+                val ml = sqrt(mx * mx + my * my)
+                if (ml > 1e-6f) {
+                    mx /= ml
+                    my /= ml
+                    val cosHalf = mx * inX + my * inY
+                    if (cosHalf > 1e-3f && h * aaScale * (1f / cosHalf - 1f) < 0.25f) {
+                        em.emitScaled(px, py, mx, my, 1f / cosHalf)
+                        return
+                    }
+                }
                 em.emit(px, py, inX, inY)
+                em.emit(px, py, outX, outY)
             }
-            for (i in 1..k) {
-                val t = i.toFloat() / k
-                val a = angle * t
-                val ca = cos(a).toFloat()
-                val sa = sin(a).toFloat()
-                em.emit(px, py, inX * ca - inY * sa, inX * sa + inY * ca)
+
+            when (join) {
+                StrokeJoin.Bevel -> emitBevel(px, py, inX, inY, outX, outY)
+
+                StrokeJoin.Miter -> {
+                    // 角平分线方向,长度 h/cos(θ/2);Skia 截断判据:
+                    // miterLimit·sin(θ/2) < 1 → 退化 Bevel(默认 limit 4 ↔ θ < ~29° 截断)
+                    var mx = inX + outX
+                    var my = inY + outY
+                    val ml = sqrt(mx * mx + my * my)
+                    val sinHalf = sin(abs(angle) / 2.0).toFloat()
+                    if (ml > 1e-6f && miterLimit > 0f && miterLimit * sinHalf >= 1f) {
+                        mx /= ml
+                        my /= ml
+                        val cosHalf = mx * inX + my * inY
+                        if (cosHalf > 1e-3f) {
+                            em.emitScaled(px, py, mx, my, 1f / cosHalf)
+                            return
+                        }
+                    }
+                    emitBevel(px, py, inX, inY, outX, outY)
+                }
+
+                StrokeJoin.Round -> {
+                    val k = max(1, ceil(abs(angle) * h * aaScale / 2.0).toInt())
+                    // 必须发射 in 法线起点(t=0):k=1(如 2px 矩形的 90° 角)时
+                    // 若只发 out 法线单点,相邻直边段两端带法线跳 90° → 带为
+                    // 斜平行四边形,每条边只盖一半;先发 in 起点后直边段平直完整。
+                    em.emit(px, py, inX, inY)
+                    for (i in 1..k) {
+                        val t = i.toFloat() / k
+                        val a = angle * t
+                        val ca = cos(a).toFloat()
+                        val sa = sin(a).toFloat()
+                        em.emit(px, py, inX * ca - inY * sa, inX * sa + inY * ca)
+                    }
+                }
             }
         }
 
         if (closed) {
             for (i in 0 until n) {
-                vertexArc(pts[i * 2], pts[i * 2 + 1], nx[(i - 1 + n) % n], ny[(i - 1 + n) % n], nx[i], ny[i])
+                vertexJoin(pts[i * 2], pts[i * 2 + 1], nx[(i - 1 + n) % n], ny[(i - 1 + n) % n], nx[i], ny[i])
             }
             em.close()
         } else {
             // 首端:端点对
             em.emit(pts[0], pts[1], nx[0], ny[0])
             for (i in 1 until n - 1) {
-                vertexArc(pts[i * 2], pts[i * 2 + 1], nx[i - 1], ny[i - 1], nx[i], ny[i])
+                vertexJoin(pts[i * 2], pts[i * 2 + 1], nx[i - 1], ny[i - 1], nx[i], ny[i])
             }
             // 末端点对
             em.emit(pts[(n - 1) * 2], pts[(n - 1) * 2 + 1], nx[n - 2], ny[n - 2])
@@ -1086,6 +1195,174 @@ internal object GeometryTessellator {
                 endCapButt(pts[(n - 1) * 2], pts[(n - 1) * 2 + 1], nx[n - 2], ny[n - 2], -1, h, w, sink)
             }
         }
+    }
+
+    /**
+     * dash 弧长切分(Skia SkDashPathEffect 语义):沿折线把 on/off 区间交替铺开,
+     * 返回所有 on 子折线(≥ 2 点)。
+     *
+     * - [intervals] 恒偶数组(构造时已归一化),[phase] 先 mod 区间总和;
+     * - 闭合折线按「首尾相接的开链」处理(接缝处 on 区间可能被切成两截,
+     *   端帽重合,视觉接近无缝);
+     * - 零长度区间直接跳过(不画 Skia 圆帽点)。
+     */
+    private fun dashSplit(pts: FloatArray, closed: Boolean, intervals: FloatArray, phase: Float): List<FloatArray> {
+        val n = pts.size / 2
+        if (n < 2) return emptyList()
+        val total = intervals.sum()
+        if (total <= 0f) return listOf(pts)
+
+        val segCount = if (closed) n else n - 1
+        fun px(i: Int) = pts[(i % n) * 2]
+        fun py(i: Int) = pts[(i % n) * 2 + 1]
+
+        // phase 归一化到 [0, total),定位起始区间
+        var offset = phase % total
+        if (offset < 0f) offset += total
+        var idx = 0
+        var left = intervals[0]
+        while (offset >= left) {
+            offset -= left
+            idx = (idx + 1) % intervals.size
+            left = intervals[idx]
+        }
+        var on = idx % 2 == 0
+
+        val pieces = ArrayList<FloatArray>()
+        var cur = ArrayList<Float>()
+
+        fun closePiece() {
+            if (on && cur.size >= 4) pieces.add(cur.toFloatArray())
+            cur = ArrayList()
+        }
+
+        fun nextInterval() {
+            idx = (idx + 1) % intervals.size
+            left = intervals[idx]
+            on = !on
+        }
+
+        for (i in 0 until segCount) {
+            val ax = px(i)
+            val ay = py(i)
+            val bx = px(i + 1)
+            val by = py(i + 1)
+            val segLen = dist(ax, ay, bx, by)
+            if (segLen < 1e-6f) continue
+            val ux = (bx - ax) / segLen
+            val uy = (by - ay) / segLen
+            var consumed = 0f
+            while (segLen - consumed > 1e-6f) {
+                val step = min(left, segLen - consumed)
+                if (on && cur.isEmpty()) {
+                    cur.add(ax + ux * consumed)
+                    cur.add(ay + uy * consumed)
+                }
+                consumed += step
+                if (on) {
+                    cur.add(ax + ux * consumed)
+                    cur.add(ay + uy * consumed)
+                }
+                left -= step
+                if (left <= 1e-6f) {
+                    closePiece()
+                    nextInterval()
+                    // 跳过零长度区间(total > 0 保证有限步内结束)
+                    var guard = 0
+                    while (left <= 1e-6f && guard++ <= intervals.size) nextInterval()
+                }
+            }
+        }
+        closePiece()
+        return pieces
+    }
+
+    /**
+     * corner 倒圆(Skia SkCornerPathEffect 语义):折线每个尖角替换为半径
+     * [radius] 的圆弧。切点距顶点 d = r/tan(α/2)(α = 拐角偏转角),
+     * d 钳制到相邻边长的一半(半径自动缩小,切点不越界)。
+     * 闭合折线首尾顶点同样倒圆,返回点列仍按闭合使用。
+     */
+    private fun roundCorners(ptsIn: FloatArray, closed: Boolean, radius: Float, aaScale: Float): FloatArray {
+        val n = ptsIn.size / 2
+        if (n < 3 || radius <= 0f) return ptsIn
+        fun px(i: Int) = ptsIn[((i % n) + n) % n * 2]
+        fun py(i: Int) = ptsIn[((i % n) + n) % n * 2 + 1]
+
+        val out = ArrayList<Float>(ptsIn.size * 2)
+
+        fun append(x: Float, y: Float) {
+            val m = out.size / 2
+            if (m > 0 && dist(out[(m - 1) * 2], out[(m - 1) * 2 + 1], x, y) < 1e-4f) return
+            out.add(x)
+            out.add(y)
+        }
+
+        fun roundedCorner(i: Int) {
+            val vx = px(i)
+            val vy = py(i)
+            val prevLen = dist(px(i - 1), py(i - 1), vx, vy)
+            val nextLen = dist(vx, vy, px(i + 1), py(i + 1))
+            if (prevLen < 1e-6f || nextLen < 1e-6f) {
+                append(vx, vy)
+                return
+            }
+            val ux = (vx - px(i - 1)) / prevLen
+            val uy = (vy - py(i - 1)) / prevLen
+            val wx = (px(i + 1) - vx) / nextLen
+            val wy = (py(i + 1) - vy) / nextLen
+            // α = 偏转角(0 = 直线);cosα = (-u)·w
+            val cosA = (-ux * wx - uy * wy).coerceIn(-1f, 1f)
+            val alpha = acos(cosA)
+            if (alpha < 1e-3f) {
+                append(vx, vy)
+                return
+            }
+            val tanHalf = tan(alpha / 2.0).toFloat()
+            val sinHalf = sin(alpha / 2.0).toFloat()
+            val d = min(radius / tanHalf, 0.5f * min(prevLen, nextLen))
+            if (d < 1e-4f) {
+                append(vx, vy)
+                return
+            }
+            val rEff = d * tanHalf
+            val t1x = vx - ux * d
+            val t1y = vy - uy * d
+            val t2x = vx + wx * d
+            val t2y = vy + wy * d
+            // 圆心:角平分线方向,距顶点 rEff/sin(α/2)
+            var bx = -ux + wx
+            var by = -uy + wy
+            val bl = sqrt(bx * bx + by * by)
+            if (bl < 1e-6f || sinHalf < 1e-6f) {
+                append(vx, vy)
+                return
+            }
+            bx /= bl
+            by /= bl
+            val ccx = vx + bx * (rEff / sinHalf)
+            val ccy = vy + by * (rEff / sinHalf)
+            val a0 = atan2((t1y - ccy).toDouble(), (t1x - ccx).toDouble())
+            var sweep = atan2((t2y - ccy).toDouble(), (t2x - ccx).toDouble()) - a0
+            while (sweep > PI) sweep -= 2.0 * PI
+            while (sweep < -PI) sweep += 2.0 * PI
+            val k = max(2, ceil(abs(sweep) * rEff * aaScale / 2.0).toInt())
+            append(t1x, t1y)
+            for (s in 1 until k) {
+                val a = a0 + sweep * s / k
+                append(ccx + rEff * cos(a).toFloat(), ccy + rEff * sin(a).toFloat())
+            }
+            append(t2x, t2y)
+        }
+
+        if (closed) {
+            for (i in 0 until n) roundedCorner(i)
+        } else {
+            append(px(0), py(0))
+            for (i in 1 until n - 1) roundedCorner(i)
+            append(px(n - 1), py(n - 1))
+        }
+        return if (out.size >= 4) out.toFloatArray() else ptsIn
     }
 
     /**
@@ -1167,7 +1444,10 @@ internal object GeometryTessellator {
     // ── 入口图元 ──────────────────────────────────────────────────────────
 
     /** 圆。细分按弦高自适应(每段弦高 ≤ 0.25 屏幕像素) */
-    fun circle(cx: Float, cy: Float, radius: Float, fill: Boolean, strokeWidth: Float, sink: Sink) {
+    fun circle(
+        cx: Float, cy: Float, radius: Float, fill: Boolean, strokeWidth: Float, sink: Sink,
+        join: StrokeJoin = StrokeJoin.Miter, miterLimit: Float = 4f, pathEffect: PathEffect? = null,
+    ) {
         val r = radius.coerceAtLeast(0f)
         if (r <= 0f) return
         val segments = if (fill) arcSegments(r * sink.aaScale) else strokeSegments(r * sink.aaScale)
@@ -1175,12 +1455,15 @@ internal object GeometryTessellator {
         if (fill) {
             fillPolygon(pts, sink)
         } else {
-            strokeRing(pts, true, strokeWidth, StrokeCap.Butt, sink)
+            strokeRing(pts, true, strokeWidth, StrokeCap.Butt, join, miterLimit, pathEffect, sink)
         }
     }
 
     /** 椭圆(轴对齐)。 */
-    fun oval(left: Float, top: Float, right: Float, bottom: Float, fill: Boolean, strokeWidth: Float, sink: Sink) {
+    fun oval(
+        left: Float, top: Float, right: Float, bottom: Float, fill: Boolean, strokeWidth: Float, sink: Sink,
+        join: StrokeJoin = StrokeJoin.Miter, miterLimit: Float = 4f, pathEffect: PathEffect? = null,
+    ) {
         val rx = (right - left) / 2f
         val ry = (bottom - top) / 2f
         if (rx <= 0f || ry <= 0f) return
@@ -1191,7 +1474,7 @@ internal object GeometryTessellator {
         if (fill) {
             fillPolygon(pts, sink)
         } else {
-            strokeRing(pts, true, strokeWidth, StrokeCap.Butt, sink)
+            strokeRing(pts, true, strokeWidth, StrokeCap.Butt, join, miterLimit, pathEffect, sink)
         }
     }
 
@@ -1204,6 +1487,7 @@ internal object GeometryTessellator {
         left: Float, top: Float, right: Float, bottom: Float,
         startAngleDeg: Float, sweepAngleDeg: Float, useCenter: Boolean,
         fill: Boolean, strokeWidth: Float, sink: Sink,
+        join: StrokeJoin = StrokeJoin.Miter, miterLimit: Float = 4f, pathEffect: PathEffect? = null,
     ) {
         val rx = (right - left) / 2f
         val ry = (bottom - top) / 2f
@@ -1227,7 +1511,7 @@ internal object GeometryTessellator {
                 fillPolygon(pts, sink)
             }
         } else {
-            strokeRing(pts, false, strokeWidth, StrokeCap.Butt, sink)
+            strokeRing(pts, false, strokeWidth, StrokeCap.Butt, join, miterLimit, pathEffect, sink)
         }
     }
 
@@ -1287,6 +1571,7 @@ internal object GeometryTessellator {
         left: Float, top: Float, right: Float, bottom: Float,
         radiusX: Float, radiusY: Float,
         fill: Boolean, strokeWidth: Float, sink: Sink,
+        join: StrokeJoin = StrokeJoin.Miter, miterLimit: Float = 4f, pathEffect: PathEffect? = null,
     ) {
         val w = right - left
         val h = bottom - top
@@ -1299,7 +1584,7 @@ internal object GeometryTessellator {
                 // 用网格而不是单 quad:让径向/扫描等非线性渐变有内部采样顶点
                 rectGrid(left, top, right, bottom, sink)
             } else {
-                strokeRing(floatArrayOf(left, top, right, top, right, bottom, left, bottom), true, strokeWidth, StrokeCap.Butt, sink)
+                strokeRing(floatArrayOf(left, top, right, top, right, bottom, left, bottom), true, strokeWidth, StrokeCap.Butt, join, miterLimit, pathEffect, sink)
             }
             return
         }
@@ -1329,7 +1614,7 @@ internal object GeometryTessellator {
         if (fill) {
             fillPolygon(outline, sink)
         } else {
-            strokeRing(outline, true, strokeWidth, StrokeCap.Butt, sink)
+            strokeRing(outline, true, strokeWidth, StrokeCap.Butt, join, miterLimit, pathEffect, sink)
         }
     }
 
@@ -1337,7 +1622,10 @@ internal object GeometryTessellator {
      * 线段:带展开(butt → 方形端帽;round → 半圆端帽),全部边经带 AA。
      * 零长度线段 → 按 cap 画一个点。
      */
-    fun line(x1: Float, y1: Float, x2: Float, y2: Float, strokeWidth: Float, cap: StrokeCap, sink: Sink) {
+    fun line(
+        x1: Float, y1: Float, x2: Float, y2: Float, strokeWidth: Float, cap: StrokeCap, sink: Sink,
+        join: StrokeJoin = StrokeJoin.Miter, miterLimit: Float = 4f, pathEffect: PathEffect? = null,
+    ) {
         val w = effectiveWidth(strokeWidth)
         val h = w / 2f
         if (dist(x1, y1, x2, y2) <= 1e-6f) {
@@ -1348,7 +1636,7 @@ internal object GeometryTessellator {
             }
             return
         }
-        strokeRing(floatArrayOf(x1, y1, x2, y2), false, w, cap, sink)
+        strokeRing(floatArrayOf(x1, y1, x2, y2), false, w, cap, join, miterLimit, pathEffect, sink)
     }
 
     // ── Path ───────────────────────────────────────────────────────────────
@@ -1364,6 +1652,9 @@ internal object GeometryTessellator {
         strokeWidth: Float,
         cap: StrokeCap,
         sink: Sink,
+        join: StrokeJoin = StrokeJoin.Miter,
+        miterLimit: Float = 4f,
+        pathEffect: PathEffect? = null,
     ) {
         val subpaths = flatten(segments, sink.aaScale)
         if (fill) {
@@ -1374,7 +1665,7 @@ internal object GeometryTessellator {
         } else {
             for ((points, closed) in subpaths) {
                 if (points.size < 4) continue
-                strokeRing(points, closed, strokeWidth, cap, sink)
+                strokeRing(points, closed, strokeWidth, cap, join, miterLimit, pathEffect, sink)
             }
         }
     }
@@ -1389,7 +1680,10 @@ internal object GeometryTessellator {
      * - Polygon:按输入顺序生成连续折线(p0→p1→p2→...),不填充内部,
      *   不自动闭合回起点;每段带展开,顶点圆 join,两端按 [cap] 端帽。
      */
-    fun points(mode: PointMode, points: List<Offset>, strokeWidth: Float, cap: StrokeCap, sink: Sink) {
+    fun points(
+        mode: PointMode, points: List<Offset>, strokeWidth: Float, cap: StrokeCap, sink: Sink,
+        join: StrokeJoin = StrokeJoin.Miter, miterLimit: Float = 4f, pathEffect: PathEffect? = null,
+    ) {
         if (points.isEmpty()) return
         val w = effectiveWidth(strokeWidth)
         when (mode) {
@@ -1406,7 +1700,7 @@ internal object GeometryTessellator {
                 while (i + 1 < points.size) {
                     val a = points[i]
                     val b = points[i + 1]
-                    line(a.x, a.y, b.x, b.y, w, cap, sink)
+                    line(a.x, a.y, b.x, b.y, w, cap, sink, join, miterLimit, pathEffect)
                     i += 2
                 }
             }
@@ -1437,7 +1731,7 @@ internal object GeometryTessellator {
                     }
                     return
                 }
-                strokeRing(pts.toFloatArray(), false, w, cap, sink)
+                strokeRing(pts.toFloatArray(), false, w, cap, join, miterLimit, pathEffect, sink)
             }
         }
     }

@@ -624,6 +624,12 @@ internal class MinecraftCanvas internal constructor(
         val blendMode: BlendMode = BlendMode.SrcOver,
         /** 渐变着色器(平台适配点):LinearGradient/RadialGradient/SweepGradient,非 null 时覆盖 color */
         val shader: Shader? = null,
+        /** 描边拐角样式(Skia 语义:Miter 带 [strokeMiterLimit] 截断,超限退化为 Bevel) */
+        val strokeJoin: StrokeJoin = StrokeJoin.Miter,
+        /** Miter 长度上限(半宽倍数,官方默认 4) */
+        val strokeMiterLimit: Float = 4f,
+        /** 几何效果(DashPathEffect / CornerPathEffect),仅作用于描边 */
+        val pathEffect: PathEffect? = null,
     )
 
     /** 绘制命令基类 */
@@ -1479,6 +1485,9 @@ internal class MinecraftCanvas internal constructor(
             colorFilter = (this as? MinecraftPaint)?.nativeColorFilter ?: colorFilter?.nativeColorFilter,
             blendMode = blendMode,
             shader = shader,
+            strokeJoin = strokeJoin,
+            strokeMiterLimit = strokeMiterLimit,
+            pathEffect = pathEffect,
         )
 
     private fun record(command: DrawCommand) {

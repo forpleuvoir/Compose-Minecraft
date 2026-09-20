@@ -179,4 +179,7 @@ internal fun Paint.toPaintSnapshot(): MinecraftCanvas.PaintSnapshot =
         colorFilter = if (this is MinecraftPaint) nativeColorFilter else colorFilter?.nativeColorFilter,
         blendMode = blendMode,
         shader = shader,
+        strokeJoin = strokeJoin,
+        strokeMiterLimit = strokeMiterLimit,
+        pathEffect = pathEffect,
     )

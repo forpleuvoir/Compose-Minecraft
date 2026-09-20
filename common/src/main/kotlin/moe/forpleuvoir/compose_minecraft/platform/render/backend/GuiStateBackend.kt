@@ -24,6 +24,7 @@ import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.client.renderer.state.gui.BlitRenderState
 import net.minecraft.client.renderer.state.gui.ColoredRectangleRenderState
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -78,6 +79,7 @@ internal class GuiStateBackend : GeometryBackend {
                 )
             )
         } else {
+            if (tryHairlineStrokeRect(sink, scissor, cmd.left, cmd.top, cmd.right, cmd.bottom, cmd.paint, cmd.matrix)) return
             addTriangles(sink, cmd, scissor) { sink ->
                 val shader = cmd.paint.shader
                 if (shader is LinearGradientShaderData && cmd.paint.style == PaintingStyle.Fill) {
@@ -109,6 +111,9 @@ internal class GuiStateBackend : GeometryBackend {
                         fill = cmd.paint.style == PaintingStyle.Fill,
                         strokeWidth = cmd.paint.strokeWidth,
                         sink = sink,
+                        join = cmd.paint.strokeJoin,
+                        miterLimit = cmd.paint.strokeMiterLimit,
+                        pathEffect = cmd.paint.pathEffect,
                     )
                 }
             }
@@ -133,6 +138,9 @@ internal class GuiStateBackend : GeometryBackend {
                 )
             )
         } else {
+            if (cmd.radiusX <= 1f && cmd.radiusY <= 1f &&
+                tryHairlineStrokeRect(sink, scissor, cmd.left, cmd.top, cmd.right, cmd.bottom, cmd.paint, cmd.matrix)
+            ) return
             addTriangles(sink, cmd, scissor) { sink ->
                 GeometryTessellator.roundRect(
                     cmd.left, cmd.top, cmd.right, cmd.bottom,
@@ -140,6 +148,9 @@ internal class GuiStateBackend : GeometryBackend {
                     fill = cmd.paint.style == PaintingStyle.Fill,
                     strokeWidth = cmd.paint.strokeWidth,
                     sink = sink,
+                    join = cmd.paint.strokeJoin,
+                    miterLimit = cmd.paint.strokeMiterLimit,
+                    pathEffect = cmd.paint.pathEffect,
                 )
             }
         }
@@ -155,6 +166,9 @@ internal class GuiStateBackend : GeometryBackend {
                 fill = cmd.paint.style == PaintingStyle.Fill,
                 strokeWidth = cmd.paint.strokeWidth,
                 sink = sink,
+                join = cmd.paint.strokeJoin,
+                miterLimit = cmd.paint.strokeMiterLimit,
+                pathEffect = cmd.paint.pathEffect,
             )
         }
     }
@@ -169,6 +183,9 @@ internal class GuiStateBackend : GeometryBackend {
                 fill = cmd.paint.style == PaintingStyle.Fill,
                 strokeWidth = cmd.paint.strokeWidth,
                 sink = sink,
+                join = cmd.paint.strokeJoin,
+                miterLimit = cmd.paint.strokeMiterLimit,
+                pathEffect = cmd.paint.pathEffect,
             )
         }
     }
@@ -184,6 +201,9 @@ internal class GuiStateBackend : GeometryBackend {
                 fill = cmd.paint.style == PaintingStyle.Fill,
                 strokeWidth = cmd.paint.strokeWidth,
                 sink = sink,
+                join = cmd.paint.strokeJoin,
+                miterLimit = cmd.paint.strokeMiterLimit,
+                pathEffect = cmd.paint.pathEffect,
             )
         }
     }
@@ -192,12 +212,16 @@ internal class GuiStateBackend : GeometryBackend {
         val sink = sink ?: return
         val scissor = scissorFor(cmd)
         if (cmd.clip != null && scissor == null) return
+        if (tryHairlineStrokeLine(sink, scissor, cmd)) return
         addTriangles(sink, cmd, scissor) { sink ->
             GeometryTessellator.line(
                 cmd.p1x, cmd.p1y, cmd.p2x, cmd.p2y,
                 cmd.paint.strokeWidth,
                 cmd.paint.strokeCap,
                 sink = sink,
+                join = cmd.paint.strokeJoin,
+                miterLimit = cmd.paint.strokeMiterLimit,
+                pathEffect = cmd.paint.pathEffect,
             )
         }
     }
@@ -213,6 +237,9 @@ internal class GuiStateBackend : GeometryBackend {
                 strokeWidth = cmd.paint.strokeWidth,
                 cap = cmd.paint.strokeCap,
                 sink = sink,
+                join = cmd.paint.strokeJoin,
+                miterLimit = cmd.paint.strokeMiterLimit,
+                pathEffect = cmd.paint.pathEffect,
             )
         }
     }
@@ -227,6 +254,9 @@ internal class GuiStateBackend : GeometryBackend {
                 cmd.paint.strokeWidth,
                 cmd.paint.strokeCap,
                 sink = sink,
+                join = cmd.paint.strokeJoin,
+                miterLimit = cmd.paint.strokeMiterLimit,
+                pathEffect = cmd.paint.pathEffect,
             )
         }
     }
@@ -540,6 +570,111 @@ internal class GuiStateBackend : GeometryBackend {
         MinecraftRenderPlugins.dispatch(cmd.tag, cmd.data, ctx)
     }
 
+    // ── hairline 特化(轴对齐 1px 描边 → 像素对齐填充条)────────────────────
+
+    /**
+     * 轴对齐 hairline 特化(T.3):物理线宽 ≤ 1px 且矩阵轴对齐(无旋转/剪切)时,
+     * 描边转为像素对齐的 1px 填充矩形(blit 硬边)。
+     *
+     * 背景:距离场 AA 下 1px 描边的峰值 coverage 只有半宽 0.5px,
+     * smoothstep(-1,1) 峰值 alpha 仅 ~84% 且边缘拖尾 ~2px;四条边的亚像素
+     * 相位不同 → 矩形描边四边明暗/粗细不一致。填充条走 blit 实心路径,
+     * 四边绝对一致,与原版 GUI 边框观感相同。
+     */
+
+    /** 矩阵是否轴对齐(仅平移 + 正缩放,无旋转/剪切) */
+    private fun isAxisAligned(m: FloatArray): Boolean =
+        m[1] == 0f && m[4] == 0f && m[0] > 0f && m[5] > 0f
+
+    /** hairline 物理线宽(strokeWidth ≤ 0 → 1px 局部;Compose hairline 语义) */
+    private fun hairlineWidthPx(strokeWidth: Float, aaScale: Float): Float =
+        (if (strokeWidth <= 0f) 1f else strokeWidth) * aaScale
+
+    /** 提交一条设备空间(场景 px)整数坐标填充矩形(单位矩阵,blit 硬边) */
+    private fun blitAxisRect(
+        sink: GuiCommandSink, scissor: Rect?,
+        x0: Int, y0: Int, x1: Int, y1: Int,
+        paint: PaintSnapshot,
+    ) {
+        if (x1 <= x0 || y1 <= y0) return
+        sink.addElement(
+            blit(IDENTITY_MATRIX, scissor, x0.toFloat(), y0.toFloat(), x1.toFloat(), y1.toFloat(), paint)
+        )
+    }
+
+    /**
+     * 描边矩形 hairline 特化:返回 true 表示已提交(调用方直接 return)。
+     * 每边描边带 [中心 ± w/2] 取整为 1px 填充条;左右通高、上下内缩,
+     * 角部无重叠(半透明色也不会双混合变深);≤ 2px 的极小矩形整体填充。
+     */
+    private fun tryHairlineStrokeRect(
+        sink: GuiCommandSink, scissor: Rect?,
+        left: Float, top: Float, right: Float, bottom: Float,
+        paint: PaintSnapshot, matrix: FloatArray,
+    ): Boolean {
+        if (paint.style != PaintingStyle.Stroke || paint.shader != null || paint.pathEffect != null) return false
+        if (!isAxisAligned(matrix)) return false
+        val sx = matrix[0]
+        val sy = matrix[5]
+        val w = hairlineWidthPx(paint.strokeWidth, max(sx, sy))
+        if (w > 1.01f) return false
+        val hw = w / 2f
+        val x0 = (left * sx + matrix[12] - hw).roundToInt()
+        val y0 = (top * sy + matrix[13] - hw).roundToInt()
+        val x1 = (right * sx + matrix[12] + hw).roundToInt()
+        val y1 = (bottom * sy + matrix[13] + hw).roundToInt()
+        if (x1 - x0 <= 2 || y1 - y0 <= 2) {
+            // 极小矩形:整个区域都是边框 → 整体填充
+            blitAxisRect(sink, scissor, x0, y0, x1, y1, paint)
+            return true
+        }
+        blitAxisRect(sink, scissor, x0, y0, x0 + 1, y1, paint)
+        blitAxisRect(sink, scissor, x1 - 1, y0, x1, y1, paint)
+        blitAxisRect(sink, scissor, x0 + 1, y0, x1 - 1, y0 + 1, paint)
+        blitAxisRect(sink, scissor, x0 + 1, y1 - 1, x1 - 1, y1, paint)
+        return true
+    }
+
+    /**
+     * 线段 hairline 特化:仅轴对齐(水平/垂直)线段;Round cap 需要 AA 半圆,
+     * 保持走三角化(返回 false)。
+     */
+    private fun tryHairlineStrokeLine(sink: GuiCommandSink, scissor: Rect?, cmd: DrawLineCommand): Boolean {
+        val paint = cmd.paint
+        if (paint.shader != null || paint.pathEffect != null) return false
+        if (paint.strokeCap == StrokeCap.Round) return false
+        val m = cmd.matrix
+        if (!isAxisAligned(m)) return false
+        val sx = m[0]
+        val sy = m[5]
+        val w = hairlineWidthPx(paint.strokeWidth, max(sx, sy))
+        if (w > 1.01f) return false
+        val hw = w / 2f
+        val ext = if (paint.strokeCap == StrokeCap.Square) hw else 0f
+        val x1 = cmd.p1x * sx + m[12]
+        val y1 = cmd.p1y * sy + m[13]
+        val x2 = cmd.p2x * sx + m[12]
+        val y2 = cmd.p2y * sy + m[13]
+        when {
+            abs(x1 - x2) < 0.01f -> {
+                val x0 = (x1 - hw).roundToInt()
+                val y0 = (minOf(y1, y2) - ext).roundToInt()
+                val yEnd = (maxOf(y1, y2) + ext).roundToInt()
+                blitAxisRect(sink, scissor, x0, y0, x0 + 1, yEnd, paint)
+            }
+
+            abs(y1 - y2) < 0.01f -> {
+                val y0 = (y1 - hw).roundToInt()
+                val x0 = (minOf(x1, x2) - ext).roundToInt()
+                val xEnd = (maxOf(x1, x2) + ext).roundToInt()
+                blitAxisRect(sink, scissor, x0, y0, xEnd, y0 + 1, paint)
+            }
+
+            else                 -> return false
+        }
+        return true
+    }
+
     // ── scissor(原 render 循环内联逻辑,提取为单方法)──────────────────
 
     /**
@@ -845,6 +980,31 @@ internal class GuiStateBackend : GeometryBackend {
                 else                         -> 4
             }
         )
+        // join/miter/pathEffect 影响描边几何,必须进指纹
+        mix(
+            when (paint.strokeJoin) {
+                StrokeJoin.Miter -> 0
+                StrokeJoin.Round -> 1
+                StrokeJoin.Bevel -> 2
+                else             -> 0
+            }
+        )
+        mix(paint.strokeMiterLimit)
+        when (val effect = paint.pathEffect) {
+            null                 -> mix(0)
+            is DashPathEffect    -> {
+                mix(1)
+                mix(effect.phase)
+                for (v in effect.normalized) mix(v)
+            }
+
+            is CornerPathEffect  -> {
+                mix(2)
+                mix(effect.radius)
+            }
+
+            else                 -> mix(3)
+        }
         when (command) {
             is DrawCircleCommand    -> {
                 mix(1); mix(command.centerX); mix(command.centerY); mix(command.radius)
@@ -911,6 +1071,9 @@ internal class GuiStateBackend : GeometryBackend {
     private companion object {
         /** 顶点网格内部 coverage 大数(与 GeometryTessellator.OPAQUE 同值) */
         const val OPAQUE_COVERAGE = 1e4f
+
+        /** hairline 特化的设备空间单位矩阵(blitAxisRect 已换算到场景 px) */
+        val IDENTITY_MATRIX = FloatArray(16) { i -> if (i % 5 == 0) 1f else 0f }
 
         /** 调试框颜色:行盒轮廓(绿)/ 基线(红) */
         const val DBG_BOUNDS_COLOR = 0xFF00E676.toInt()
