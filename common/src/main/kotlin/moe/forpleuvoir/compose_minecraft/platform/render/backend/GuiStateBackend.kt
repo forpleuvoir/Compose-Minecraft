@@ -948,17 +948,27 @@ internal class GuiStateBackend : GeometryBackend {
     private fun geometryFingerprint(command: DrawCommand, paint: PaintSnapshot, aaScale: Float): Long {
         var h1 = 1125899906842597L
         var h2 = 31L
-        fun mix(v: Float) {
-            h1 = h1 * 31 + v.toRawBits()
+
+        /**
+         * 字段级 64 位雪崩(splitmix64 的 fmix),再进多项式折叠。
+         *
+         * 折叠 `h1 = h1 * 31 + bits` 对字段位是线性的:不先雪崩时,靠后混入的字段只在
+         * 低位留下差异,坐标近似的不同几何会算出同一个键 —— 缓存命中会取回另一份几何的
+         * 顶点。逐字段雪崩后,键在整个 64 位上互相区分。
+         * 必须在**进入折叠之前**逐字段雪崩:折叠后再雪崩无效(雪崩是双射,不减少重复键)。
+         */
+        fun mixBits(bits: Long) {
+            var z = bits
+            z = (z xor (z ushr 30)) * -0x40A7B892E31B1A47L
+            z = (z xor (z ushr 27)) * -0x6B2FB644ECCEEE15L
+            z = z xor (z ushr 31)
+            h1 = h1 * 31 + z
             h2 = h2 * 31 + (h1 ushr 1)
         }
 
-        fun mix(i: Int) {
-            h1 = h1 * 31 + i
-            h2 = h2 * 31 + (h1 ushr 1)
-        }
-
-        fun mixB(b: Boolean) = mix(if (b) 1 else 0)
+        fun mix(v: Float) = mixBits(v.toRawBits().toLong())
+        fun mix(i: Int) = mixBits(i.toLong())
+        fun mixB(b: Boolean) = mixBits(if (b) 1L else 0L)
         mix(aaScale)
         mix(if (paint.style == PaintingStyle.Fill) 0 else 1)
         mix(paint.strokeWidth)
