@@ -9,6 +9,7 @@ out/
 .tmp-scene/
 .reasonix
 .dsh-vision-router/
+.workbuddy/
 reasonix.toml
 # 字体下载缓存
 downloads/
