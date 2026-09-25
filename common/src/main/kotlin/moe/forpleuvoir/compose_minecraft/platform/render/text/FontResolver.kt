@@ -6,7 +6,6 @@ import com.mojang.logging.LogUtils
 import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.boldRaw
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontOriginal
-import moe.forpleuvoir.compose_minecraft.platform.ui.text.italicRaw
 import net.minecraft.network.chat.FontDescription
 import net.minecraft.network.chat.Style
 import net.minecraft.resources.Identifier
@@ -59,26 +58,6 @@ data class MeasureSpec(
     /** 渲染样式快照(mc.font 渲染通道的权威计宽输入;矢量通道可 null) */
     val style: Style? = null,
 )
-
-/**
- * 度量规格归一化:只保留**决定字形与 advance 的样式字段**(字体 / 粗体 / 斜体),
- * 剔除纯绘制属性(颜色 / 阴影色 / 点击悬停事件 / 插入文本 / 下划线 / 删除线 / 乱码)。
- *
- * 度量池([FontResolver.pool]、[VanillaPipelineMetrics.pool])按规格分桶,而一个码点的
- * advance 只取决于「用哪个字形集、要不要加粗」—— 颜色等绘制属性既不进 splitter 计宽、
- * 也不改变字形集。若把它们留在规格里,同一段文字换一次颜色(例如悬停态的交互反馈色)
- * 就会落到另一个池桶、另行计算并**另行缓存**一份 advance;两份缓存分别在不同时刻取值
- * 时(字体管线尚未就绪 / 已就绪)就会量出两个宽度,按内容取宽的容器随之抖动。
- * 颜色由绘制端消费(节点样式 / overrideColor),不归度量。
- */
-internal fun MeasureSpec.layoutOnly(): MeasureSpec {
-    val source = style ?: return this
-    var normalized = Style.EMPTY
-    source.fontOriginal?.let { normalized = normalized.withFont(it) }
-    if (source.boldRaw == true) normalized = normalized.withBold(true)
-    if (source.italicRaw == true) normalized = normalized.withItalic(true)
-    return if (normalized == source) this else copy(style = normalized)
-}
 
 /**
  * 逐码点度量(emPx 绝对值;架构法则 A5「度量恒等于渲染」):
@@ -324,10 +303,8 @@ object FontResolver {
         return resolveFont(font, spec)
     }
 
-    private fun resolveFont(font: PlatformFont, spec: MeasureSpec): ResolvedFont {
-        val layoutSpec = spec.layoutOnly()
-        return pool.computeIfAbsent(font to layoutSpec) { ResolvedFont(font, layoutSpec) }
-    }
+    private fun resolveFont(font: PlatformFont, spec: MeasureSpec): ResolvedFont =
+        pool.computeIfAbsent(font to spec) { ResolvedFont(font, spec) }
 
     fun resolveDefault(spec: MeasureSpec): ResolvedFont = resolve(null, spec)
 
@@ -454,8 +431,8 @@ internal object FontMetrics {
         /** 网格原生态度量(禁止传入已按目标 em 缩放的值 —— 防双重缩放) */
         native: RunMetrics,
     ): RunMetrics {
-        val effSpec = (if (spec.style != null) spec
-        else spec.copy(style = Style.EMPTY.withFont(font.id))).layoutOnly()
+        val effSpec = if (spec.style != null) spec
+        else spec.copy(style = Style.EMPTY.withFont(font.id))
         return VanillaPipelineMetrics.of(font, effSpec, native)
     }
 
