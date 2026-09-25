@@ -1,9 +1,12 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.text
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.mojang.logging.LogUtils
 import moe.forpleuvoir.compose_minecraft.mc
+import moe.forpleuvoir.compose_minecraft.mixin.FontManagerAccessor
+import moe.forpleuvoir.compose_minecraft.mixin.MinecraftAccessor
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.boldRaw
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontOriginal
 import net.minecraft.network.chat.FontDescription
@@ -360,6 +363,49 @@ object FontResolver {
 
     private val pool = java.util.concurrent.ConcurrentHashMap<Pair<PlatformFont, MeasureSpec>, ResolvedFont>()
 
+    /**
+     * 字体管线代次:FontManager 的 FontSet 实例被替换(异步字体装载完成 / 资源重载 /
+     * 自定义字体注册)即推进。`mc.font.splitter` 在换代期间对同一码点给出的是回退字形宽度,
+     * 而度量池按 (字体, 规格) 把它冻结了下来 —— 池因此在换代时整体作废。
+     */
+    private var lastFontSetToken: Int = Int.MIN_VALUE
+
+    /**
+     * 当前字体管线代次(快照状态)。文本类读取它判断自己量出的值是否仍代表当前字体状态:
+     * 见 [androidx.compose.ui.text.platform.MinecraftParagraphIntrinsics.hasStaleResolvedFonts]。
+     */
+    private val fontGeneration = mutableStateOf(0)
+
+    /** 当前字体管线代次。 */
+    fun currentFontGeneration(): Int = fontGeneration.value
+
+    /** FontSet 实例身份 + 条目数:换代 = 新实例,据此判断字体管线是否已重建。 */
+    private fun fontSetToken(): Int {
+        val sets = fontManagerAccessor()?.fontSets() ?: return 0
+        val defaultKey = (defaultFontId as? FontDescription.Resource)?.id
+            ?: Identifier.withDefaultNamespace("default")
+        var token = sets.size
+        token = token * 31 + System.identityHashCode(sets[Identifier.withDefaultNamespace("default")])
+        token = token * 31 + System.identityHashCode(sets[defaultKey])
+        return token
+    }
+
+    private fun fontManagerAccessor(): FontManagerAccessor? =
+        runCatching { (mc as MinecraftAccessor).fontManager() as FontManagerAccessor }.getOrNull()
+
+    /**
+     * 每帧刷新字体管线代次:换代时清空度量池并推进 [fontGeneration],让已排版的文本重算 ——
+     * 否则布局宽度停留在换代期间的回退字形上,与实际绘制的字形宽度分叉(按内容取宽的控件会裁字)。
+     */
+    fun refreshFontState() {
+        val token = fontSetToken()
+        if (token == lastFontSetToken) return
+        lastFontSetToken = token
+        pool.clear()
+        VanillaPipelineMetrics.clear()
+        fontGeneration.value++
+    }
+
     init {
         BuiltinFonts.registerAll()
     }
@@ -576,6 +622,9 @@ internal class VanillaPipelineMetrics private constructor(
     companion object {
         private val pool =
             java.util.concurrent.ConcurrentHashMap<Pair<FontDescription, MeasureSpec>, VanillaPipelineMetrics>()
+
+        /** 清空度量池(字体管线换代时由 [FontResolver.refreshFontState] 调用)。 */
+        fun clear() = pool.clear()
 
         fun of(
             font: PlatformFont,

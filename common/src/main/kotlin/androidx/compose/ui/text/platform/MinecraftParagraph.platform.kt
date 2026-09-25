@@ -460,6 +460,15 @@ internal class MinecraftParagraphIntrinsics(
     val textDirection: ResolvedTextDirection = ResolvedTextDirection.Ltr
 
     /**
+     * 构造时的字体管线代次。代次推进后本对象量出的 advance 取自换代期间的回退字形,
+     * 不再代表当前字体状态;读取它会订阅该快照状态,换代即触发重新排版。
+     */
+    private val measuredFontGeneration: Int = FontResolver.currentFontGeneration()
+
+    override val hasStaleResolvedFonts: Boolean
+        get() = measuredFontGeneration != FontResolver.currentFontGeneration()
+
+    /**
      * 平台适配点(InlineContent):占位符排版原子。
      * Placeholder(sp) 经 [density] 转 px,再除以 [scale] 进入布局空间(与 maxWidth 同规则)。
      */

@@ -6,6 +6,7 @@ import com.mojang.blaze3d.pipeline.RenderPipeline
 import com.mojang.blaze3d.systems.RenderPass
 import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.VertexConsumer
+import moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
 import moe.forpleuvoir.compose_minecraft.platform.render.text.GlyphAtlas
 import moe.forpleuvoir.compose_minecraft.platform.render.text.GlyphCache
 import moe.forpleuvoir.compose_minecraft.platform.render.text.GuiGlyphRenderState
@@ -326,6 +327,9 @@ class ComposeGuiRenderer : GuiCommandSink {
         // 自定义字体自愈 —— 资源重载清空 FontManager.fontSets 后重建已注册字体
         // (无注册时 O(1) 空检查,见 MinecraftCustomFonts.ensureAlive)
         MinecraftCustomFonts.ensureAlive()
+        // 字体管线代次刷新:FontSet 换代(异步装载完成 / 资源重载)会让度量池里的 advance 过期,
+        // 换代即清池并让已排版文本重算,避免布局宽度停留在回退字形上
+        FontResolver.refreshFontState()
         //  图集 LRU 时钟 + 活跃页水位淘汰(淘汰页本帧不再分配,
         // 游标在帧末 flushRetiredPages 重置复用)
         GlyphCache.onFrameStart()
