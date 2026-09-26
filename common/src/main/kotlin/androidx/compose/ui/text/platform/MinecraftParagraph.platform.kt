@@ -37,6 +37,8 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.ResolvedTextDirection
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.isOffsetAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
@@ -456,6 +458,8 @@ internal class MinecraftParagraphIntrinsics(
     internal val segments: List<StyleSegment> = emptyList(),
     /** 平台适配点:文本缩放(1f = 原样;布局尺寸与字形矩阵同步缩放)。 */
     internal val scale: Float = 1f,
+    /** 平台适配点:段落水平对齐(布局端按行宽计算起点偏移;见 [MinecraftParagraph.lineX])。 */
+    internal val textAlign: TextAlign = TextAlign.Unspecified,
 ) : ParagraphIntrinsics {
     val textDirection: ResolvedTextDirection = ResolvedTextDirection.Ltr
 
@@ -607,6 +611,42 @@ internal class MinecraftParagraph(
         return acc
     }
 
+    /**
+     * 平台适配点:段落水平对齐的**容器宽度** = 该段落被布局时的宽度
+     * ([constraints] 有界时即 `maxWidth`)。无界(含 softWrap=false 的固有宽度布局)
+     * 时对齐无意义 → NaN,[lineX] 恒 0。
+     */
+    private val alignWidth: Float =
+        if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else Float.NaN
+
+    /**
+     * 平台适配点:第 [lineIndex] 行的水平起点偏移(段落水平对齐)。
+     *
+     * 语义对照官方 `android.text.Layout#getLineLeft`:每一行在**段落布局宽度**内摆放,
+     * 行自身宽度 = 内容实际宽度。因此对齐只在"容器比文本宽"时可见 —— 文本节点自身仍取
+     * 固有宽度,父级(如 `Modifier.fillMaxWidth()`)给足宽度才看得出居中/右对齐。
+     *
+     * 方向:平台 [MinecraftParagraphIntrinsics.textDirection] 恒 `Ltr`,故 `Start`/`End`
+     * 等同 `Left`/`Right`;`Justify` 需要按词拉伸 advance(MC 字形体系未实现)→ 按
+     * `Start` 降级;`Unspecified` 同样按 `Start`(与官方默认一致)。
+     */
+    private fun lineX(lineIndex: Int): Float {
+        if (lineIndex !in 0 until visibleLineCount) return 0f
+        val align = intrinsics.textAlign
+        // 平台适配点:`Left/Start/Unspecified`(及降级的 `Justify`)不产生行偏移
+        if (!align.isOffsetAlign) return 0f
+        val container = alignWidth
+        if (!container.isFinite()) return 0f
+        val free = container - lineAt(lineIndex).width
+        if (free <= 0f) return 0f
+        return when (align) {
+            TextAlign.Center -> free / 2f
+            TextAlign.End, TextAlign.Right -> free
+            // Justify:平台不支持(需按词拉伸 advance),按 Start 降级;未知值同样左对齐
+            else -> 0f
+        }
+    }
+
     override val height: Float get() = lineTop(visibleLineCount)
 
     override val minIntrinsicWidth: Float get() = intrinsics.minIntrinsicWidth
@@ -642,7 +682,7 @@ internal class MinecraftParagraph(
                 null
             } else {
                 val lineStart = layout.lines[lineIndex].start
-                val x = layout.prefixWidth(lineStart, span.start)
+                val x = lineX(lineIndex) + layout.prefixWidth(lineStart, span.start)
                 // 平台适配点(段级字号):行顶按前序行盒高累计,对齐基准用该行真实基线
                 val box = lineBoxHeight(lineIndex)
                 val baseline = lineAt(lineIndex).baselinePx
@@ -753,8 +793,9 @@ internal class MinecraftParagraph(
                     lineEndRaw
                 }
             if (lineEnd <= lineStart) continue
-            val left = layout.prefixWidth(line.start, lineStart)
-            val right = layout.prefixWidth(line.start, lineEnd)
+            val lineOffset = lineX(lineIndex)
+            val left = lineOffset + layout.prefixWidth(line.start, lineStart)
+            val right = lineOffset + layout.prefixWidth(line.start, lineEnd)
             val top = lineTop(lineIndex)
             val bottom = lineTop(lineIndex) + lineBoxHeight(lineIndex)
             // 平台适配点:坐标 API 统一 ×scale —— 布局在 1x 空间度量,绘制经矩阵
@@ -768,15 +809,15 @@ internal class MinecraftParagraph(
         val lineIndex = lineForOffset(offset)
         val line = lineAt(lineIndex)
         val start = lineDrawStart(lineIndex, line)
-        // 前缀精确宽度(EditBox.getScreenX 同源)
-        val x = layout.prefixWidth(start, offset.coerceIn(start, line.end))
+        // 前缀精确宽度(EditBox.getScreenX 同源)+ 段落对齐行偏移
+        val x = lineX(lineIndex) + layout.prefixWidth(start, offset.coerceIn(start, line.end))
         val top = lineTop(lineIndex)
         return Rect(x, top, x, top + lineBoxHeight(lineIndex))
     }
 
-    override fun getLineLeft(lineIndex: Int): Float = 0f
+    override fun getLineLeft(lineIndex: Int): Float = lineX(lineIndex)
 
-    override fun getLineRight(lineIndex: Int): Float = lineAt(lineIndex).width
+    override fun getLineRight(lineIndex: Int): Float = lineX(lineIndex) + lineAt(lineIndex).width
 
     override fun getLineTop(lineIndex: Int): Float = lineTop(lineIndex)
 
@@ -809,7 +850,7 @@ internal class MinecraftParagraph(
         val lineIndex = lineForOffset(offset)
         val line = lineAt(lineIndex)
         val start = lineDrawStart(lineIndex, line)
-        return layout.prefixWidth(start, offset.coerceIn(start, line.end))
+        return lineX(lineIndex) + layout.prefixWidth(start, offset.coerceIn(start, line.end))
     }
 
     override fun getParagraphDirection(offset: Int): ResolvedTextDirection = intrinsics.textDirection
@@ -843,7 +884,8 @@ internal class MinecraftParagraph(
             line.end
         }
         //("累计宽度 ≤ x"语义与旧 plainSubstrByWidth 一致)
-        val xLayout = position.x
+        // 平台适配点:视觉 x = 行偏移 + 行内前缀宽 → 命中先扣除该行的对齐偏移
+        val xLayout = position.x - lineX(lineIndex)
         var rel = 0
         for (o in start until lineEndExclusive) {
             if (layout.prefixWidth(start, o + 1) <= xLayout) {
@@ -964,6 +1006,8 @@ internal class MinecraftParagraph(
             for (i in 0 until lineCount) {
                     val line = layout.lines[i]
                     val start = lineDrawStart(i, line)
+                    // 平台适配点:段落对齐 —— 该行绘制起点偏移
+                    val lineOffset = lineX(i)
                     if (line.end > start) {
                         val contentEnd =
                             if (intrinsics.text[line.end - 1] == '\n') line.end - 1 else line.end
@@ -978,7 +1022,7 @@ internal class MinecraftParagraph(
                             if (segs.isEmpty()) {
                                 mc.recordTextDraw(
                                     text = pieceText,
-                                    x = layout.prefixWidth(start, piece.first),
+                                    x = lineOffset + layout.prefixWidth(start, piece.first),
                                     y = rowTop,
                                     style = intrinsics.style,
                                     alpha = effectiveAlpha,
@@ -990,7 +1034,7 @@ internal class MinecraftParagraph(
                                 recordSegmentedTextDraw(
                                     mc, pieceText, piece.first, rowTop, segs,
                                     intrinsics.style, effectiveAlpha,
-                                    baseX = layout.prefixWidth(start, piece.first),
+                                    baseX = lineOffset + layout.prefixWidth(start, piece.first),
                                     line = line,
                                     shader = shader,
                                 )
@@ -999,7 +1043,7 @@ internal class MinecraftParagraph(
                         if (appendEllipsis) {
                             drawStyledRun(
                                 mc, ellipsisSuffix,
-                                layout.prefixWidth(start, start + ellipsizedLastLine.length),
+                                lineOffset + layout.prefixWidth(start, start + ellipsizedLastLine.length),
                                 rowTop + line.baselinePx - layout.baseFont.baselineFromTopPx,
                                 layout.baseFont, intrinsics.style, effectiveAlpha, shader,
                             )
@@ -1029,6 +1073,8 @@ internal class MinecraftParagraph(
         for (i in 0 until lineCount) {
             val line = layout.lines[i]
             val start = lineDrawStart(i, line)
+            // 平台适配点:段落对齐 —— 该行绘制起点偏移
+            val lineOffset = lineX(i)
             if (line.end > start) {
                 // 整行绘制;行尾可能含 \n(exclusive end),绘制时去掉
                 val contentEnd = if (intrinsics.text[line.end - 1] == '\n') line.end - 1 else line.end
@@ -1038,7 +1084,7 @@ internal class MinecraftParagraph(
                 // InlineContent:占位符内部不绘制,按可见子区间分段绘制
                 for (piece in visiblePieces(start, contentEnd, drawLimit)) {
                     val pieceText = intrinsics.text.substring(piece.first, piece.last + 1)
-                    val pieceX = layout.prefixWidth(start, piece.first)
+                    val pieceX = lineOffset + layout.prefixWidth(start, piece.first)
                     val segments = intrinsics.segments
                     if (segments.isEmpty()) {
                         mc.recordTextDraw(
@@ -1060,7 +1106,7 @@ internal class MinecraftParagraph(
                 if (appendEllipsis) {
                     drawStyledRun(
                         mc, ellipsisSuffix,
-                        layout.prefixWidth(start, start + ellipsizedLastLine.length),
+                        lineOffset + layout.prefixWidth(start, start + ellipsizedLastLine.length),
                         rowTop + line.baselinePx - layout.baseFont.baselineFromTopPx,
                         layout.baseFont, style, effectiveAlpha, shader = null,
                     )
@@ -1151,6 +1197,8 @@ internal fun ActualParagraph(
     @Suppress("DEPRECATION") resourceLoader: Font.ResourceLoader,
     segments: List<StyleSegment> = emptyList(),
     scale: Float = 1f,
+    // 平台适配点:段落水平对齐(默认未设置 = 旧行为)
+    textAlign: TextAlign = TextAlign.Unspecified,
 ): Paragraph = ActualParagraph(
     text = text,
     style = style,
@@ -1163,6 +1211,7 @@ internal fun ActualParagraph(
     fontFamilyResolver = androidx.compose.ui.text.font.createFontFamilyResolver(resourceLoader),
     segments = segments,
     scale = scale,
+    textAlign = textAlign,
 )
 
 internal fun ActualParagraph(
@@ -1177,6 +1226,8 @@ internal fun ActualParagraph(
     fontFamilyResolver: FontFamily.Resolver,
     segments: List<StyleSegment> = emptyList(),
     scale: Float = 1f,
+    // 平台适配点:段落水平对齐(默认未设置 = 旧行为)
+    textAlign: TextAlign = TextAlign.Unspecified,
 ): Paragraph = MinecraftParagraph(
     MinecraftParagraphIntrinsics(
         text = text,
@@ -1187,6 +1238,7 @@ internal fun ActualParagraph(
         fontFamilyResolver = fontFamilyResolver,
         segments = segments,
         scale = scale,
+        textAlign = textAlign,
     ),
     maxLines,
     overflow,
@@ -1214,6 +1266,7 @@ internal fun ActualParagraphIntrinsics(
     fontFamilyResolver: FontFamily.Resolver,
     segments: List<StyleSegment> = emptyList(),
     scale: Float = 1f,
+    textAlign: TextAlign = TextAlign.Unspecified,
 ): ParagraphIntrinsics = MinecraftParagraphIntrinsics(
     text = text,
     style = style,
@@ -1223,6 +1276,7 @@ internal fun ActualParagraphIntrinsics(
     fontFamilyResolver = fontFamilyResolver,
     segments = segments,
     scale = scale,
+    textAlign = textAlign,
 )
 
 /** 与官方 Paragraph.skiko.kt 一致的 DefaultMaxLines */

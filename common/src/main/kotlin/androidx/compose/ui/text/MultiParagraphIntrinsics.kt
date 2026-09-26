@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.text.internal.requirePrecondition
 import androidx.compose.ui.text.platform.StyleSegment
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.util.fastAny
@@ -54,6 +55,8 @@ class MultiParagraphIntrinsics(
     scale: Float = 1f,
     // 平台适配点(富文本):spanStyles 切分后的段列表(全覆盖,渲染端逐段绘制)
     segments: List<StyleSegment> = emptyList(),
+    // 平台适配点:段落水平对齐(段落级;MC Style 无此属性,独立字段下沉)
+    textAlign: TextAlign = TextAlign.Unspecified,
 ) : ParagraphIntrinsics {
 
     @Suppress("DEPRECATION")
@@ -100,8 +103,9 @@ class MultiParagraphIntrinsics(
     internal val infoList: List<ParagraphIntrinsicInfo>
 
     init {
-        // 平台适配点:Style 无段落级样式(textAlign/textDirection 等),统一用默认 ParagraphStyle;
-        // 第一版不做富文本,ParagraphStyle 段级差异不参与布局
+        // 平台适配点:段级 ParagraphStyle 注解(AnnotatedString.paragraphStyles)第一版不参与布局,
+        // 统一用默认 ParagraphStyle 兜底;全局段落对齐不走这里,而是经 [textAlign] 字段
+        // 直接下沉到每个 ParagraphIntrinsics(MC Style 无段落属性,无法承载)。
         val paragraphStyle = ParagraphStyle()
         infoList =
             annotatedString.mapEachParagraphStyle(paragraphStyle) {
@@ -126,6 +130,7 @@ class MultiParagraphIntrinsics(
                             scale = scale,
                             // 平台适配点(富文本):段列表透传到 Paragraph → 渲染端
                             segments = segments,
+                            textAlign = textAlign,
                         ),
                     startIndex = paragraphStyleItem.start,
                     endIndex = paragraphStyleItem.end,

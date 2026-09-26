@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.text.platform.ActualParagraphIntrinsics
 import androidx.compose.ui.text.platform.StyleSegment
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import net.minecraft.network.chat.Style
 
@@ -66,7 +67,7 @@ interface ParagraphIntrinsics {
     "Font.ResourceLoader is deprecated, instead use FontFamily.Resolver",
     ReplaceWith(
         "ParagraphIntrinsics(text, style, spanStyles, placeholders, density, " +
-            "fontFamilyResolver"
+            "fontFamilyResolver)"
     ),
 )
 fun ParagraphIntrinsics(
@@ -78,6 +79,8 @@ fun ParagraphIntrinsics(
     resourceLoader: Font.ResourceLoader,
     segments: List<StyleSegment> = emptyList(),
     scale: Float = 1f,
+    // 平台适配点:段落水平对齐(MC Style 无段落属性,独立字段下沉;见 PlatformTextPayload)
+    textAlign: TextAlign = TextAlign.Unspecified,
 ): ParagraphIntrinsics =
     ActualParagraphIntrinsics(
         text = text,
@@ -88,6 +91,7 @@ fun ParagraphIntrinsics(
         fontFamilyResolver = createFontFamilyResolver(resourceLoader),
         segments = segments,
         scale = scale,
+        textAlign = textAlign,
     )
 
 @Deprecated(
@@ -105,6 +109,8 @@ fun ParagraphIntrinsics(
     fontFamilyResolver: FontFamily.Resolver,
     segments: List<StyleSegment> = emptyList(),
     scale: Float = 1f,
+    // 平台适配点:段落水平对齐(MC Style 无段落属性,独立字段下沉;见 PlatformTextPayload)
+    textAlign: TextAlign = TextAlign.Unspecified,
 ): ParagraphIntrinsics =
     ActualParagraphIntrinsics(
         text = text,
@@ -115,6 +121,7 @@ fun ParagraphIntrinsics(
         fontFamilyResolver = fontFamilyResolver,
         segments = segments,
         scale = scale,
+        textAlign = textAlign,
     )
 
 /**
@@ -134,6 +141,8 @@ fun ParagraphIntrinsics(
     placeholders: List<AnnotatedString.Range<Placeholder>> = listOf(),
     segments: List<StyleSegment> = emptyList(),
     scale: Float = 1f,
+    // 平台适配点:段落水平对齐(MC Style 无段落属性,独立字段下沉;见 PlatformTextPayload)
+    textAlign: TextAlign = TextAlign.Unspecified,
 ): ParagraphIntrinsics =
     ActualParagraphIntrinsics(
         text = text,
@@ -144,4 +153,5 @@ fun ParagraphIntrinsics(
         fontFamilyResolver = fontFamilyResolver,
         segments = segments,
         scale = scale,
+        textAlign = textAlign,
     )

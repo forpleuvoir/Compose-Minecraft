@@ -17,75 +17,74 @@
 package androidx.compose.foundation.text.modifiers
 
 import androidx.compose.foundation.text.DefaultMinLines
-import androidx.compose.ui.graphics.Brush
-import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
 import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.platform.StyleSegment
-import net.minecraft.network.chat.Style
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.PlatformTextPayload
 
 /**
  * Modifier element for String based text
  *
  * This is faster than [TextAnnotatedStringElement]
  *
- * 平台适配点:TextStyle → Style。
+ * 平台适配点:平台文本输入收敛为 [PlatformTextPayload](单一对象)—— 承载
+ * MC `Style` / 富文本段 / 字号缩放 / 透明度 / 画刷 / 渲染后端定向。
+ * element 只接一个载荷参数,新增平台字段时不必再逐个 element 改签名,
+ * 也不会出现「某条路径漏抄某字段」的静默失效。
  */
 internal class TextStringSimpleElement(
     private val text: String,
-    private val style: Style,
+    private val payload: PlatformTextPayload,
     private val fontFamilyResolver: FontFamily.Resolver,
     private val overflow: TextOverflow = TextOverflow.Clip,
     private val softWrap: Boolean = true,
     private val maxLines: Int = Int.MAX_VALUE,
     private val minLines: Int = DefaultMinLines,
     private val color: ColorProducer? = null,
-    /** 平台适配点:MC Component 展平后的多段样式;空 = 单样式(旧行为)。 */
-    private val segments: List<StyleSegment> = emptyList(),
-    /** 平台适配点:文本缩放;1f = 原样。 */
-    private val scale: Float = 1f,
-    /** 平台适配点:文本透明度(TextStyle.alpha,默认 1f),绘制时合成进颜色。 */
-    private val alpha: Float = 1f,
-    /** 平台适配点:渐变画刷(TextStyle.brush 非 SolidColor),绘制走 brush 重载。 */
-    private val brush: Brush? = null,
-    /** 平台适配点:子树级渲染后端定向 */
-    private val backend: TextRenderBackend = TextRenderBackend.DEFAULT,
 ) : ModifierNodeElement<TextStringSimpleNode>() {
 
     override fun create(): TextStringSimpleNode =
         TextStringSimpleNode(
-            text,
-            style,
-            fontFamilyResolver,
-            overflow,
-            softWrap,
-            maxLines,
-            minLines,
-            color,
-            segments,
-            scale,
-            alpha,
-            brush,
-            backend,
+            text = text,
+            style = payload.mcStyle,
+            fontFamilyResolver = fontFamilyResolver,
+            overflow = overflow,
+            softWrap = softWrap,
+            maxLines = maxLines,
+            minLines = minLines,
+            overrideColor = color,
+            segments = payload.segments,
+            scale = payload.scale,
+            textAlign = payload.textAlign,
+            textAlpha = payload.alpha,
+            textBrush = payload.brush,
+            textBackend = payload.backend,
         )
 
     override fun update(node: TextStringSimpleNode) {
         node.doInvalidations(
-            drawChanged = node.updateDraw(color, style, alpha, brush, backend),
+            drawChanged =
+                node.updateDraw(
+                    color = color,
+                    style = payload.mcStyle,
+                    alpha = payload.alpha,
+                    brush = payload.brush,
+                    backend = payload.backend,
+                ),
             textChanged = node.updateText(text = text),
             layoutChanged =
                 node.updateLayoutRelatedArgs(
-                    style = style,
+                    style = payload.mcStyle,
                     minLines = minLines,
                     maxLines = maxLines,
                     softWrap = softWrap,
                     fontFamilyResolver = fontFamilyResolver,
                     overflow = overflow,
-                    segments = segments,
-                    scale = scale,
+                    segments = payload.segments,
+                    scale = payload.scale,
+                    textAlign = payload.textAlign,
                 ),
         )
     }
@@ -98,12 +97,7 @@ internal class TextStringSimpleElement(
         // these three are most likely to actually change
         if (color != other.color) return false
         if (text != other.text) return false /* expensive to check, do after color */
-        if (style != other.style) return false
-        if (alpha != other.alpha) return false
-        if (brush != other.brush) return false
-        if (backend != other.backend) return false
-        if (segments != other.segments) return false
-        if (scale != other.scale) return false
+        if (payload != other.payload) return false
 
         // these are equally unlikely to change
         if (fontFamilyResolver != other.fontFamilyResolver) return false
@@ -117,18 +111,13 @@ internal class TextStringSimpleElement(
 
     override fun hashCode(): Int {
         var result = text.hashCode()
-        result = 31 * result + style.hashCode()
+        result = 31 * result + payload.hashCode()
         result = 31 * result + fontFamilyResolver.hashCode()
         result = 31 * result + overflow.hashCode()
         result = 31 * result + softWrap.hashCode()
         result = 31 * result + maxLines
         result = 31 * result + minLines
         result = 31 * result + (color?.hashCode() ?: 0)
-        result = 31 * result + alpha.hashCode()
-        result = 31 * result + segments.hashCode()
-        result = 31 * result + scale.hashCode()
-        result = 31 * result + brush.hashCode()
-        result = 31 * result + backend.hashCode()
         return result
     }
 

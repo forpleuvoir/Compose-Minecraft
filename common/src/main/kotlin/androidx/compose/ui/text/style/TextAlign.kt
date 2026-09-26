@@ -119,3 +119,16 @@ inline val TextAlign.isSpecified: Boolean
 inline fun TextAlign.takeOrElse(block: () -> TextAlign): TextAlign {
     return if (isSpecified) this else block()
 }
+
+/**
+ * 平台适配点:该对齐是否会**产生行起点偏移**(即需要容器宽度才能成立)。
+ *
+ * `Center` / `Right` / `End` → true;`Left` / `Start` / `Unspecified` → false;
+ * `Justify` → false(平台未实现按词拉伸,布局端按 `Start` 降级)。
+ *
+ * 用途:布局端据此决定文本节点是否占用容器宽度 —— 行偏移会把行推出"内容宽度",
+ * 若节点仍按内容宽上报,上层 `TextLayoutResult.hasVisualOverflow`
+ * (`size.width < 段落宽`)会成立并把偏移后的行裁掉。
+ */
+internal val TextAlign.isOffsetAlign: Boolean
+    get() = this == TextAlign.Center || this == TextAlign.Right || this == TextAlign.End

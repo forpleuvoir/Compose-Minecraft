@@ -1,5 +1,6 @@
 package moe.forpleuvoir.compose_minecraft.dev
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -17,8 +18,20 @@ import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFontFamilyResolver
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.MultiParagraph
+import androidx.compose.ui.text.MultiParagraphIntrinsics
+import androidx.compose.ui.text.ParagraphIntrinsics
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.Paragraph
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -29,6 +42,7 @@ import androidx.compose.ui.text.PlatformSpanStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
@@ -396,6 +410,192 @@ fun TextDevScene() {
                 modifier = Modifier.width(260.dp),
                 style = TextStyle(color = Color.White),
             )
+
+            // ── ⑮ 段落对齐(TextAlign)──
+            // 对齐只在「容器比文本宽」时可见 —— 所以对照用**短文本 + 240dp 容器**:
+            // Left/Start/Justify 贴左、Center 居中、Right/End 贴右,位置差异一眼可辨。
+            // (此前用「几乎占满容器的换行文本」对照,偏移只有几像素,等于看不出。)
+            SectionLabel("⑮ 段落对齐:短文本 + 240dp 容器(左/中/右位置差异一眼可辨)")
+            listOf(
+                "Left" to TextAlign.Left,
+                "Center" to TextAlign.Center,
+                "Right" to TextAlign.Right,
+                "Start(= Left,Ltr)" to TextAlign.Start,
+                "End(= Right,Ltr)" to TextAlign.End,
+                "Justify(不支持→Start)" to TextAlign.Justify,
+            ).forEach { (label, align) ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 1.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    BasicText(
+                        label,
+                        style = TextStyle(color = Color(0xFF80CBC4)),
+                        modifier = Modifier.width(180.dp),
+                    )
+                    BasicText(
+                        "短文本",
+                        style = TextStyle(color = Color.White, textAlign = align),
+                        modifier = Modifier
+                            .width(240.dp)
+                            .background(Color(0xFF263238)),
+                    )
+                }
+            }
+            // 换行对照:每行的起点随行宽变化(短行偏移更明显)
+            BasicText(
+                "换行对照(Center):这一行比较长会占满容器宽度,第二行略短,第三行最短。",
+                style = TextStyle(color = Color(0xFFB0BEC5), textAlign = TextAlign.Center),
+                modifier = Modifier
+                    .width(300.dp)
+                    .background(Color(0xFF37474F)),
+            )
+
+            // ── ⑯ onTextLayout:三个重载都必须回调 ──
+            // 验证点(客户端日志搜 `textLayout:`):String / AnnotatedString / Component
+            // 三条重载都应打印尺寸与行数;Component 版此前是死参数(永不回调)。
+            SectionLabel("⑯ onTextLayout:三个重载都应回调(日志搜 textLayout:)")
+            BasicText(
+                "String 版:onTextLayout 应回调(打印尺寸/行数)",
+                style = TextStyle(color = Color(0xFFB0BEC5)),
+                modifier = Modifier.width(260.dp),
+                onTextLayout = { println("textLayout: [String] size=${it.size} lines=${it.lineCount}") },
+            )
+            BasicText(
+                buildAnnotatedString { append("AnnotatedString 版:onTextLayout 应回调") },
+                style = TextStyle(color = Color(0xFFB0BEC5)),
+                modifier = Modifier.width(260.dp),
+                onTextLayout = { println("textLayout: [Annotated] size=${it.size} lines=${it.lineCount}") },
+            )
+            BasicText(
+                component = Component.literal("Component 版:onTextLayout 应回调(修复点)"),
+                defaultStyle = Style.EMPTY.withColor(Color(0xFFB0BEC5)),
+                modifier = Modifier.width(260.dp),
+                onTextLayout = { println("textLayout: [Component] size=${it.size} lines=${it.lineCount}") },
+            )
+
+            // ── ⑰ TextMeasurer / 老工厂(MultiParagraph / Paragraph)对齐 ──
+            // 数值:日志搜 `alignProbe:` —— 三条老入口的 getLineLeft(0) 应随对齐变化
+            //   (240px 容器 + 短文本):Left≈0、Center≈(240−w)/2、Right≈240−w。
+            // ⚠️ 三条入口的约束口径不同(都是官方语义,写错会抛异常或对齐无余量):
+            //   · TextMeasurer:width = min==max ? max : intrinsic(≡ finalMaxWidth);
+            //     要给**定宽**(min == max = 240)才有对齐余量,它内部转成 (0, width) ✓
+            //   · MultiParagraph:**契约要求 minWidth == 0**(否则抛 IllegalArgumentException);
+            //     直接给 maxWidth = 240 即可 —— 它把 maxWidth 原样转发给每个 Paragraph,
+            //     对齐余量来自那个 maxWidth(容器宽),与 min 无关
+            //   · Paragraph(text, style, constraints, …):constraints 直达 MinecraftParagraph,
+            //     定宽 (240,240) ⇒ alignWidth = maxWidth = 240 ✓
+            // ⚠️ 字号口径:本平台没有"字号"参数,字号 = scale(emPx,18sp ⇒ 18px)。
+            //   · TextMeasurer / ParameterIntrinsics 版有 scale ✓ → 传 18f 文字可读;
+            //   · 便捷构造(MultiParagraph/Paragraph 的 annotatedString/text 版)**没有 scale 形参**
+            //     (既有设计)→ 恒 1px 字号,故其 lineLeft 反映的是 3px 宽字符串
+            //     (Center = (240−3)/2 ≈ 118、Right = 237),数值仍然能证明 textAlign 传到了段落。
+            //   推荐口径:字号与对齐都随 intrinsics 走(见下面的 18px 对照行)。
+            // 视觉:TextMeasurer 量出的 layout 直接 drawText 进 240dp 容器,与 ⑮ 对照。
+            SectionLabel("⑰ TextMeasurer / 老工厂(MultiParagraph/Paragraph):同样支持 textAlign")
+            val probeMeasurer = rememberTextMeasurer()
+            val probeDensity = LocalDensity.current
+            val probeResolver = LocalFontFamilyResolver.current
+            val probeStyle = Style.EMPTY.withColor(Color(0xFFFFFFFF))
+            listOf(
+                "Left" to TextAlign.Left,
+                "Center" to TextAlign.Center,
+                "Right" to TextAlign.Right,
+            ).forEach { (label, align) ->
+                val probe = remember(probeMeasurer, probeStyle, probeDensity, probeResolver, align) {
+                    val measured = probeMeasurer.measure(
+                        text = AnnotatedString("短文本"),
+                        style = probeStyle,
+                        // 定宽容器 = 240px(与 visual 的 Canvas 一致)
+                        constraints = Constraints(minWidth = 240, maxWidth = 240),
+                        // 字号:scale 是 emPx(18sp ⇒ 18px),不传 = 1f = 1px 文字
+                        scale = 18f,
+                        textAlign = align,
+                    )
+                    @Suppress("DEPRECATION")
+                    val legacyParagraph = Paragraph(
+                        "短文本",
+                        probeStyle,
+                        Constraints(minWidth = 240, maxWidth = 240),
+                        probeDensity,
+                        probeResolver,
+                        textAlign = align,
+                    )
+                    // MultiParagraph 契约:minWidth 必须为 0 → 只给 maxWidth(容器宽)
+                    val legacyMulti = MultiParagraph(
+                        AnnotatedString("短文本"),
+                        probeStyle,
+                        Constraints(maxWidth = 240),
+                        probeDensity,
+                        probeResolver,
+                        textAlign = align,
+                    )
+                    // 推荐口径:intrinsics 携带 {scale, textAlign},两条老入口都能拿到字号 + 对齐
+                    val intrMulti = MultiParagraph(
+                        MultiParagraphIntrinsics(
+                            AnnotatedString("短文本"),
+                            probeStyle,
+                            listOf(),
+                            probeDensity,
+                            probeResolver,
+                            scale = 18f,
+                            textAlign = align,
+                        ),
+                        Constraints(maxWidth = 240),
+                    )
+                    @Suppress("DEPRECATION")
+                    val intrParagraph = Paragraph(
+                        ParagraphIntrinsics(
+                            "短文本",
+                            probeStyle,
+                            listOf(),
+                            probeDensity,
+                            probeResolver,
+                            scale = 18f,
+                            textAlign = align,
+                        ),
+                        Constraints(maxWidth = 240),
+                    )
+                    println(
+                        "alignProbe: [$label]" +
+                            " measurer18=${measured.getLineLeft(0)}" +
+                            " intrMP18=${intrMulti.getLineLeft(0)}" +
+                            " intrP18=${intrParagraph.getLineLeft(0)}" +
+                            " 便捷1px: mp=${legacyMulti.getLineLeft(0)} p=${legacyParagraph.getLineLeft(0)}"
+                    )
+                    Probe(measured, legacyParagraph, legacyMulti, intrMulti, intrParagraph)
+                }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 1.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.width(260.dp)) {
+                        BasicText(
+                            "$label 18px: measurer=${probe.first.getLineLeft(0).toInt()}" +
+                                " / intrMP=${probe.fourth.getLineLeft(0).toInt()}" +
+                                " / intrP=${probe.fifth.getLineLeft(0).toInt()}",
+                            style = TextStyle(color = Color(0xFF80CBC4)),
+                        )
+                        BasicText(
+                            "便捷构造 1px: mp=${probe.third.getLineLeft(0).toInt()}" +
+                                " / p=${probe.second.getLineLeft(0).toInt()}",
+                            style = TextStyle(color = Color(0xFF78909C)),
+                        )
+                    }
+                    Canvas(
+                        Modifier
+                            .width(240.dp)
+                            .height(20.dp)
+                            .background(Color(0xFF263238))
+                    ) {
+                        drawText(probe.first, color = Color.White)
+                    }
+                }
+            }
         }
     }
 }
@@ -409,3 +609,12 @@ private fun SectionLabel(text: String) {
         modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
     )
 }
+
+/** ⑰ 的探针结果容器(5 条入口的测量结果)。 */
+private class Probe(
+    val first: TextLayoutResult,
+    val second: Paragraph,
+    val third: MultiParagraph,
+    val fourth: MultiParagraph,
+    val fifth: Paragraph,
+)

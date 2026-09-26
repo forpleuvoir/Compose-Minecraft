@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.internal.JvmDefaultWithCompatibility
 import androidx.compose.ui.text.platform.ActualParagraph
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -112,6 +113,8 @@ fun Paragraph(
     width: Float,
     density: Density,
     resourceLoader: Font.ResourceLoader,
+    // 平台适配点:段落水平对齐(默认未设置 = 旧行为)
+    textAlign: TextAlign = TextAlign.Unspecified,
 ): Paragraph =
     ActualParagraph(
         text,
@@ -123,6 +126,7 @@ fun Paragraph(
         width,
         density,
         resourceLoader,
+        textAlign = textAlign,
     )
 
 /**
@@ -163,6 +167,8 @@ fun Paragraph(
     placeholders: List<AnnotatedString.Range<Placeholder>> = listOf(),
     maxLines: Int = DefaultMaxLines,
     ellipsis: Boolean = false,
+    // 平台适配点:段落水平对齐(默认未设置 = 旧行为)
+    textAlign: TextAlign = TextAlign.Unspecified,
 ): Paragraph =
     ActualParagraph(
         text,
@@ -174,6 +180,7 @@ fun Paragraph(
         Constraints(maxWidth = width.ceilToInt()),
         density,
         fontFamilyResolver,
+        textAlign = textAlign,
     )
 
 /**
@@ -211,6 +218,8 @@ fun Paragraph(
     placeholders: List<AnnotatedString.Range<Placeholder>> = listOf(),
     maxLines: Int = DefaultMaxLines,
     ellipsis: Boolean = false,
+    // 平台适配点:段落水平对齐(默认未设置 = 旧行为)
+    textAlign: TextAlign = TextAlign.Unspecified,
 ): Paragraph =
     ActualParagraph(
         text,
@@ -222,6 +231,7 @@ fun Paragraph(
         constraints,
         density,
         fontFamilyResolver,
+        textAlign = textAlign,
     )
 
 /**
@@ -255,6 +265,8 @@ fun Paragraph(
     placeholders: List<AnnotatedString.Range<Placeholder>> = listOf(),
     maxLines: Int = DefaultMaxLines,
     overflow: TextOverflow = TextOverflow.Clip,
+    // 平台适配点:段落水平对齐(默认未设置 = 旧行为)
+    textAlign: TextAlign = TextAlign.Unspecified,
 ): Paragraph =
     ActualParagraph(
         text,
@@ -266,6 +278,7 @@ fun Paragraph(
         constraints,
         density,
         fontFamilyResolver,
+        textAlign = textAlign,
     )
 
 /**
@@ -314,7 +327,7 @@ fun Paragraph(
     "Paragraph that takes ellipsis: Boolean is deprecated, pass TextOverflow instead.",
     ReplaceWith(
         "Paragraph(paragraphIntrinsics, constraints, maxLines, " +
-            "if (ellipsis) TextOverflow.Ellipsis else TextOverflow.Clip"
+            "if (ellipsis) TextOverflow.Ellipsis else TextOverflow.Clip)"
     ),
     level = DeprecationLevel.HIDDEN,
 )

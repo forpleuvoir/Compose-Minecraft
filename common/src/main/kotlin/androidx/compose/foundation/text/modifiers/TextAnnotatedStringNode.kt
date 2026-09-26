@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorProducer
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
@@ -58,6 +59,7 @@ import androidx.compose.ui.text.TextLayoutInput
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.platform.StyleSegment
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Constraints.Companion.fitPrioritizingWidth
@@ -88,6 +90,12 @@ internal class TextAnnotatedStringNode(
     private var segments: List<StyleSegment> = emptyList(),
     // 平台适配点:字号渲染缩放(18sp → 2x),透传给 MultiParagraphLayoutCache
     private var scale: Float = 1f,
+    /** 平台适配点:段落水平对齐(透传给 MultiParagraphLayoutCache → 段落布局)。 */
+    private var textAlign: TextAlign = TextAlign.Unspecified,
+    /** 平台适配点:文本透明度(TextStyle.alpha,默认 1f),绘制时合成进颜色。 */
+    private var textAlpha: Float = 1f,
+    /** 平台适配点:渐变画刷(TextStyle.brush 非 SolidColor),绘制走 brush 重载。 */
+    private var textBrush: Brush? = null,
     /** 平台适配点:子树级渲染后端定向 */
     private var textBackend: TextRenderBackend = TextRenderBackend.DEFAULT,
 ) : Modifier.Node(), LayoutModifierNode, DrawModifierNode, SemanticsModifierNode {
@@ -114,6 +122,7 @@ internal class TextAnnotatedStringNode(
                         autoSize,
                         segments,
                         scale,
+                        textAlign,
                     )
             }
             return _layoutCache!!
@@ -137,7 +146,13 @@ internal class TextAnnotatedStringNode(
     }
 
     /** Element has draw parameters to update */
-    fun updateDraw(color: ColorProducer?, style: Style, backend: TextRenderBackend = textBackend): Boolean {
+    fun updateDraw(
+        color: ColorProducer?,
+        style: Style,
+        alpha: Float = textAlpha,
+        brush: Brush? = textBrush,
+        backend: TextRenderBackend = textBackend,
+    ): Boolean {
         var changed = false
         if (color != this.overrideColor) {
             changed = true
@@ -145,6 +160,10 @@ internal class TextAnnotatedStringNode(
         overrideColor = color
         // 平台适配点:MC Style 无布局/绘制属性分离,整样式参与比较
         changed = changed || style != this.style
+        changed = changed || alpha != this.textAlpha
+        textAlpha = alpha
+        changed = changed || brush != this.textBrush
+        textBrush = brush
         changed = changed || backend != this.textBackend
         this.textBackend = backend
         return changed
@@ -179,6 +198,8 @@ internal class TextAnnotatedStringNode(
         segments: List<StyleSegment>,
         // 平台适配点:字号渲染缩放(18sp → 2x)
         scale: Float = 1f,
+        // 平台适配点:段落水平对齐
+        textAlign: TextAlign = this.textAlign,
     ): Boolean {
         var changed: Boolean
 
@@ -228,6 +249,11 @@ internal class TextAnnotatedStringNode(
 
         if (this.scale != scale) {
             this.scale = scale
+            changed = true
+        }
+
+        if (this.textAlign != textAlign) {
+            this.textAlign = textAlign
             changed = true
         }
 
@@ -286,6 +312,8 @@ internal class TextAnnotatedStringNode(
                 autoSize = autoSize,
                 segments = segments,
                 scale = scale,
+                // 平台适配点:段落对齐必须随更新一起带(否则被 update 的默认值静默清掉)
+                textAlign = textAlign,
             )
         }
 
@@ -340,6 +368,7 @@ internal class TextAnnotatedStringNode(
                 autoSize,
                 segments = emptyList(),
                 scale = scale,
+                textAlign = textAlign,
             ) ?: return false
         } else {
             val newTextSubstitution = TextSubstitutionValue(text, updatedText)
@@ -356,6 +385,7 @@ internal class TextAnnotatedStringNode(
                     autoSize,
                     segments = emptyList(),
                     scale = scale,
+                    textAlign = textAlign,
                 )
             substitutionLayoutCache.density = layoutCache.density
             newTextSubstitution.layoutCache = substitutionLayoutCache
@@ -402,6 +432,8 @@ internal class TextAnnotatedStringNode(
                                     fontFamilyResolver = inputLayout.layoutInput.fontFamilyResolver,
                                     constraints = inputLayout.layoutInput.constraints,
                                     scale = inputLayout.layoutInput.scale,
+                                    // 平台适配点:段落对齐随语义 TextLayoutResult 一并透出
+                                    textAlign = inputLayout.layoutInput.textAlign,
                                 )
                         )
                         ?.also { textLayoutResult.add(it) }
@@ -582,10 +614,24 @@ internal class TextAnnotatedStringNode(
                 val color =
                     if (overrideColorVal.isSpecified) overrideColorVal
                     else style.color?.toColor() ?: Color.White
+                // 平台适配点:TextStyle.alpha 合成进绘制色(MC TextColor 无 alpha 通道);
+                // TextStyle.brush(非 SolidColor)→ 渐变逐字形取色。
+                // 与 TextStringSimpleNode.draw 同构 —— 两条路径消费同一个载荷,
+                // 不得再出现「富路径丢 alpha/brush」。
+                val paintColor = color.copy(alpha = color.alpha * textAlpha)
+                val localBrush = textBrush
                 val prevBackend = (canvas as? MinecraftCanvas)?.textBackendOverride
                 (canvas as? MinecraftCanvas)?.textBackendOverride = textBackend
                 try {
-                    localParagraph.paint(canvas = canvas, color = color)
+                    if (localBrush != null) {
+                        localParagraph.paint(
+                            canvas = canvas,
+                            brush = localBrush,
+                            alpha = paintColor.alpha,
+                        )
+                    } else {
+                        localParagraph.paint(canvas = canvas, color = paintColor)
+                    }
                 } finally {
                     (canvas as? MinecraftCanvas)?.textBackendOverride = prevBackend
                 }

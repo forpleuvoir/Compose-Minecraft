@@ -28,6 +28,7 @@ import androidx.compose.ui.text.platform.SynchronizedObject
 import androidx.compose.ui.text.platform.makeSynchronizedObject
 import androidx.compose.ui.text.platform.synchronized
 import androidx.compose.ui.text.style.ResolvedTextDirection
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -87,6 +88,9 @@ private constructor(
 
     /** 平台适配点:文本渲染缩放(1f = 原样,经 MultiParagraphIntrinsics.scale 注入布局)。 */
     val scale: Float = 1f,
+
+    /** 平台适配点:段落水平对齐(经 MultiParagraphIntrinsics.textAlign 注入段落布局)。 */
+    val textAlign: TextAlign = TextAlign.Unspecified,
 ) {
 
     private var _developerSuppliedResourceLoader = resourceLoader
@@ -135,6 +139,7 @@ private constructor(
         createFontFamilyResolver(resourceLoader),
         constraints,
         1f,
+        TextAlign.Unspecified,
     )
 
     constructor(
@@ -150,6 +155,8 @@ private constructor(
         constraints: Constraints,
         // 平台适配点:文本渲染缩放(1f = 原样)
         scale: Float = 1f,
+        // 平台适配点:段落水平对齐
+        textAlign: TextAlign = TextAlign.Unspecified,
     ) : this(
         text,
         style,
@@ -163,6 +170,7 @@ private constructor(
         fontFamilyResolver,
         constraints,
         scale,
+        textAlign,
     )
 
     @Deprecated(
@@ -191,6 +199,7 @@ private constructor(
         @Suppress("DEPRECATION") resourceLoader: Font.ResourceLoader = this.resourceLoader,
         constraints: Constraints = this.constraints,
         scale: Float = this.scale,
+        textAlign: TextAlign = this.textAlign,
     ): TextLayoutInput {
         return TextLayoutInput(
             text = text,
@@ -205,6 +214,7 @@ private constructor(
             fontFamilyResolver = fontFamilyResolver,
             constraints = constraints,
             scale = scale,
+            textAlign = textAlign,
         )
     }
 
@@ -223,6 +233,7 @@ private constructor(
         if (fontFamilyResolver != other.fontFamilyResolver) return false
         if (constraints != other.constraints) return false
         if (scale != other.scale) return false
+        if (textAlign != other.textAlign) return false
 
         return true
     }
@@ -239,6 +250,7 @@ private constructor(
         result = 31 * result + fontFamilyResolver.hashCode()
         result = 31 * result + constraints.hashCode()
         result = 31 * result + scale.hashCode()
+        result = 31 * result + textAlign.hashCode()
         return result
     }
 
@@ -256,7 +268,8 @@ private constructor(
             append("density=$density, ")
             append("layoutDirection=$layoutDirection, ")
             append("fontFamilyResolver=$fontFamilyResolver, ")
-            append("constraints=$constraints")
+            append("constraints=$constraints, ")
+            append("textAlign=$textAlign")
             append(")")
         }
     }

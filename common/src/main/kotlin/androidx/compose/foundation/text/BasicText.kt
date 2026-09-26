@@ -52,6 +52,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.platform.StyleSegment
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Constraints.Companion.fitPrioritizingWidth
@@ -63,12 +64,15 @@ import androidx.compose.ui.unit.sp
 import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalTextRenderBackend
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultFont
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.PlatformTextPayload
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.mcTextPayload
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.resolveDefaultFont
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.resolveDefaultFontSize
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.resolveDefaultFontSize
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderConfig
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.LocalDefaultTextStyle
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.fontSizeToEmPx
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.toPayload
 import moe.forpleuvoir.compose_minecraft.platform.ui.text.withDefaultFont
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.util.fastFilter
@@ -95,10 +99,11 @@ import net.minecraft.network.chat.Style
  *   平台适配点:接受 Compose [TextStyle] —— 语义经
  *   [moe.forpleuvoir.compose_minecraft.platform.ui.text.toPlatformData]
  *   映射到平台:color/alpha/fontSize(sp,18sp = 2x 平台基准字号,9sp = 1x 原生像素)/
- *   fontWeight(≥600 加粗)/fontStyle(斜体)/textDecoration(下划线/删除线)生效;
+ *   fontWeight(≥600 加粗)/fontStyle(斜体)/textDecoration(下划线/删除线)/
+ *   paragraphStyle.textAlign(段落水平对齐;`Justify` 不支持,按 Start 降级)生效;
  *   [androidx.compose.ui.text.PlatformSpanStyle] 承载 MC 原版渲染特性
  *   (obfuscated/shadowColor/clickEvent/hoverEvent/insertion/font);
- *   letterSpacing/background/lineHeight/textAlign 等平台无法表达的字段
+ *   letterSpacing/background/lineHeight 等平台无法表达的字段
  *   文档化忽略(见 [moe.forpleuvoir.compose_minecraft.platform.ui.text.PlatformTextData.ignored])。
  * @param onTextLayout Callback that is executed when a new text layout is calculated. A
  *   [TextLayoutResult] object that callback provides contains paragraph information, size of the
@@ -151,11 +156,10 @@ fun BasicText(
 
     val fontFamilyResolver = LocalFontFamilyResolver.current
 
-    // 平台适配点:TextStyle → {MC Style, scale, alpha}。Compose 语义经
-    // toPlatformData 映射:color/fontWeight/fontStyle/textDecoration/alpha/fontSize
+    // 平台适配点:TextStyle → PlatformTextPayload(平台文本载荷,唯一对象)。Compose 语义
+    // 经 toPlatformData 映射:color/fontWeight/fontStyle/textDecoration/alpha/fontSize
     // (sp → 渲染缩放)+ PlatformSpanStyle 承载的 MC 渲染特性;平台无法表达的字段
     // (letterSpacing/background/lineHeight/...) 收集进 PlatformTextData.ignored(文档化忽略)。
-    // 已知边界:textModifier 分支(selection/onTextLayout/autoSize)暂不消费 scale/alpha。
     val density = LocalDensity.current
     // 平台适配点:style 可空 —— 未显式传 style 用 LocalDefaultTextStyle 兜底;
     // 未显式指定字体(platformStyle.font)补 LocalDefaultFont。
@@ -170,51 +174,48 @@ fun BasicText(
             // 平台适配点:fontSize 未显式指定时补解析后的默认字号(显式 provide 优先)
             if (withFont.fontSize.isUnspecified) withFont.merge(TextStyle(fontSize = defaultFontSize)) else withFont
         }
-    val platformData = remember(effectiveStyle, density) { effectiveStyle.toPlatformData(density) }
-    val mcStyle = platformData.mcStyle
-    val scale = platformData.scale
-    val textAlpha = platformData.alpha
-    // 平台适配点:渐变画刷(TextStyle.brush 非 SolidColor),绘制走 brush 重载
-    val textBrush = platformData.brush
     // 平台适配点:子树级渲染后端定向(LocalTextRenderBackend)
     val textBackend = LocalTextRenderBackend.current
+    // 平台适配点:Compose 语义 → 映射结果 → 平台文本载荷
+    // (mcStyle/scale/alpha/brush 由映射表产出,段列表与后端在此装配)
+    val platformData = remember(effectiveStyle, density) { effectiveStyle.toPlatformData(density) }
+    val payload = remember(platformData, textBackend) { platformData.toPayload(emptyList(), textBackend) }
 
-    BackgroundTextMeasurement(text = text, style = mcStyle, fontFamilyResolver = fontFamilyResolver)
+    BackgroundTextMeasurement(
+        text = text,
+        style = payload.mcStyle,
+        fontFamilyResolver = fontFamilyResolver,
+    )
 
     val finalModifier =
         if (selectionController != null || onTextLayout != null || autoSize != null) {
             modifier.textModifier(
-                AnnotatedString(text = text),
-                style = mcStyle,
+                text = AnnotatedString(text = text),
+                payload = payload,
                 onTextLayout = onTextLayout,
                 overflow = overflow,
                 softWrap = softWrap,
                 maxLines = maxLines,
                 minLines = minLines,
-                fontFamilyResolver = LocalFontFamilyResolver.current,
+                fontFamilyResolver = fontFamilyResolver,
                 placeholders = null,
                 onPlaceholderLayout = null,
                 selectionController = selectionController,
                 color = color,
                 onShowTranslation = null,
                 autoSize = autoSize,
-                scale = scale,
             )
         } else {
             modifier then
                 TextStringSimpleElement(
                     text = text,
-                    style = mcStyle,
+                    payload = payload,
                     fontFamilyResolver = fontFamilyResolver,
                     overflow = overflow,
                     softWrap = softWrap,
                     maxLines = maxLines,
                     minLines = minLines,
                     color = color,
-                    scale = scale,
-                    alpha = textAlpha,
-                    brush = textBrush,
-                    backend = textBackend,
                 )
         }
     Layout(finalModifier, EmptyMeasurePolicy)
@@ -254,6 +255,15 @@ fun BasicText(
     minLines: Int = 1,
     color: ColorProducer? = null,
     fontSize: TextUnit = resolveDefaultFontSize(),
+    /**
+     * 平台适配点:段落水平对齐。MC [Style] 是字符级样式、无段落属性,故对齐以独立形参给出
+     * (对齐本身由段落布局的**容器宽度**决定:父级给了多余宽度才可见,见
+     * [androidx.compose.ui.text.Paragraph] 的语义)。
+     *
+     * `Justify` 平台不支持(需按词拉伸 advance,MC 字形体系未实现),按 `Start` 降级;
+     * `Start`/`End` 在平台下等同 `Left`/`Right`(平台 `textDirection` 恒 `Ltr`)。
+     */
+    textAlign: TextAlign = TextAlign.Unspecified,
 ) {
     validateMinMaxLines(minLines = minLines, maxLines = maxLines)
 
@@ -280,22 +290,59 @@ fun BasicText(
         }
     val text = remember(segments) { segments.joinToString("") { it.text } }
 
+    // 平台适配点:子树级渲染后端定向(LocalTextRenderBackend)—— 与另两个重载同源,
+    // 此前本重载两条分支都不读它,导致「Component 版不吃后端定向」的不一致。
+    val textBackend = LocalTextRenderBackend.current
+    // 平台适配点:MC Component 通路载荷(无 TextStyle 映射阶段 → alpha 恒 1f、无 brush)
+    val payload =
+        remember(effectiveDefaultStyle, segments, scale, textAlign, textBackend) {
+            mcTextPayload(
+                mcStyle = effectiveDefaultStyle,
+                segments = segments,
+                scale = scale,
+                textAlign = textAlign,
+                backend = textBackend,
+            )
+        }
+
     BackgroundTextMeasurement(text = text, style = effectiveDefaultStyle, fontFamilyResolver = fontFamilyResolver)
 
+    // 平台适配点:onTextLayout 需要 TextLayoutResult —— 只有 AnnotatedString 路径
+    // (TextAnnotatedStringNode.measure 产出并回调)具备该能力,TextStringSimpleNode
+    // 整条链没有这个槽位。因此声明了 onTextLayout 就必须改走 textModifier,
+    // 否则参数被静默吞掉、回调永不触发。
+    // 两条路径消费**同一个载荷**,故「加不加 onTextLayout」不改变任何外观。
     val finalModifier =
-        modifier then
-            TextStringSimpleElement(
-                text = text,
-                style = effectiveDefaultStyle,
-                fontFamilyResolver = fontFamilyResolver,
+        if (onTextLayout != null) {
+            modifier.textModifier(
+                text = AnnotatedString(text = text),
+                payload = payload,
+                onTextLayout = onTextLayout,
                 overflow = overflow,
                 softWrap = softWrap,
                 maxLines = maxLines,
                 minLines = minLines,
+                fontFamilyResolver = fontFamilyResolver,
+                placeholders = null,
+                onPlaceholderLayout = null,
+                selectionController = null,
                 color = color,
-                segments = segments,
-                scale = scale,
+                onShowTranslation = null,
+                autoSize = null,
             )
+        } else {
+            modifier then
+                TextStringSimpleElement(
+                    text = text,
+                    payload = payload,
+                    fontFamilyResolver = fontFamilyResolver,
+                    overflow = overflow,
+                    softWrap = softWrap,
+                    maxLines = maxLines,
+                    minLines = minLines,
+                    color = color,
+                )
+        }
     Layout(finalModifier, EmptyMeasurePolicy)
 }
 
@@ -390,9 +437,14 @@ fun BasicText(
     // 段间无样式覆盖的文本用 mcStyle;渲染端 recordSegmentedTextDraw 要求段全覆盖)
     val segments = remember(text, style, density) { text.toStyleSegments(mcStyle) }
 
-    // 平台适配点:字号渲染缩放(18sp → 2x)。AnnotatedString 版走
-    // MultiParagraphLayoutCache,scale 必须透传到布局/绘制(否则字号恒 1x)
-    val textScale = platformData.scale
+    // 平台适配点:子树级渲染后端定向(LocalTextRenderBackend)
+    val textBackend = LocalTextRenderBackend.current
+    // 平台适配点:Compose 语义 → 映射结果 → 平台文本载荷(含富文本段与字号渲染缩放)。
+    // AnnotatedString 版走 MultiParagraphLayoutCache,载荷必须透传到布局/绘制,
+    // 否则字号恒 1x、alpha/brush/后端定向丢失。
+    val payload = remember(platformData, segments, textBackend) {
+        platformData.toPayload(segments = segments, backend = textBackend)
+    }
 
     if (!hasInlineContent && !hasLinks) {
         BackgroundTextMeasurement(
@@ -407,7 +459,7 @@ fun BasicText(
             modifier =
                 modifier.textModifier(
                     text = text,
-                    style = mcStyle,
+                    payload = payload,
                     onTextLayout = onTextLayout,
                     overflow = overflow,
                     softWrap = softWrap,
@@ -420,8 +472,6 @@ fun BasicText(
                     color = color,
                     onShowTranslation = null,
                     autoSize = autoSize,
-                    segments = segments,
-                    scale = textScale,
                 ),
             EmptyMeasurePolicy,
         )
@@ -433,10 +483,10 @@ fun BasicText(
         LayoutWithLinksAndInlineContent(
             modifier = modifier,
             text = displayedText,
+            payload = payload,
             onTextLayout = onTextLayout,
             hasInlineContent = hasInlineContent,
             inlineContent = inlineContent,
-            style = mcStyle,
             overflow = overflow,
             softWrap = softWrap,
             maxLines = maxLines,
@@ -453,8 +503,6 @@ fun BasicText(
                     }
             },
             autoSize = autoSize,
-            segments = segments,
-            scale = textScale,
         )
     }
 }
@@ -752,7 +800,9 @@ private fun measureWithTextRangeMeasureConstraints(
 
 private fun Modifier.textModifier(
     text: AnnotatedString,
-    style: Style,
+    // 平台适配点:平台文本载荷(MC Style / 富文本段 / 字号缩放 / 透明度 / 画刷 /
+    // 渲染后端定向,一次给全)。此前逐个形参转抄,已两次漏字段。
+    payload: PlatformTextPayload,
     onTextLayout: ((TextLayoutResult) -> Unit)?,
     overflow: TextOverflow,
     softWrap: Boolean,
@@ -765,50 +815,42 @@ private fun Modifier.textModifier(
     color: ColorProducer?,
     onShowTranslation: ((TextAnnotatedStringNode.TextSubstitutionValue) -> Unit)?,
     autoSize: TextAutoSize?,
-    // 平台适配点(富文本):spanStyles 切分后的段列表(全覆盖)
-    segments: List<StyleSegment> = emptyList(),
-    // 平台适配点:字号渲染缩放(18sp → 2x),透传给布局/绘制
-    scale: Float = 1f,
 ): Modifier {
     if (selectionController == null) {
         val staticTextModifier =
             TextAnnotatedStringElement(
-                text,
-                style,
-                fontFamilyResolver,
-                onTextLayout,
-                overflow,
-                softWrap,
-                maxLines,
-                minLines,
-                placeholders,
-                onPlaceholderLayout,
-                null,
-                color,
-                autoSize,
-                onShowTranslation,
-                segments,
-                scale,
+                text = text,
+                payload = payload,
+                fontFamilyResolver = fontFamilyResolver,
+                onTextLayout = onTextLayout,
+                overflow = overflow,
+                softWrap = softWrap,
+                maxLines = maxLines,
+                minLines = minLines,
+                placeholders = placeholders,
+                onPlaceholderLayout = onPlaceholderLayout,
+                selectionController = null,
+                color = color,
+                autoSize = autoSize,
+                onShowTranslation = onShowTranslation,
             )
         return this then Modifier /* selection position */ then staticTextModifier
     } else {
         val selectableTextModifier =
             SelectableTextAnnotatedStringElement(
-                text,
-                style,
-                fontFamilyResolver,
-                onTextLayout,
-                overflow,
-                softWrap,
-                maxLines,
-                minLines,
-                placeholders,
-                onPlaceholderLayout,
-                selectionController,
-                color,
-                autoSize,
-                segments,
-                scale,
+                text = text,
+                payload = payload,
+                fontFamilyResolver = fontFamilyResolver,
+                onTextLayout = onTextLayout,
+                overflow = overflow,
+                softWrap = softWrap,
+                maxLines = maxLines,
+                minLines = minLines,
+                placeholders = placeholders,
+                onPlaceholderLayout = onPlaceholderLayout,
+                selectionController = selectionController,
+                color = color,
+                autoSize = autoSize,
             )
         return this then selectionController.modifier then selectableTextModifier
     }
@@ -818,10 +860,11 @@ private fun Modifier.textModifier(
 private fun LayoutWithLinksAndInlineContent(
     modifier: Modifier,
     text: AnnotatedString,
+    // 平台适配点:平台文本载荷(见 textModifier)
+    payload: PlatformTextPayload,
     onTextLayout: ((TextLayoutResult) -> Unit)?,
     hasInlineContent: Boolean,
     inlineContent: Map<String, InlineTextContent> = mapOf(),
-    style: Style,
     overflow: TextOverflow,
     softWrap: Boolean,
     maxLines: Int,
@@ -831,10 +874,6 @@ private fun LayoutWithLinksAndInlineContent(
     color: ColorProducer?,
     onShowTranslation: ((TextAnnotatedStringNode.TextSubstitutionValue) -> Unit)?,
     autoSize: TextAutoSize?,
-    // 平台适配点(富文本):spanStyles 切分后的段列表(全覆盖)
-    segments: List<StyleSegment> = emptyList(),
-    // 平台适配点:字号渲染缩放(18sp → 2x)
-    scale: Float = 1f,
 ) {
 
     val textScope =
@@ -869,7 +908,7 @@ private fun LayoutWithLinksAndInlineContent(
 
     BackgroundTextMeasurement(
         text = text,
-        style = style,
+        style = payload.mcStyle,
         fontFamilyResolver = fontFamilyResolver,
         placeholders = placeholders,
     )
@@ -882,7 +921,7 @@ private fun LayoutWithLinksAndInlineContent(
         modifier =
             modifier.textModifier(
                 text = styledText(),
-                style = style,
+                payload = payload,
                 onTextLayout = {
                     textScope?.textLayoutResult = it
                     onTextLayout?.invoke(it)
@@ -898,8 +937,6 @@ private fun LayoutWithLinksAndInlineContent(
                 color = color,
                 onShowTranslation = onShowTranslation,
                 autoSize = autoSize,
-                segments = segments,
-                scale = scale,
             ),
         measurePolicy =
             if (!hasInlineContent) {

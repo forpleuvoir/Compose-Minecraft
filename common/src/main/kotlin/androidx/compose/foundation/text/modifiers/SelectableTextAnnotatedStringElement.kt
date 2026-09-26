@@ -26,14 +26,19 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.platform.StyleSegment
 import androidx.compose.ui.text.style.TextOverflow
-import net.minecraft.network.chat.Style
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.PlatformTextPayload
 
-/** Element for any text that is in a selection container. */
+/**
+ * Element for any text that is in a selection container.
+ *
+ * 平台适配点:与 [TextAnnotatedStringElement] 消费同一个 [PlatformTextPayload] ——
+ * 选区路径此前既没有 alpha/brush 形参、也没有 backend 可转发,是「进
+ * SelectionContainer 就换外观」的来源。
+ */
 internal class SelectableTextAnnotatedStringElement(
     private val text: AnnotatedString,
-    private val style: Style,
+    private val payload: PlatformTextPayload,
     private val fontFamilyResolver: FontFamily.Resolver,
     private val onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     private val overflow: TextOverflow = TextOverflow.Clip,
@@ -45,16 +50,12 @@ internal class SelectableTextAnnotatedStringElement(
     private val selectionController: SelectionController? = null,
     private val color: ColorProducer? = null,
     private val autoSize: TextAutoSize? = null,
-    // 平台适配点(富文本):spanStyles 切分后的段列表(全覆盖)
-    private val segments: List<StyleSegment> = emptyList(),
-    // 平台适配点:字号渲染缩放(18sp → 2x)
-    private val scale: Float = 1f,
 ) : ModifierNodeElement<SelectableTextAnnotatedStringNode>() {
 
     override fun create(): SelectableTextAnnotatedStringNode =
         SelectableTextAnnotatedStringNode(
             text = text,
-            style = style,
+            payload = payload,
             fontFamilyResolver = fontFamilyResolver,
             onTextLayout = onTextLayout,
             overflow = overflow,
@@ -67,14 +68,12 @@ internal class SelectableTextAnnotatedStringElement(
             overrideColor = color,
             autoSize = autoSize,
             onShowTranslation = null,
-            segments = segments,
-            scale = scale,
         )
 
     override fun update(node: SelectableTextAnnotatedStringNode) {
         node.update(
             text = text,
-            style = style,
+            payload = payload,
             placeholders = placeholders,
             minLines = minLines,
             maxLines = maxLines,
@@ -86,8 +85,6 @@ internal class SelectableTextAnnotatedStringElement(
             selectionController = selectionController,
             color = color,
             autoSize = autoSize,
-            segments = segments,
-            scale = scale,
         )
     }
 
@@ -99,10 +96,8 @@ internal class SelectableTextAnnotatedStringElement(
         // these three are most likely to actually change
         if (color != other.color) return false
         if (text != other.text) return false
-        if (style != other.style) return false
+        if (payload != other.payload) return false
         if (placeholders != other.placeholders) return false
-        if (segments != other.segments) return false
-        if (scale != other.scale) return false
 
         // these are equally unlikely to change
         if (fontFamilyResolver != other.fontFamilyResolver) return false
@@ -115,14 +110,14 @@ internal class SelectableTextAnnotatedStringElement(
 
         // these never change, but check anyway for correctness
         if (onPlaceholderLayout !== other.onPlaceholderLayout) return false
-        if (selectionController != other.selectionController) return false
+        if (selectionController !== other.selectionController) return false
 
         return true
     }
 
     override fun hashCode(): Int {
         var result = text.hashCode()
-        result = 31 * result + style.hashCode()
+        result = 31 * result + payload.hashCode()
         result = 31 * result + fontFamilyResolver.hashCode()
         result = 31 * result + (onTextLayout?.hashCode() ?: 0)
         result = 31 * result + overflow.hashCode()
@@ -134,8 +129,6 @@ internal class SelectableTextAnnotatedStringElement(
         result = 31 * result + (selectionController?.hashCode() ?: 0)
         result = 31 * result + (autoSize?.hashCode() ?: 0)
         result = 31 * result + (color?.hashCode() ?: 0)
-        result = 31 * result + segments.hashCode()
-        result = 31 * result + scale.hashCode()
         return result
     }
 

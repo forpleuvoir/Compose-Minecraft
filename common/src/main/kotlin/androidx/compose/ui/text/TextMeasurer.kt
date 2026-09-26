@@ -20,6 +20,7 @@ import androidx.collection.LruCache
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -153,6 +154,8 @@ class TextMeasurer(
         skipCache: Boolean = false,
         // 平台适配点:文本渲染缩放(1f = 原样;经 TextLayoutInput/MultiParagraphIntrinsics 注入)
         scale: Float = 1f,
+        // 平台适配点:段落水平对齐(MC Style 无段落属性,故以形参给出;默认未设置 = 旧行为)
+        textAlign: TextAlign = TextAlign.Unspecified,
     ): TextLayoutResult {
         val requestedTextLayoutInput =
             TextLayoutInput(
@@ -167,6 +170,7 @@ class TextMeasurer(
                 fontFamilyResolver,
                 constraints,
                 scale,
+                textAlign,
             )
 
         val cacheResult =
@@ -248,6 +252,8 @@ class TextMeasurer(
         skipCache: Boolean = false,
         // 平台适配点:文本渲染缩放(1f = 原样;透传给 AnnotatedString 重载)
         scale: Float = 1f,
+        // 平台适配点:段落水平对齐(透传给 AnnotatedString 重载)
+        textAlign: TextAlign = TextAlign.Unspecified,
     ): TextLayoutResult {
         return measure(
             text = AnnotatedString(text),
@@ -261,6 +267,7 @@ class TextMeasurer(
             fontFamilyResolver = fontFamilyResolver,
             skipCache = skipCache,
             scale = scale,
+            textAlign = textAlign,
         )
     }
 
@@ -283,6 +290,8 @@ class TextMeasurer(
                         fontFamilyResolver = fontFamilyResolver,
                         placeholders = placeholders,
                         scale = scale,
+                        // 平台适配点:段落水平对齐(TextLayoutInput 携带)
+                        textAlign = textAlign,
                     )
 
                 val minWidth = constraints.minWidth
@@ -451,6 +460,8 @@ internal class CacheTextLayoutInput(val textLayoutInput: TextLayoutInput) {
             if (layoutDirection != other.textLayoutInput.layoutDirection) return false
             if (fontFamilyResolver !== other.textLayoutInput.fontFamilyResolver) return false
             if (constraints != other.textLayoutInput.constraints) return false
+            // 平台适配点:段落对齐参与缓存键(只改对齐也必须重新布局)
+            if (textAlign != other.textLayoutInput.textAlign) return false
         }
 
         return true

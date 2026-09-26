@@ -37,19 +37,21 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.platform.StyleSegment
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
-import net.minecraft.network.chat.Style
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.PlatformTextPayload
 
 /**
  * Node for any text that is in a selection container.
  *
  * This adds [GlobalPositionAwareModifierNode].
+ *
+ * 平台适配点:内部委托的 [TextAnnotatedStringNode] 由载荷一次性喂全
+ * (样式/段/缩放/透明度/画刷/渲染后端),不再逐个形参转抄。
  */
 internal class SelectableTextAnnotatedStringNode(
     text: AnnotatedString,
-    style: Style,
+    payload: PlatformTextPayload,
     fontFamilyResolver: FontFamily.Resolver,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     overflow: TextOverflow = TextOverflow.Clip,
@@ -62,10 +64,6 @@ internal class SelectableTextAnnotatedStringNode(
     overrideColor: ColorProducer? = null,
     autoSize: TextAutoSize? = null,
     private var onShowTranslation: ((TextAnnotatedStringNode.TextSubstitutionValue) -> Unit)? = null,
-    // 平台适配点(富文本):spanStyles 切分后的段列表(全覆盖)
-    segments: List<StyleSegment> = emptyList(),
-    // 平台适配点:字号渲染缩放(18sp → 2x),透传给内部节点
-    scale: Float = 1f,
 ) : DelegatingNode(), LayoutModifierNode, DrawModifierNode, GlobalPositionAwareModifierNode {
     override val shouldAutoInvalidate: Boolean
         get() = false
@@ -74,7 +72,7 @@ internal class SelectableTextAnnotatedStringNode(
         delegate(
             TextAnnotatedStringNode(
                 text = text,
-                style = style,
+                style = payload.mcStyle,
                 fontFamilyResolver = fontFamilyResolver,
                 onTextLayout = onTextLayout,
                 overflow = overflow,
@@ -87,8 +85,12 @@ internal class SelectableTextAnnotatedStringNode(
                 overrideColor = overrideColor,
                 autoSize = autoSize,
                 onShowTranslation = onShowTranslation,
-                segments = segments,
-                scale = scale,
+                segments = payload.segments,
+                scale = payload.scale,
+                textAlign = payload.textAlign,
+                textAlpha = payload.alpha,
+                textBrush = payload.brush,
+                textBackend = payload.backend,
             )
         )
 
@@ -131,7 +133,7 @@ internal class SelectableTextAnnotatedStringNode(
 
     fun update(
         text: AnnotatedString,
-        style: Style,
+        payload: PlatformTextPayload,
         placeholders: List<AnnotatedString.Range<Placeholder>>?,
         minLines: Int,
         maxLines: Int,
@@ -143,17 +145,20 @@ internal class SelectableTextAnnotatedStringNode(
         selectionController: SelectionController?,
         color: ColorProducer?,
         autoSize: TextAutoSize?,
-        // 平台适配点(富文本):spanStyles 切分后的段列表(全覆盖)
-        segments: List<StyleSegment>,
-        // 平台适配点:字号渲染缩放(18sp → 2x)
-        scale: Float = 1f,
     ) {
         textAnnotatedStringNode.doInvalidations(
-            drawChanged = textAnnotatedStringNode.updateDraw(color, style),
+            drawChanged =
+                textAnnotatedStringNode.updateDraw(
+                    color = color,
+                    style = payload.mcStyle,
+                    alpha = payload.alpha,
+                    brush = payload.brush,
+                    backend = payload.backend,
+                ),
             textChanged = textAnnotatedStringNode.updateText(text = text),
             layoutChanged =
                 textAnnotatedStringNode.updateLayoutRelatedArgs(
-                    style = style,
+                    style = payload.mcStyle,
                     placeholders = placeholders,
                     minLines = minLines,
                     maxLines = maxLines,
@@ -161,8 +166,9 @@ internal class SelectableTextAnnotatedStringNode(
                     fontFamilyResolver = fontFamilyResolver,
                     overflow = overflow,
                     autoSize = autoSize,
-                    segments = segments,
-                    scale = scale,
+                    segments = payload.segments,
+                    scale = payload.scale,
+                    textAlign = payload.textAlign,
                 ),
             callbacksChanged =
                 textAnnotatedStringNode.updateCallbacks(

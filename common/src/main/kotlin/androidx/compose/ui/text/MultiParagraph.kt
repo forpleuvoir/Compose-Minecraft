@@ -34,6 +34,7 @@ import androidx.compose.ui.text.internal.requirePrecondition
 import androidx.compose.ui.text.platform.drawMultiParagraph
 import androidx.compose.ui.text.style.ResolvedTextDirection
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -157,6 +158,8 @@ class MultiParagraph(
         width: Float,
         density: Density,
         resourceLoader: Font.ResourceLoader,
+        // 平台适配点:段落水平对齐(默认未设置 = 旧行为)
+        textAlign: TextAlign = TextAlign.Unspecified,
     ) : this(
         intrinsics =
             MultiParagraphIntrinsics(
@@ -165,6 +168,8 @@ class MultiParagraph(
                 placeholders = placeholders,
                 density = density,
                 fontFamilyResolver = createFontFamilyResolver(resourceLoader),
+                // 平台适配点:段落水平对齐(MC Style 无段落属性,独立形参下沉)
+                textAlign = textAlign,
             ),
         maxLines = maxLines,
         overflow = if (ellipsis) TextOverflow.Ellipsis else TextOverflow.Clip,
@@ -208,6 +213,8 @@ class MultiParagraph(
         placeholders: List<AnnotatedString.Range<Placeholder>> = listOf(),
         maxLines: Int = Int.MAX_VALUE,
         ellipsis: Boolean = false,
+        // 平台适配点:段落水平对齐(默认未设置 = 旧行为)
+        textAlign: TextAlign = TextAlign.Unspecified,
     ) : this(
         intrinsics =
             MultiParagraphIntrinsics(
@@ -216,6 +223,8 @@ class MultiParagraph(
                 placeholders = placeholders,
                 density = density,
                 fontFamilyResolver = fontFamilyResolver,
+                // 平台适配点:段落水平对齐(MC Style 无段落属性,独立形参下沉)
+                textAlign = textAlign,
             ),
         maxLines = maxLines,
         overflow = if (ellipsis) TextOverflow.Ellipsis else TextOverflow.Clip,
@@ -257,6 +266,8 @@ class MultiParagraph(
         placeholders: List<AnnotatedString.Range<Placeholder>> = listOf(),
         maxLines: Int = Int.MAX_VALUE,
         ellipsis: Boolean = false,
+        // 平台适配点:段落水平对齐(默认未设置 = 旧行为)
+        textAlign: TextAlign = TextAlign.Unspecified,
     ) : this(
         intrinsics =
             MultiParagraphIntrinsics(
@@ -265,6 +276,8 @@ class MultiParagraph(
                 placeholders = placeholders,
                 density = density,
                 fontFamilyResolver = fontFamilyResolver,
+                // 平台适配点:段落水平对齐(MC Style 无段落属性,独立形参下沉)
+                textAlign = textAlign,
             ),
         maxLines = maxLines,
         overflow = if (ellipsis) TextOverflow.Ellipsis else TextOverflow.Clip,
@@ -303,6 +316,8 @@ class MultiParagraph(
         placeholders: List<AnnotatedString.Range<Placeholder>> = listOf(),
         maxLines: Int = Int.MAX_VALUE,
         overflow: TextOverflow = TextOverflow.Clip,
+        // 平台适配点:段落水平对齐(默认未设置 = 旧行为)
+        textAlign: TextAlign = TextAlign.Unspecified,
     ) : this(
         intrinsics =
             MultiParagraphIntrinsics(
@@ -311,6 +326,8 @@ class MultiParagraph(
                 placeholders = placeholders,
                 density = density,
                 fontFamilyResolver = fontFamilyResolver,
+                // 平台适配点:段落水平对齐(MC Style 无段落属性,独立形参下沉)
+                textAlign = textAlign,
             ),
         maxLines = maxLines,
         overflow = overflow,

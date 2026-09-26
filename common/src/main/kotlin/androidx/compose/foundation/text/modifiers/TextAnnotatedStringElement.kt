@@ -21,26 +21,27 @@ import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.node.ModifierNodeElement
-import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.platform.StyleSegment
-import net.minecraft.network.chat.Style
+import moe.forpleuvoir.compose_minecraft.platform.ui.text.PlatformTextPayload
 
 /**
  * Modifier element for any Text with [AnnotatedString] or [onTextLayout] parameters
  *
- * This is slower than [TextAnnotatedStringElement]
+ * This is slower than [TextStringSimpleElement]
  *
- * 平台适配点:TextStyle → Style。
+ * 平台适配点:平台文本输入收敛为 [PlatformTextPayload](单一对象,见其 KDoc)。
+ * 此前本 element 缺少 `alpha` / `brush` 形参、`backend` 虽有形参但无人转发,
+ * 导致「传了 `onTextLayout` 或放进 `SelectionContainer` 就丢了透明度/渐变/
+ * 后端定向」;现在与 [TextStringSimpleElement] 消费同一个载荷,字段集完全一致。
  */
 internal class TextAnnotatedStringElement(
     private val text: AnnotatedString,
-    private val style: Style,
+    private val payload: PlatformTextPayload,
     private val fontFamilyResolver: FontFamily.Resolver,
     private val onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     private val overflow: TextOverflow = TextOverflow.Clip,
@@ -53,42 +54,46 @@ internal class TextAnnotatedStringElement(
     private val color: ColorProducer? = null,
     private val autoSize: TextAutoSize? = null,
     private val onShowTranslation: ((TextAnnotatedStringNode.TextSubstitutionValue) -> Unit)? = null,
-    // 平台适配点(富文本):spanStyles 切分后的段列表(全覆盖)
-    private val segments: List<StyleSegment> = emptyList(),
-    // 平台适配点:字号渲染缩放(18sp → 2x)
-    private val scale: Float = 1f,
-    /** 平台适配点:子树级渲染后端定向 */
-    private val backend: TextRenderBackend = TextRenderBackend.DEFAULT,
 ) : ModifierNodeElement<TextAnnotatedStringNode>() {
 
     override fun create(): TextAnnotatedStringNode =
         TextAnnotatedStringNode(
-            text,
-            style,
-            fontFamilyResolver,
-            onTextLayout,
-            overflow,
-            softWrap,
-            maxLines,
-            minLines,
-            placeholders,
-            onPlaceholderLayout,
-            selectionController,
-            color,
-            autoSize,
-            onShowTranslation,
-            segments,
-            scale,
-            backend,
+            text = text,
+            style = payload.mcStyle,
+            fontFamilyResolver = fontFamilyResolver,
+            onTextLayout = onTextLayout,
+            overflow = overflow,
+            softWrap = softWrap,
+            maxLines = maxLines,
+            minLines = minLines,
+            placeholders = placeholders,
+            onPlaceholderLayout = onPlaceholderLayout,
+            selectionController = selectionController,
+            overrideColor = color,
+            autoSize = autoSize,
+            onShowTranslation = onShowTranslation,
+            segments = payload.segments,
+            scale = payload.scale,
+            textAlign = payload.textAlign,
+            textAlpha = payload.alpha,
+            textBrush = payload.brush,
+            textBackend = payload.backend,
         )
 
     override fun update(node: TextAnnotatedStringNode) {
         node.doInvalidations(
-            drawChanged = node.updateDraw(color, style, backend),
+            drawChanged =
+                node.updateDraw(
+                    color = color,
+                    style = payload.mcStyle,
+                    alpha = payload.alpha,
+                    brush = payload.brush,
+                    backend = payload.backend,
+                ),
             textChanged = node.updateText(text = text),
             layoutChanged =
                 node.updateLayoutRelatedArgs(
-                    style = style,
+                    style = payload.mcStyle,
                     placeholders = placeholders,
                     minLines = minLines,
                     maxLines = maxLines,
@@ -96,8 +101,9 @@ internal class TextAnnotatedStringElement(
                     fontFamilyResolver = fontFamilyResolver,
                     overflow = overflow,
                     autoSize = autoSize,
-                    segments = segments,
-                    scale = scale,
+                    segments = payload.segments,
+                    scale = payload.scale,
+                    textAlign = payload.textAlign,
                 ),
             callbacksChanged =
                 node.updateCallbacks(
@@ -117,10 +123,8 @@ internal class TextAnnotatedStringElement(
         // these three are most likely to actually change
         if (color != other.color) return false
         if (text != other.text) return false /* expensive to check, do it after color */
-        if (style != other.style) return false
+        if (payload != other.payload) return false
         if (placeholders != other.placeholders) return false
-        if (segments != other.segments) return false
-        if (scale != other.scale) return false
 
         // these are equally unlikely to change
         if (fontFamilyResolver != other.fontFamilyResolver) return false
@@ -140,7 +144,7 @@ internal class TextAnnotatedStringElement(
 
     override fun hashCode(): Int {
         var result = text.hashCode()
-        result = 31 * result + style.hashCode()
+        result = 31 * result + payload.hashCode()
         result = 31 * result + fontFamilyResolver.hashCode()
         result = 31 * result + (onTextLayout?.hashCode() ?: 0)
         result = 31 * result + overflow.hashCode()
@@ -152,8 +156,6 @@ internal class TextAnnotatedStringElement(
         result = 31 * result + (selectionController?.hashCode() ?: 0)
         result = 31 * result + (color?.hashCode() ?: 0)
         result = 31 * result + (onShowTranslation?.hashCode() ?: 0)
-        result = 31 * result + segments.hashCode()
-        result = 31 * result + scale.hashCode()
         return result
     }
 

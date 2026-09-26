@@ -29,6 +29,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.platform.StyleSegment
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Density
@@ -43,9 +44,9 @@ import com.mojang.logging.LogUtils
  * Compose [TextStyle] → 平台渲染参数映射(文本 TextStyle 化)。
  *
  * 平台渲染能力 = MC `Style`(颜色/加粗/斜体/下划线/删除线)+ 渲染矩阵缩放
- * (字号,18sp = 2x 平台基准)+ 渲染 alpha(透明度)。[TextStyle] 里平台
- * 无法表达的字段(letterSpacing/background/shadow/fontFamily/lineHeight/
- * textAlign/... )收集进 [PlatformTextData.ignored] 文档化忽略。
+ * (字号,18sp = 2x 平台基准)+ 渲染 alpha(透明度)+ 段落水平对齐。
+ * [TextStyle] 里平台无法表达的字段(letterSpacing/background/shadow/fontFamily/
+ * lineHeight/... )收集进 [PlatformTextData.ignored] 文档化忽略。
  *
  * 映射规则:
  * - color → MC `TextColor`(只取 RGB,alpha 分量走渲染 alpha);
@@ -55,6 +56,8 @@ import com.mojang.logging.LogUtils
  * - fontWeight ≥ 600 → bold(MC 只有布尔);
  * - fontStyle == Italic → italic;
  * - textDecoration 含 Underline/LineThrough → underlined/strikethrough;
+ * - paragraphStyle.textAlign → [PlatformTextData.textAlign](段落级,经载荷下沉到
+ *   段落布局;`Justify` 平台不支持,布局端按 Start 降级);
  * - 其余字段忽略(见 [PlatformTextData.ignored])。
  */
 /** 映射层共享日志(忽略字段告警等) */
@@ -69,6 +72,12 @@ data class PlatformTextData(
     val mcStyle: Style,
     /** 字号渲染缩放(18sp = 2x 平台基准字号);与 BasicText 的 scale 链路一致。 */
     val scale: Float,
+    /**
+     * 段落水平对齐(`ParagraphStyle.textAlign`,`Unspecified` = 未设置)。
+     * 平台适配点:MC `Style` 是字符级样式,无段落属性 —— 对齐与 [scale] 同级,
+     * 作为独立字段沿布局链下沉(见 [PlatformTextPayload])。
+     */
+    val textAlign: TextAlign,
     /** 文本透明度(spanStyle.alpha,默认 1f),与图层 alpha 相乘。 */
     val alpha: Float,
     /** 平台适配点:渐变画刷(spanStyle.brush,非 SolidColor),绘制端逐字形取色;null = 无。 */
@@ -98,10 +107,10 @@ fun TextStyle.toPlatformData(density: Density): PlatformTextData {
     val span = spanStyle
     val ignored = buildList {
         // 段落级:布局端不支持(MC 行高固定 9px×scale、单行方向、无首行缩进)
-        // 存疑(未修复):textAlign / textIndent / lineBreak / hyphens 为不可空类型,
+        // 存疑(未修复):textIndent / lineBreak / hyphens 为不可空类型,
         // 其判空恒真 —— 此处实际语义是"设置过就记录",与其余项的判空语义不一致。
         // 当前行为正常,复现"被丢弃样式统计不准"时优先看此处。
-        if (paragraphStyle.textAlign != null) add("textAlign")
+        // 注:textAlign 已不再忽略(见 PlatformTextData.textAlign,经载荷下沉到段落布局)
         if (paragraphStyle.textDirection != TextDirection.Unspecified) add("textDirection")
         if (!paragraphStyle.lineHeight.isUnspecified) add("lineHeight")
         if (paragraphStyle.textIndent != null) add("textIndent")
@@ -174,6 +183,8 @@ fun TextStyle.toPlatformData(density: Density): PlatformTextData {
     return PlatformTextData(
         mcStyle = mcStyle,
         scale = scale,
+        // 段落对齐:TextAlign.Unspecified = 未设置(布局端按 Start 处理,与官方一致)
+        textAlign = paragraphStyle.textAlign,
         // 官方语义:未指定 alpha(无颜色/无 brush)时 span.alpha = Float.NaN
         // (TextForegroundStyle.Unspecified),须按 1f 处理,否则 NaN 直传渲染端
         // 致 alphaByte=0 全透明空白

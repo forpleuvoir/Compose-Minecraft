@@ -28,6 +28,8 @@ import androidx.compose.ui.text.TextLayoutInput
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.platform.StyleSegment
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.isOffsetAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -35,7 +37,6 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.constrain
 import kotlin.jvm.JvmInline
-import kotlin.math.min
 import net.minecraft.network.chat.Style
 
 /**
@@ -58,6 +59,8 @@ internal class ParagraphLayoutCache(
     private var segments: List<StyleSegment> = emptyList(),
     /** 平台适配点:文本缩放;1f = 原样。 */
     private var scale: Float = 1f,
+    /** 平台适配点:段落水平对齐(布局端逐行计算起点偏移)。 */
+    private var textAlign: TextAlign = TextAlign.Unspecified,
 ) {
 
     /**
@@ -171,7 +174,7 @@ internal class ParagraphLayoutCache(
             if (finalConstraints != prevConstraints) {
                 // ensure size and overflow is still accurate
                 val localParagraph = paragraph!!
-                val layoutWidth = min(localParagraph.maxIntrinsicWidth, localParagraph.width)
+                val layoutWidth = occupiedWidth(finalConstraints, localParagraph.width)
                 val localSize =
                     finalConstraints.constrain(
                         IntSize(layoutWidth.ceilToIntPx(), localParagraph.height.ceilToIntPx())
@@ -191,7 +194,10 @@ internal class ParagraphLayoutCache(
                 prevConstraints = finalConstraints
                 val localSize =
                     finalConstraints.constrain(
-                        IntSize(it.width.ceilToIntPx(), it.height.ceilToIntPx())
+                        IntSize(
+                            occupiedWidth(finalConstraints, it.width).ceilToIntPx(),
+                            it.height.ceilToIntPx(),
+                        )
                     )
                 layoutSize = localSize
                 didOverflow =
@@ -200,6 +206,22 @@ internal class ParagraphLayoutCache(
             }
         return true
     }
+
+    /**
+     * 平台适配点:文本节点**占用宽度**。
+     *
+     * 默认 = 段落内容宽度([contentWidth],本平台 `Paragraph.width` 语义 = 最大行宽)。
+     * 但请求了行偏移对齐(`Center`/`Right`/`End`)且容器宽度有界时,占用整个容器宽度:
+     * 对齐会把行推离内容盒,若节点仍按内容宽上报,上层
+     * `TextLayoutResult.hasVisualOverflow`(`size.width < 段落宽`)成立 → 偏移后的行被裁掉。
+     * 语义即"请求对齐 = 请求容器宽度"(与块级元素 `text-align` 一致)。
+     */
+    private fun occupiedWidth(constraints: Constraints, contentWidth: Float): Float =
+        if (textAlign.isOffsetAlign && constraints.hasBoundedWidth) {
+            constraints.maxWidth.toFloat()
+        } else {
+            contentWidth
+        }
 
     private fun useMinLinesConstrainer(
         constraints: Constraints,
@@ -253,6 +275,8 @@ internal class ParagraphLayoutCache(
         segments: List<StyleSegment> = emptyList(),
         /** 平台适配点:文本缩放;1f = 原样。 */
         scale: Float = 1f,
+        /** 平台适配点:段落水平对齐(默认保持当前值 —— 省略即"不改",防止静默清空) */
+        textAlign: TextAlign = this.textAlign,
     ) {
         this.text = text
         this.style = style
@@ -266,6 +290,9 @@ internal class ParagraphLayoutCache(
         }
         if (this.scale != scale) {
             this.scale = scale
+        }
+        if (this.textAlign != textAlign) {
+            this.textAlign = textAlign
         }
         recordHistory(LayoutCacheOperation.MarkDirtyNode)
         markDirty()
@@ -295,6 +322,9 @@ internal class ParagraphLayoutCache(
                     placeholders = listOf(),
                     segments = segments,
                     scale = scale,
+                    // 平台适配点:段落水平对齐 —— 漏传会让简单路径(String/Component 无回调时)
+                    // 永远拿不到对齐,且是静默失效(默认 Unspecified)
+                    textAlign = textAlign,
                 )
             } else {
                 localIntrinsics
@@ -402,6 +432,7 @@ internal class ParagraphLayoutCache(
                 fontFamilyResolver,
                 finalConstraints,
                 scale,
+                textAlign,
             ),
             MultiParagraph(
                 MultiParagraphIntrinsics(
@@ -411,6 +442,7 @@ internal class ParagraphLayoutCache(
                     density = localDensity,
                     fontFamilyResolver = fontFamilyResolver,
                     scale = scale,
+                    textAlign = textAlign,
                 ),
                 finalConstraints,
                 maxLines,

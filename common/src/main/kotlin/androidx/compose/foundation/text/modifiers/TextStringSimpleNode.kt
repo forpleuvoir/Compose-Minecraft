@@ -55,6 +55,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.platform.StyleSegment
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Constraints.Companion.fitPrioritizingWidth
@@ -87,6 +88,8 @@ internal class TextStringSimpleNode(
     private var segments: List<StyleSegment> = emptyList(),
     /** 平台适配点:文本缩放;1f = 原样。 */
     private var scale: Float = 1f,
+    /** 平台适配点:段落水平对齐(布局端逐行计算起点偏移)。 */
+    private var textAlign: TextAlign = TextAlign.Unspecified,
     /** 平台适配点:文本透明度(TextStyle.alpha,默认 1f),绘制时合成进颜色。 */
     private var textAlpha: Float = 1f,
     /** 平台适配点:渐变画刷(TextStyle.brush 非 SolidColor),绘制走 brush 重载。 */
@@ -122,6 +125,7 @@ internal class TextStringSimpleNode(
                         minLines,
                         segments = segments,
                         scale = scale,
+                        textAlign = textAlign,
                     )
             }
             return _layoutCache!!
@@ -152,6 +156,7 @@ internal class TextStringSimpleNode(
                     minLines = minLines,
                     segments = segments,
                     scale = scale,
+                    textAlign = textAlign,
                 )
             }
         }
@@ -229,6 +234,8 @@ internal class TextStringSimpleNode(
         segments: List<StyleSegment> = emptyList(),
         /** 平台适配点:文本缩放;1f = 原样。 */
         scale: Float = 1f,
+        /** 平台适配点:段落水平对齐 */
+        textAlign: TextAlign = this.textAlign,
     ): Boolean {
         var changed: Boolean
 
@@ -243,6 +250,11 @@ internal class TextStringSimpleNode(
 
         if (this.scale != scale) {
             this.scale = scale
+            changed = true
+        }
+
+        if (this.textAlign != textAlign) {
+            this.textAlign = textAlign
             changed = true
         }
 
@@ -292,6 +304,8 @@ internal class TextStringSimpleNode(
                 minLines = minLines,
                 segments = segments,
                 scale = scale,
+                // 平台适配点:段落对齐必须随更新一起带(漏传会被 update 的清空/默认值覆盖)
+                textAlign = textAlign,
             )
         }
 
@@ -348,6 +362,7 @@ internal class TextStringSimpleNode(
                 minLines,
                 segments,
                 scale,
+                textAlign,
             ) ?: return false
         } else {
             val newTextSubstitution = TextSubstitutionValue(text, updatedText)
@@ -362,6 +377,7 @@ internal class TextStringSimpleNode(
                     minLines,
                     segments = segments,
                     scale = scale,
+                    textAlign = textAlign,
                 )
             substitutionLayoutCache.density = layoutCache.density
             newTextSubstitution.layoutCache = substitutionLayoutCache

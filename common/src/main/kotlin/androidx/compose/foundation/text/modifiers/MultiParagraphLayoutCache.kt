@@ -30,6 +30,8 @@ import androidx.compose.ui.text.TextLayoutInput
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.platform.StyleSegment
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.isOffsetAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -66,6 +68,8 @@ internal class MultiParagraphLayoutCache(
     // 平台适配点:字号渲染缩放(18sp → 2x)。AnnotatedString 版文本的
     // fontSize 经 BasicText 组合端换算后一路透传到这里,布局与绘制共用。
     private var scale: Float = 1f,
+    // 平台适配点:段落水平对齐(布局端逐行计算起点偏移)
+    private var textAlign: TextAlign = TextAlign.Unspecified,
 ) {
     /** Convert min max lines into actual constraints */
     private var mMinLinesConstrainer: MinLinesConstrainer? = null
@@ -260,7 +264,15 @@ internal class MultiParagraphLayoutCache(
         finalConstraints: Constraints,
         multiParagraph: MultiParagraph,
     ): TextLayoutResult {
-        val layoutWidth = min(multiParagraph.intrinsics.maxIntrinsicWidth, multiParagraph.width)
+        // 平台适配点:请求行偏移对齐且容器宽度有界时占用容器宽度 —— 否则
+        // size.width(内容宽)< multiParagraph.width 会让 hasVisualOverflow 成立,
+        // 偏移后的行被 TextAnnotatedStringNode/SelectionController 的裁剪吃掉。
+        val layoutWidth =
+            if (textAlign.isOffsetAlign && multiParagraph.width.isFinite()) {
+                multiParagraph.width
+            } else {
+                min(multiParagraph.intrinsics.maxIntrinsicWidth, multiParagraph.width)
+            }
         return TextLayoutResult(
             TextLayoutInput(
                 text,
@@ -274,6 +286,7 @@ internal class MultiParagraphLayoutCache(
                 fontFamilyResolver,
                 finalConstraints,
                 intrinsicsScale,
+                textAlign,
             ),
             multiParagraph,
             finalConstraints.constrain(
@@ -320,6 +333,8 @@ internal class MultiParagraphLayoutCache(
         segments: List<StyleSegment> = emptyList(),
         // 平台适配点:字号渲染缩放(18sp → 2x),见构造注释
         scale: Float = 1f,
+        // 平台适配点:段落水平对齐(默认保持当前值 —— 省略即"不改",防止静默清空)
+        textAlign: TextAlign = this.textAlign,
     ) {
         this.text = text
         this.style = style
@@ -332,6 +347,7 @@ internal class MultiParagraphLayoutCache(
         this.autoSize = autoSize
         this.segments = segments
         this.scale = scale
+        this.textAlign = textAlign
         recordHistory(LayoutCacheOperation.MarkDirtyNode)
         markDirty()
     }
@@ -365,6 +381,8 @@ internal class MultiParagraphLayoutCache(
                     scale = scale,
                     // 平台适配点(富文本):段列表透传到 intrinsics → Paragraph → 渲染端
                     segments = segments,
+                    // 平台适配点:段落水平对齐
+                    textAlign = textAlign,
                 )
             } else {
                 localIntrinsics
@@ -504,6 +522,7 @@ internal class MultiParagraphLayoutCache(
                     scale = scale,
                     // 平台适配点(富文本):autoSize 探测布局同样携带段列表
                     segments = this@MultiParagraphLayoutCache.segments,
+                    textAlign = this@MultiParagraphLayoutCache.textAlign,
                 )
             val multiParagraph =
                 MultiParagraph(
@@ -532,14 +551,22 @@ internal class MultiParagraphLayoutCache(
                         fontFamilyResolver,
                         constraints,
                         scale,
+                        this@MultiParagraphLayoutCache.textAlign,
                     ),
                     multiParagraph,
                     constraints.constrain(
                         IntSize(
-                            min(
-                                multiParagraph.intrinsics.maxIntrinsicWidth,
-                                multiParagraph.width,
-                            ).ceilToIntPx(),
+                            // 平台适配点:同 textLayoutResult —— 对齐生效时占用容器宽度
+                            (
+                                if (textAlign.isOffsetAlign && multiParagraph.width.isFinite()) {
+                                    multiParagraph.width
+                                } else {
+                                    min(
+                                        multiParagraph.intrinsics.maxIntrinsicWidth,
+                                        multiParagraph.width,
+                                    )
+                                }
+                                ).ceilToIntPx(),
                             multiParagraph.height.ceilToIntPx(),
                         ),
                     ),
