@@ -180,6 +180,27 @@ dependencies {
 }
 
 /*
+ * 补全被本模块"认领"的包。
+ *
+ * MC 26.2 / loader 11 的 `ModuleClassLoader.loadClass` 按**包名**决定从哪读类：
+ * 包名出现在模块的 packageLookup 里时，**只从该模块读**，读不到直接抛
+ * ClassNotFoundException，不会回退到 classpath 或 jarJar 的嵌套 jar。
+ *
+ * 本模块编译了 compose 的一部分源码，于是 `androidx/compose/ui`（自身 67 / 依赖 4）
+ * 与 `androidx/compose/ui/unit`（自身 1 / 依赖 40）这两个包被本模块认领，
+ * 包里其余类却在依赖 jar 里 —— `androidx.compose.ui.unit.IntSize` 等类因此永远找不到。
+ *
+ * 这里把这些包的类补进本模块自己的产物：dev 运行是目录式 mod
+ * （`build/resources/main` 也在模块里），发布构件也带资源，两处包的完整性都补齐。
+ */
+tasks.named<ProcessResources>("processResources") {
+    from(project.provider { jarJarInternal.files.map { project.zipTree(it) } }) {
+        include("androidx/compose/ui/**")
+        exclude("META-INF/**")
+    }
+}
+
+/*
  * 模拟 Loom includeInternal：
  *
  * 1. 解析 jarJarInternal 的完整传递依赖树。
