@@ -21,6 +21,7 @@ import net.minecraft.world.item.ItemStackTemplate
 import net.minecraft.world.item.component.BundleContents
 import org.apache.commons.lang3.math.Fraction
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent
+import org.slf4j.LoggerFactory
 
 /**
  * tooltip 行(1:1 渲染):文本行与图片行的统一接口,测量/渲染语义对齐原版
@@ -103,6 +104,8 @@ data class TooltipLines(
 
     companion object {
 
+        private val logger = LoggerFactory.getLogger("ComposeMinecraft/Tooltip")
+
         /** 通用文本 tooltip:任意 [Component] 列表 → 文本行。 */
         fun fromLines(texts: List<Component>, style: Identifier? = null, font: Font = mc.font): TooltipLines =
             TooltipLines(
@@ -116,7 +119,16 @@ data class TooltipLines(
          * `TOOLTIP_STYLE`;图片组件插到第 1 行(原版 components.isEmpty() ? 0 : 1 语义)。
          */
         fun fromItem(itemStack: ItemStack, font: Font = mc.font): TooltipLines {
-            val texts = Screen.getTooltipFromItem(mc, itemStack)
+            // 防御式:tooltip 是渲染期按需构建的附属信息,不该让整棵组合树炸掉。
+            // 组件里可能持有**暂时还解析不出值**的 Holder —— 例如主菜单里尚未同步动态注册表时,
+            // 唱片的 `jukebox_song`;原版 `JukeboxPlayable.addToTooltip` 会在 `.value()` 上抛
+            // `IllegalStateException: Trying to access unbound value ...`。
+            // 失败就退化成「只有物品名」的一行(数据齐全后自然恢复正常)。
+            val texts = runCatching { Screen.getTooltipFromItem(mc, itemStack) }
+                .getOrElse { error ->
+                    logger.warn("Failed to build the tooltip of ${itemStack.item}; fallback to the display name.", error)
+                    listOf(itemStack.hoverName)
+                }
             val lines: MutableList<TooltipLine> = texts.map { TextTooltipLine(it.visualOrderText) }.toMutableList()
             val image = itemStack.tooltipImage.orElse(null)
             if (image != null) {

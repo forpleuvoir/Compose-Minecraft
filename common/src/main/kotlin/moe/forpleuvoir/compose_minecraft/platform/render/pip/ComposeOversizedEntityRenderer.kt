@@ -163,6 +163,18 @@ class ComposeOversizedEntityRenderer(
     }
 
     /** 释放全部 GPU 纹理资源(缓存淘汰时调用,防显存泄漏)。 */
+    /** 本帧是否被使用(原版同名的帧末清理语义):帧末据此释放没被用到的纹理。 */
+    var usedOnThisFrame: Boolean = false
+        private set
+
+    fun markUsedOnThisFrame() {
+        usedOnThisFrame = true
+    }
+
+    fun resetUsedOnThisFrame() {
+        usedOnThisFrame = false
+    }
+
     fun close() {
         texture?.let { it.close(); texture = null }
         textureView?.let { it.close(); textureView = null }

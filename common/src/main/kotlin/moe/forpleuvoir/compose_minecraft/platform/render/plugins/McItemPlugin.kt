@@ -1,5 +1,6 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.plugins
 
+import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiProfiler
 import moe.forpleuvoir.compose_minecraft.platform.render.CustomDrawContext
 import moe.forpleuvoir.compose_minecraft.platform.render.state.ItemRenderState
 import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderPlugin
@@ -40,11 +41,15 @@ object McItemPlugin : MinecraftRenderPlugin {
         if (dd.stack.isEmpty) return false
         val mc = Minecraft.getInstance()
 
+        ComposeGuiProfiler.count("cmd.物品数/帧")
         // 解析物品模型为渲染状态(GUI display context,与坐标/缩放无关)
-        val state = TrackingItemStackRenderState()
-        mc.itemModelResolver.updateForTopItem(
-            state, dd.stack, ItemDisplayContext.GUI, dd.level, dd.player, dd.seed,
-        )
+        val state = ComposeGuiProfiler.measure("3b.物品:模型解析") {
+            TrackingItemStackRenderState().also {
+                mc.itemModelResolver.updateForTopItem(
+                    it, dd.stack, ItemDisplayContext.GUI, dd.level, dd.player, dd.seed,
+                )
+            }
+        }
 
         // 调制色(着色器色彩调制器):取自 paint,无 paint 时 -1(白色不调制)
         val color = context.paint?.let { p -> p.color.toArgb(p.alpha) } ?: -1

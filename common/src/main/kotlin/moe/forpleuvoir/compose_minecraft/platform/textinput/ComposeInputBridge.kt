@@ -32,7 +32,10 @@ object ComposeInputBridge {
      * (内容向下移动),两者同号,不需要取反。
      */
     fun scrollDelta(scrollX: Double, scrollY: Double): Offset = Offset(
-        scrollX.toFloat() * scrollPx,
+        // 纵向滚轮同时写进横向分量:Compose 的 `scrollable` 只取自己轴向的那个分量
+        // (横向容器取 x、纵向取 y),而鼠标只有一个纵向滚轮 —— 只写 y 的话,
+        // 横向容器(如分类条)永远收不到滚轮,只能拖动。真·横向滚轮(触控板)优先用 scrollX。
+        if (scrollX != 0.0) scrollX.toFloat() * scrollPx else scrollY.toFloat() * scrollPx,
         scrollY.toFloat() * scrollPx,
     )
 

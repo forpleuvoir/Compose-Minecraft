@@ -6,6 +6,7 @@ import com.mojang.blaze3d.pipeline.RenderPipeline
 import com.mojang.blaze3d.systems.RenderPass
 import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.VertexConsumer
+import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiProfiler
 import moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
 import moe.forpleuvoir.compose_minecraft.platform.render.text.GlyphAtlas
 import moe.forpleuvoir.compose_minecraft.platform.render.text.GlyphCache
@@ -154,30 +155,51 @@ class ComposeGuiRenderer : GuiCommandSink {
 
     /**
      * 物品离屏(PIP)渲染器缓存:按稳定 key([ItemRenderState.identityKey],如 Item 单例)各持独立纹理,
-     * 同一物品跨帧复用;LRU 上限 [PIP_RENDERER_CACHE_LIMIT],淘汰时 [ComposeOversizedItemRenderer.close]
-     * 释放纹理,防显存泄漏。
+     * 同一物品跨帧复用。
+     *
+     * **不做按数量淘汰** —— 与 [net.minecraft.client.gui.render.GuiRenderer] 一致:
+     * 帧末只关「本帧没被用到」的渲染器([clearUnusedPipRenderers])。按数量 LRU 时,
+     * 一屏可见物品数就可能超过上限,于是每帧都在淘汰 + 重新离屏渲染(卡),
+     * 而且淘汰发生在 prepare 期间 —— 会释放本帧 blit 命令仍在引用的纹理(崩)。
      */
-    private val itemPipRenderers = object : LinkedHashMap<Any, ComposeOversizedItemRenderer>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Any, ComposeOversizedItemRenderer>?): Boolean {
-            if (size <= PIP_RENDERER_CACHE_LIMIT) return false
-            eldest?.value?.close()
-            return true
-        }
-    }
+    private val itemPipRenderers = LinkedHashMap<Any, ComposeOversizedItemRenderer>()
 
     /**
      * 实体离屏(PIP)渲染器缓存:按稳定 key([EntityPipRenderState.identityKey],如实体实例标识)
-     * 各持独立纹理,同一实体跨帧复用;LRU 上限与物品 PIP 缓存共享 [PIP_RENDERER_CACHE_LIMIT],
-     * 淘汰时 [ComposeOversizedEntityRenderer.close] 释放纹理。
+     * 各持独立纹理,同一实体跨帧复用;淘汰策略同物品(帧末清理本帧未使用)。
      */
-    private val entityPipRenderers = object : LinkedHashMap<Any, ComposeOversizedEntityRenderer>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Any, ComposeOversizedEntityRenderer>?): Boolean {
-            if (size <= PIP_RENDERER_CACHE_LIMIT) return false
-            eldest?.value?.close()
-            return true
+    private val entityPipRenderers = LinkedHashMap<Any, ComposeOversizedEntityRenderer>()
+
+    /**
+     * 原版 [net.minecraft.client.gui.render.GuiRenderer.clearUnusedOversizedItemRenderers]:
+     * 帧末关闭本帧没被用到的 PIP 渲染器并释放其纹理,用过的清标志留给下一帧。
+     * 调用点在 draw/submit 之后,此时本帧命令已提交,释放纹理安全。
+     */
+    private fun clearUnusedPipRenderers() {
+        if (itemPipRenderers.isNotEmpty()) {
+            val iterator = itemPipRenderers.entries.iterator()
+            while (iterator.hasNext()) {
+                val renderer = iterator.next().value
+                if (renderer.usedOnThisFrame) renderer.resetUsedOnThisFrame()
+                else {
+                    renderer.close()
+                    iterator.remove()
+                }
+            }
+        }
+        if (entityPipRenderers.isNotEmpty()) {
+            val iterator = entityPipRenderers.entries.iterator()
+            while (iterator.hasNext()) {
+                val renderer = iterator.next().value
+                if (renderer.usedOnThisFrame) renderer.resetUsedOnThisFrame()
+                else {
+                    renderer.close()
+                    iterator.remove()
+                }
+            }
         }
     }
-
+    
     // ──  文本批次合并状态 ─────────────────────────────────────────────
     //
     // 目标:同页同 scissor 的**连续** gui_text run 合并为单次提交,消掉每 run 的
@@ -335,13 +357,16 @@ class ComposeGuiRenderer : GuiCommandSink {
         GlyphCache.onFrameStart()
         // 收集阶段(extract)开启的文本批在本帧 prepare 前落盘
         flushTextBatch()
+        ComposeGuiProfiler.gauge("PIP 物品渲染器", itemPipRenderers.size)
+        ComposeGuiProfiler.gauge("PIP 实体渲染器", entityPipRenderers.size)
         if (items.isEmpty()) {
             GlyphAtlas.flushRetiredPages()
+            clearUnusedPipRenderers()
             return
         }
-        prepare()
-        vertexBuffer.upload()
-        draw()
+        ComposeGuiProfiler.measure("4a.prepare(含物品 PIP)") { prepare() }
+        ComposeGuiProfiler.measure("4b.顶点上传") { vertexBuffer.upload() }
+        ComposeGuiProfiler.measure("4d.draw 提交") { draw() }
         // 帧末清理(对应原版 GuiRenderer.render 的 endDraw/endFrame/clear 段)
         vertexBuffer.endDraw()
         vertexBuffer.endFrame()
@@ -350,6 +375,7 @@ class ComposeGuiRenderer : GuiCommandSink {
         // draw 完成后重置已退役页游标 —— 此前本帧元素仍持有旧槽位 UV,
         // 提前重置会让下一帧收集阶段覆盖其内容造成花屏
         GlyphAtlas.flushRetiredPages()
+        clearUnusedPipRenderers()
     }
 
     /**
@@ -395,10 +421,11 @@ class ComposeGuiRenderer : GuiCommandSink {
      */
 
     /** 单物品离屏渲染:每个模型 identity 一个独立 renderer/纹理(防止同帧互相覆盖)。 */
-    private fun prepareItem(entry: ItemRenderState, mc: Minecraft) {
+    private fun prepareItem(entry: ItemRenderState, mc: Minecraft) = ComposeGuiProfiler.measure("4c.物品 PIP 离屏渲染") {
         val renderer = itemPipRenderers.getOrPut(entry.itemStackRenderState.modelIdentity) {
             ComposeOversizedItemRenderer { addElementToMesh(it) }
         }
+        renderer.markUsedOnThisFrame()
         renderer.prepare(
             OversizedItemRenderState(
                 GuiItemRenderState(
@@ -427,6 +454,7 @@ class ComposeGuiRenderer : GuiCommandSink {
         val renderer = entityPipRenderers.getOrPut(entry.identityKey) {
             ComposeOversizedEntityRenderer { addElementToMesh(it) }
         }
+        renderer.markUsedOnThisFrame()
         renderer.prepare(entry.state, mc.gameRenderer.featureRenderDispatcher(), 1, entry.color, entry.pose)
     }
 
@@ -608,7 +636,7 @@ class ComposeGuiRenderer : GuiCommandSink {
 
     companion object {
         /** 物品离屏渲染器缓存上限(LRU 淘汰,防显存泄漏) */
-        private const val PIP_RENDERER_CACHE_LIMIT = 64
+
 
         /**
          * 当前打开的 Compose 屏渲染器([ComposeScreen] init/removed 维护,渲染线程读写)。
