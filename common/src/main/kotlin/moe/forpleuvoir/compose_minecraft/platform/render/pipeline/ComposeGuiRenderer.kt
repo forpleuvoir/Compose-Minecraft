@@ -35,6 +35,7 @@ import moe.forpleuvoir.compose_minecraft.platform.render.pip.EntityPipRenderStat
 import moe.forpleuvoir.compose_minecraft.platform.render.pip.ComposeOversizedItemRenderer
 import moe.forpleuvoir.compose_minecraft.platform.render.pip.ComposeOversizedEntityRenderer
 import java.util.*
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.max
 import kotlin.math.min
 import moe.forpleuvoir.compose_minecraft.mixin.GuiRendererMixin
@@ -105,6 +106,7 @@ interface GuiCommandSink {
  * 注入点必触发)。
  */
 class ComposeGuiRenderer : GuiCommandSink {
+
 
     /**
      * 本帧收集的 GUI 命令(**按记录顺序交错**)—— 保持 Compose z 序:
@@ -339,12 +341,47 @@ class ComposeGuiRenderer : GuiCommandSink {
     // ── 提交(仿原版 GuiRenderer.render:prepare → upload → draw)────
 
     /**
+     * GUI 提交阶段失败回调(崩溃恢复)。
+     *
+     * [render] 运行在原版 GUI 绘制流程内:此时既不能切屏也不能推进关闭流程,故只把异常
+     * 上报给宿主(见 [ComposeScreen] 的崩溃收口),由它在**下一帧帧提取**时按崩溃流程
+     * 关屏;本帧已收集的命令被丢弃,不会把半成品提交到 GPU。
+     *
+     * 为空时异常照旧向上抛出(交给原版崩溃报告,与未接入崩溃恢复的场景一致)。
+     */
+    var onRenderFailure: ((Throwable) -> Unit)? = null
+
+    /**
      * 提交当前帧收集的 Compose 内容。由 [GuiRendererMixin] 在 gui 阶段、
      * 原版 GuiRenderer.render 的 draw() 调用**之前**调用
      * (Compose 先画,原版随后绘制,F3 调试覆盖层盖在 Compose 之上;
      * 注入点不依赖原版 draws 状态)。
+     *
+     * 抛出时:丢弃本帧残料 → 交给 [onRenderFailure];无宿主时原样抛出。
      */
     fun render() {
+        try {
+            submit()
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            discardFrame()
+            onRenderFailure?.invoke(t) ?: throw t
+        }
+    }
+
+    /** 丢弃本帧已收集/已分组的命令(提交半途失败时用,避免残料进入下一帧)。 */
+    private fun discardFrame() {
+        items.clear()
+        draws.clear()
+        textBatchOpen = false
+        textBatchPage = -1
+        textBatchScissor = null
+        textBatchVCount = 0
+        textBatchCCount = 0
+    }
+
+    /** 提交主体:收集批次落盘 → prepare → upload → draw → 帧末清理。 */
+    private fun submit() {
         // 自定义字体自愈 —— 资源重载清空 FontManager.fontSets 后重建已注册字体
         // (无注册时 O(1) 空检查,见 MinecraftCustomFonts.ensureAlive)
         MinecraftCustomFonts.ensureAlive()
@@ -417,9 +454,15 @@ class ComposeGuiRenderer : GuiCommandSink {
      * 不写死 16×16,支持任意 size/动画。画在 Compose 内容之上(原版 item 同批次语义)。
      */
 
-    /** 单物品离屏渲染:每个模型 identity 一个独立 renderer/纹理(防止同帧互相覆盖)。 */
+/** 单物品离屏渲染:每个模型 identity 一个独立 renderer/纹理(防止同帧互相覆盖)。 */
     private fun prepareItem(entry: ItemRenderState, mc: Minecraft) {
-        val renderer = itemPipRenderers.getOrPut(entry.itemStackRenderState.modelIdentity) {
+        // 缓存键必须是**稳定**的:[ItemRenderState.modelIdentity] 由 updateForTopItem 每帧重建、
+        // hashCode 不稳定,用它当键会每帧 miss → 每个物品每帧新建离屏渲染器 + 新纹理,
+        // 实测 97 个物品时 4a.prepare 就要 1.2 ms/帧(帧数随可见物品数下降的直接原因)。
+        // 用 [ItemRenderState.identityKey](物品单例)并把尺寸一起入键:同一物品在不同尺寸下
+        // (网格 42dp / 容器 32dp 等)不会来回 resize 同一张纹理。
+        val key = (entry.identityKey ?: entry.itemStackRenderState.modelIdentity) to entry.size
+        val renderer = itemPipRenderers.getOrPut(key) {
             ComposeOversizedItemRenderer { addElementToMesh(it) }
         }
         renderer.markUsedOnThisFrame()
