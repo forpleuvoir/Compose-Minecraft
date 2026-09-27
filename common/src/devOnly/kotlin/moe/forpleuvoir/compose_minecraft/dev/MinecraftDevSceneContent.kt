@@ -268,6 +268,12 @@ fun MinecraftDevSceneContent() {
                 subtitle = "组合期/内容协程/点击回调抛异常 → 拆场景跳过退出动画直接关屏,并回调逐屏或全局崩溃钩子",
                 onClick = { ComposeScreen.open { CrashRecoveryDevScene() } },
             )
+
+            DevMenuButton(
+                title = "条件 Modifier 测试 (thenIf / thenIfElse / thenIfNotNull)",
+                subtitle = "inline + 块不带接收者:BoxScope/ColumnScope/RowScope 修饰符穿透,链首修饰符不丢",
+                onClick = { ComposeScreen.open { ModifierConditionalDevScene() } },
+            )
         }
     }
 }
