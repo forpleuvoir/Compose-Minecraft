@@ -26,7 +26,6 @@ import com.mojang.blaze3d.platform.cursor.CursorType
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
 import moe.forpleuvoir.compose_minecraft.platform.CompositionLocalRegistry
-import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiProfiler
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposeGuiRenderer
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.MinecraftRenderContext
@@ -269,7 +268,7 @@ class MinecraftComposeScene(
             height = windowState.height,
         )
         canvas.clearCommands()
-        ComposeGuiProfiler.measure("1.Compose 组合/绘制/命令记录") { scene.render(canvas, System.nanoTime()) }
+        scene.render(canvas, System.nanoTime())
         // 当前帧原版 extractor(ComposeScreen 已写入)与 GUI 缩放系数(guiScale 通道换算用;
         // 1:1 通道不参与绘制,仅原版通道以 GUI 单位绘制时使用)
         val graphics = vanillaDrawState.graphics
@@ -277,12 +276,11 @@ class MinecraftComposeScene(
         // 每帧重放前渲染回调(绕开 Compose 图层"命令烘焙"脏标记缓存 ——
         // GraphicsLayer.record 静态帧不重跑 draw 块)。桥元素注入在
         // renderContext.render 之前 → 元素位于列表头部,画在 Compose 内容之下。
-        ComposeGuiProfiler.measure("2.原版回调(前)") { vanillaDrawState.runFrameCallbacks(renderer, graphics, guiScale) }
-        ComposeGuiProfiler.measure("3.命令执行(后端绘制)") { renderContext.render(canvas, renderer) }
+        vanillaDrawState.runFrameCallbacks(renderer, graphics, guiScale)
+        renderContext.render(canvas, renderer)
         // 每帧重放后渲染回调(在 renderContext.render 之后 → 元素位于列表
         // 尾部,画在全部 Compose 内容之上;guiScale 通道例外,见 KDoc)。
-        ComposeGuiProfiler.measure("2.原版回调(后)") { vanillaDrawState.runPostFrameCallbacks(renderer, graphics, guiScale) }
-        ComposeGuiProfiler.frame()
+        vanillaDrawState.runPostFrameCallbacks(renderer, graphics, guiScale)
     }
 
     /** 释放场景(组合、Recomposer 等) */

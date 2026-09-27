@@ -6,7 +6,6 @@ import com.mojang.blaze3d.pipeline.RenderPipeline
 import com.mojang.blaze3d.systems.RenderPass
 import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.VertexConsumer
-import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiProfiler
 import moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
 import moe.forpleuvoir.compose_minecraft.platform.render.text.GlyphAtlas
 import moe.forpleuvoir.compose_minecraft.platform.render.text.GlyphCache
@@ -357,16 +356,14 @@ class ComposeGuiRenderer : GuiCommandSink {
         GlyphCache.onFrameStart()
         // 收集阶段(extract)开启的文本批在本帧 prepare 前落盘
         flushTextBatch()
-        ComposeGuiProfiler.gauge("PIP 物品渲染器", itemPipRenderers.size)
-        ComposeGuiProfiler.gauge("PIP 实体渲染器", entityPipRenderers.size)
         if (items.isEmpty()) {
             GlyphAtlas.flushRetiredPages()
             clearUnusedPipRenderers()
             return
         }
-        ComposeGuiProfiler.measure("4a.prepare(含物品 PIP)") { prepare() }
-        ComposeGuiProfiler.measure("4b.顶点上传") { vertexBuffer.upload() }
-        ComposeGuiProfiler.measure("4d.draw 提交") { draw() }
+        prepare()
+        vertexBuffer.upload()
+        draw()
         // 帧末清理(对应原版 GuiRenderer.render 的 endDraw/endFrame/clear 段)
         vertexBuffer.endDraw()
         vertexBuffer.endFrame()
@@ -421,7 +418,7 @@ class ComposeGuiRenderer : GuiCommandSink {
      */
 
     /** 单物品离屏渲染:每个模型 identity 一个独立 renderer/纹理(防止同帧互相覆盖)。 */
-    private fun prepareItem(entry: ItemRenderState, mc: Minecraft) = ComposeGuiProfiler.measure("4c.物品 PIP 离屏渲染") {
+    private fun prepareItem(entry: ItemRenderState, mc: Minecraft) {
         val renderer = itemPipRenderers.getOrPut(entry.itemStackRenderState.modelIdentity) {
             ComposeOversizedItemRenderer { addElementToMesh(it) }
         }

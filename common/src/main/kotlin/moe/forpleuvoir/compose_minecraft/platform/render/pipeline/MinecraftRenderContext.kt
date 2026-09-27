@@ -1,7 +1,6 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.pipeline
 
 import androidx.compose.ui.graphics.MinecraftCanvas
-import moe.forpleuvoir.compose_minecraft.platform.render.ComposeGuiProfiler
 import moe.forpleuvoir.compose_minecraft.platform.render.backend.CommandDispatcher
 import moe.forpleuvoir.compose_minecraft.platform.render.backend.ConnectedLineMerger
 import moe.forpleuvoir.compose_minecraft.platform.render.backend.GuiStateBackend
@@ -30,9 +29,7 @@ internal class MinecraftRenderContext {
     fun render(canvas: MinecraftCanvas, sink: GuiCommandSink) {
         guiBackend.sink = sink
         // 同帧首尾相接的连续 drawLine 先合并为折线(消除逐段 butt 端帽接缝)
-        val merged = ComposeGuiProfiler.measure("3a.合并折线+取命令") { ConnectedLineMerger.merge(canvas.commands()) }
-        ComposeGuiProfiler.count("cmd.命令数/帧", merged.size)
-        for (command in merged) {
+        for (command in ConnectedLineMerger.merge(canvas.commands())) {
             // 3D 命令(图层 rotationX/rotationY,携带行主序含透视的 layer3D)
             // 走 CPU 顶点透视变换路径(纯色几何 → 屏幕三角形,实心无 AA)。
             if (command.layer3D != null) {
