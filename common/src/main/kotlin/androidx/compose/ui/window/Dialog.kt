@@ -391,9 +391,8 @@ private class DialogAppearanceController(
                 ),
             )
             LaunchedEffect(Unit) {
-                // 兜底:本渲染栈下这只重托管组合里的动画**不保证**会推进到 0(实测 7 次 hide 有 3 次没跑完),
-                // 一旦推进不到,close() 就永远不执行 → 图层泄漏 → 每多开一次对话框就多一整套组合 + 每帧绘制,
-                // 表现为「重开对话框帧数骤降」(F3 上就是 live 计数一路涨)。所以超时也必须释放。
+                // 兜底:这只重托管组合里的退场动画不保证推进到 0;推进不到时 close() 永不执行,
+                // 图层与其组合会一直留着,因此超时后也强制释放。
                 withTimeoutOrNull(transition.durationMillis.toLong() + 200L) {
                     progress.animateTo(0f, tween(transition.durationMillis, easing = transition.easing))
                 }

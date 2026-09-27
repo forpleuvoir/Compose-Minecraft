@@ -458,7 +458,7 @@ class ComposeGuiRenderer : GuiCommandSink {
     private fun prepareItem(entry: ItemRenderState, mc: Minecraft) {
         // 缓存键必须是**稳定**的:[ItemRenderState.modelIdentity] 由 updateForTopItem 每帧重建、
         // hashCode 不稳定,用它当键会每帧 miss → 每个物品每帧新建离屏渲染器 + 新纹理,
-        // 实测 97 个物品时 4a.prepare 就要 1.2 ms/帧(帧数随可见物品数下降的直接原因)。
+        // 用它当键会每帧全部 miss,每个可见物品每帧都要重建离屏渲染器与纹理。
         // 用 [ItemRenderState.identityKey](物品单例)并把尺寸一起入键:同一物品在不同尺寸下
         // (网格 42dp / 容器 32dp 等)不会来回 resize 同一张纹理。
         val key = (entry.identityKey ?: entry.itemStackRenderState.modelIdentity) to entry.size
