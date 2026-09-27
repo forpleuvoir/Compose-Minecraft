@@ -122,6 +122,19 @@ class GraphicsLayer internal constructor() {
     var compositingStrategy: CompositingStrategy = CompositingStrategy.Auto
 
     /**
+     * 平台适配点:本平台图层是"命令烘焙"模型 —— 父层 [record] 时会把子层的绘制命令连同
+     * 当时的变换 / [alpha] 一起拍平进自己的命令表,之后每帧只回放该表。因此图层动态属性
+     * 一旦变化,必须让持有它的 [androidx.compose.ui.platform.GraphicsLayerOwnerLayer] 失效
+     * (isDirty → 沿父链把每一层录制都标脏),否则父层会一直回放旧副本,表现为"动画不播、
+     * 过一会才突然出现"。由 `GraphicsLayerOwnerLayer` 安装,`destroy()` 时摘除。
+     */
+    internal var onDynamicPropertyChanged: (() -> Unit)? = null
+
+    private fun notifyDynamicPropertyChanged() {
+        onDynamicPropertyChanged?.invoke()
+    }
+
+    /**
      * Offset in pixels where this [GraphicsLayer] will render within a provided canvas when
      * [drawLayer] is called.
      *
@@ -157,6 +170,12 @@ class GraphicsLayer internal constructor() {
      * @sample androidx.compose.ui.graphics.samples.GraphicsLayerAlphaSample
      */
     var alpha: Float = 1f
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyDynamicPropertyChanged()
+            }
+        }
 
     /**
      * The horizontal scale of the drawn area. Default value is `1`.
@@ -164,6 +183,12 @@ class GraphicsLayer internal constructor() {
      * @sample androidx.compose.ui.graphics.samples.GraphicsLayerScaleAndPivotSample
      */
     var scaleX: Float = 1f
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyDynamicPropertyChanged()
+            }
+        }
 
     /**
      * The vertical scale of the drawn area. Default value is `1`.
@@ -171,6 +196,12 @@ class GraphicsLayer internal constructor() {
      * @sample androidx.compose.ui.graphics.samples.GraphicsLayerScaleAndPivotSample
      */
     var scaleY: Float = 1f
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyDynamicPropertyChanged()
+            }
+        }
 
     /**
      * Horizontal pixel offset of the layer relative to [topLeft].x. Default value is `0`.
@@ -178,6 +209,12 @@ class GraphicsLayer internal constructor() {
      * @sample androidx.compose.ui.graphics.samples.GraphicsLayerTranslateSample
      */
     var translationX: Float = 0f
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyDynamicPropertyChanged()
+            }
+        }
 
     /**
      * Vertical pixel offset of the layer relative to [topLeft].y. Default value is `0`
@@ -185,6 +222,12 @@ class GraphicsLayer internal constructor() {
      * @sample androidx.compose.ui.graphics.samples.GraphicsLayerTranslateSample
      */
     var translationY: Float = 0f
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyDynamicPropertyChanged()
+            }
+        }
 
     /**
      * Sets the elevation for the shadow in pixels. With the [shadowElevation] > 0f and [Outline]
@@ -327,6 +370,12 @@ class GraphicsLayer internal constructor() {
      * @sample androidx.compose.ui.graphics.samples.GraphicsLayerRotationX
      */
     var rotationX: Float = 0f
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyDynamicPropertyChanged()
+            }
+        }
 
     /**
      * The rotation, in degrees, of the contents around the vertical axis in degrees. Default value
@@ -335,11 +384,23 @@ class GraphicsLayer internal constructor() {
      * @sample androidx.compose.ui.graphics.samples.GraphicsLayerRotationYWithCameraDistance
      */
     var rotationY: Float = 0f
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyDynamicPropertyChanged()
+            }
+        }
 
     /**
      * The rotation, in degrees, of the contents around the Z axis in degrees. Default value is `0`.
      */
     var rotationZ: Float = 0f
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyDynamicPropertyChanged()
+            }
+        }
 
     /**
      * Sets the distance along the Z axis (orthogonal to the X/Y plane on which layers are drawn)
@@ -372,6 +433,12 @@ class GraphicsLayer internal constructor() {
      * the BlendMode is not equivalent to BlendMode.SrcOver
      */
     @Suppress("GetterSetterNames") @get:Suppress("GetterSetterNames") var clip: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyDynamicPropertyChanged()
+            }
+        }
 
     /**
      * Configure the [RenderEffect] to apply to this [GraphicsLayer]. This will apply a visual

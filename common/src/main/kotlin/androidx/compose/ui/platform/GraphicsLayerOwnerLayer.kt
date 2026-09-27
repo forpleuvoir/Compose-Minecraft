@@ -70,6 +70,13 @@ internal class GraphicsLayerOwnerLayer(
 ) : OwnedLayer {
     internal var graphicsLayer: GraphicsLayer = graphicsLayer
         private set
+
+    init {
+        // 平台适配点:本平台图层是"命令烘焙"模型,图层动态属性(alpha/变换/clip)会被
+        // 父层录制拍平。属性一变化就必须让本层失效(isDirty → 父链每个录制重新生成),
+        // 否则父层会一直回放旧副本 —— 表现为动画不播、过一会才突然出现。
+        this.graphicsLayer.onDynamicPropertyChanged = { invalidate() }
+    }
     private var drawBlock: ((canvas: Canvas, parentLayer: GraphicsLayer?) -> Unit)? = drawBlock
     private var invalidateParentLayer: (() -> Unit)? = invalidateParentLayer
 
@@ -286,6 +293,7 @@ internal class GraphicsLayerOwnerLayer(
         invalidateParentLayer = null
         isDestroyed = true
         isDirty = false
+        graphicsLayer.onDynamicPropertyChanged = null
         if (context != null) {
             context.releaseGraphicsLayer(graphicsLayer)
 
@@ -333,6 +341,7 @@ internal class GraphicsLayerOwnerLayer(
 
         // recreate a layer
         graphicsLayer = context.createGraphicsLayer()
+        graphicsLayer.onDynamicPropertyChanged = { invalidate() }
         isDestroyed = false
 
         // apply new params

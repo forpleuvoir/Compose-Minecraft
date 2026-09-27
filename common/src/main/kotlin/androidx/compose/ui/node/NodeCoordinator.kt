@@ -1383,12 +1383,13 @@ internal abstract class NodeCoordinator(override val layoutNode: LayoutNode) :
 
     /** Invalidates the layer that this coordinator will draw into. */
     open fun invalidateLayer() {
-        val layer = layer
-        if (layer != null) {
-            layer.invalidate()
-        } else {
-            wrappedBy?.invalidateLayer()
-        }
+        layer?.invalidate()
+        // 平台适配点:本平台图层是"命令烘焙"模型 —— 父层录制里保存的是子层绘制命令的
+        // 拍平副本(含当时的变换 / alpha)。因此只把最近的一层置脏不足以让画面更新:
+        // 烘焙过这一层的每一层都必须重新录制,否则屏幕上回放的仍是旧副本(典型表现:
+        // 图层属性动画不播、过一会才突然出现)。这里继续向上走完整个祖先链,不依赖
+        // 各层自身 invalidateParentLayer 的链路是否完整。
+        wrappedBy?.invalidateLayer()
     }
 
     /**
