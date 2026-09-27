@@ -16,6 +16,7 @@
 
 package moe.forpleuvoir.compose_minecraft.platform.ui.text
 
+import moe.forpleuvoir.compose_minecraft.platform.render.text.FontRegistry
 import moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
 import moe.forpleuvoir.compose_minecraft.platform.render.text.TextRenderBackend
 
@@ -23,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.sp
 import net.minecraft.network.chat.FontDescription
 import net.minecraft.resources.Identifier
@@ -80,15 +82,26 @@ fun resolveDefaultFont(): FontDescription {
         FontResolver.bitmapPreferred(provided) else provided
 }
 
-/** 解析生效默认字号(sp):跟随「生效字体」的 defaultSizeSp(font-system 重构  更正失效引用) */
+/**
+ * 解析生效默认字号(sp):[LocalDefaultFontSize] 显式 provide 的覆盖值优先
+ * (业务覆盖通道),未提供时跟随「生效字体」的 defaultSizeSp(font-system 重构
+ * 更正失效引用)。
+ */
 @Composable
 fun resolveDefaultFontSize(): TextUnit {
-    // A6:默认字号跟随「生效字体」(含 LocalDefaultFont 局部作用域),
-    // 而非全局默认字体 —— 对照屏局部切字体时尺寸同步切换。
-    val desc = resolveDefaultFont()
-    val sizeSp = moe.forpleuvoir.compose_minecraft.platform.render.text.FontRegistry[desc]
-        ?.defaultSizeSp
-        ?: FontResolver.defaultFont().defaultSizeSp
+    // 业务覆盖通道(A6 覆盖优先):显式 provide 非 Unspecified 的 sp 即接管本子树
+    // 的默认字号 —— 未显式传 fontSize 的文本组件(BasicText/sokitsu Text(component)
+    // 等)以此为默认值。em 不是平台表达的字号(MC 无原生字号体系),按未指定处理。
+    val override = LocalDefaultFontSize.current
+    val sizeSp =
+        if (override.type == TextUnitType.Sp) override.value
+        else {
+            // A6:默认字号跟随「生效字体」(含 LocalDefaultFont 局部作用域),
+            // 而非全局默认字体 —— 对照屏局部切字体时尺寸同步切换。
+            val desc = resolveDefaultFont()
+            FontRegistry[desc]?.defaultSizeSp
+                ?: FontResolver.defaultFont().defaultSizeSp
+        }
     return sizeSp.sp
 }
 
