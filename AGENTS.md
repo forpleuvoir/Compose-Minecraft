@@ -379,6 +379,31 @@ repositories 中声明(注意 `settings.gradle.kts` 里那个 Modrinth 仓库只
   换屏后必须对新屏**补一次提取**(`extractRenderStateWithTooltipAndSubtitles`),
   否则新屏本帧无命令可画,会闪一帧空画面。
 
+### 崩溃恢复(屏内异常 → 自动关屏 + 钩子)
+
+- **动机(两个失败面)**:屏内未捕获异常此前有两条路外泄 —— ①同步路径(帧提取 / 输入分发)
+  冒泡到 `Minecraft.runTick` 的 `catch (Throwable)` → 崩溃报告 + 退出;②协程路径
+  (内容 `LaunchedEffect` / 动画 / 手势)`ComposeSceneRecomposer` 用 `CoroutineScope(Dispatchers.Unconfined + Job())`
+  且上下文**没有 CoroutineExceptionHandler**,异常落到线程未捕获处理器 —— MC 未给渲染线程装
+  handler,于是**渲染线程静默死亡:窗口还在、画面冻住、什么也点不动**。
+- **收口点(单一出口)**:`ComposeScreen.crash(phase, cause)` 只记标记 + 日志(可在场景栈内被调用,
+  不能当场拆场景),真正的收尾在**下一帧 `extractRenderState`** 走 `crashClose`:
+  `teardownScene()`(注销渲染器 + 释放世界借用 + 强制 `reopenable = false` + `close()` 场景)
+  → `closeCoordinator.finishNow()`(**跳过退出动画**)→ 回调钩子 → `performClose(...)`
+  (与正常关闭同一出口:按 `parent` 语义切屏、补提取新屏、`onClosed` 照常触发)。
+- **覆盖四个阶段**(`ScreenCrashPhase`):`Frame`(帧提取,含**构造期首次组合**的 try)/ `Draw`
+  (`ComposeGuiRenderer.onRenderFailure`:GUI 提交阶段不能当场切屏,只上报,下一帧关屏)/
+  `Input`(`guardedInput` 包装全部输入回调,崩溃屏吞掉输入)/ `Effect`
+  (`MinecraftComposeScene.onUncaughtError` ← 场景协程上下文里的 `CoroutineExceptionHandler`)。
+- **钩子**:逐屏 `ComposeScreen(onCrash = …)` / `open(onCrash = …)` 优先,未提供时用全局
+  `ComposeScreenDefaults.onScreenCrash`。契约:游戏主线程、每屏一次、**在真正关屏之前**;
+  钩子自身抛异常只记日志。屏关闭后仍可用 `ComposeScreen.crash` 读现场。
+  `DialogComposeScreen` 无逐屏参数(走全局钩子)。
+- ⚠️ 崩溃屏**不可复活**:`teardownScene()` 清掉 `reopenable`,被上层屏渲染的父屏崩溃时只拆场景
+  不切屏,等它再次成为当前屏的那一帧立即关闭。
+- 验证:dev 菜单「崩溃恢复测试」按组合期 / 内容协程 / 点击回调三种触发方式验证自动关屏、
+  钩子回调与 `onClosed`(`common/src/devOnly/.../CrashRecoveryDevScene.kt`)。
+
 ### 对话框屏幕
 
 - `DialogComposeScreen(...)` 工厂 + `openDialogComposeScreen(...)`(主线程 `mc.execute` + 标记父屏可复活):

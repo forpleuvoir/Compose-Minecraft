@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import com.mojang.blaze3d.platform.cursor.CursorType
 import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import moe.forpleuvoir.compose_minecraft.platform.CompositionLocalRegistry
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposeGuiRenderer
@@ -150,6 +151,26 @@ class MinecraftComposeScene(
      */
     var onSemanticsChanged: (() -> Unit)? = null
 
+    /**
+     * 场景协程的未捕获异常回调(崩溃恢复)。
+     *
+     * Compose 内容的 `LaunchedEffect` / 动画 / `rememberCoroutineScope` 协程抛出的异常,
+     * 由协程机制沿作用域上交 —— 没有本回调时它落到线程未捕获处理器,MC 渲染线程(即该
+     * 作用域所在线程)静默死亡:窗口还在、画面冻住、什么也点不动。
+     *
+     * 平台开放点:public —— [ComposeScreen] 在建立场景时接到自己的崩溃收口;
+     * 无宿主的场景(如暖机)可只做日志。
+     */
+    var onUncaughtError: ((Throwable) -> Unit)? = null
+
+    /**
+     * 场景协程上下文的异常处理器:只做转交,不改变协程语义 ——
+     * 异常仍会取消该作用域(组合因此停止推进),由宿主决定如何收场。
+     */
+    private val uncaughtErrorHandler = CoroutineExceptionHandler { _, throwable ->
+        onUncaughtError?.invoke(throwable)
+    }
+
     /** 登记语义树所有者(复述系统,平台开放点:自定义 semanticsOwnerListener 调用) */
     fun addSemanticsOwner(semanticsOwner: SemanticsOwner) {
         capturedSemanticsOwners += semanticsOwner
@@ -177,8 +198,9 @@ class MinecraftComposeScene(
     private val scene: ComposeScene = CanvasLayersComposeScene(
         density = Density(density),
         size = IntSize(width.coerceAtLeast(1), height.coerceAtLeast(1)),
-        // 主线程驱动:MC 的 extract/render 都在主线程,recompose 同步刷新
-        coroutineContext = Dispatchers.Unconfined,
+        // 主线程驱动:MC 的 extract/render 都在主线程,recompose 同步刷新;
+        // 附带异常处理器,把内容协程的未捕获异常交给 onUncaughtError(否则线程静默死亡)
+        coroutineContext = Dispatchers.Unconfined + uncaughtErrorHandler,
         platformContext = platformContext,
         // MC 每帧都会调用 render(),无需额外 invalidate 调度
         invalidate = {},

@@ -262,6 +262,12 @@ fun MinecraftDevSceneContent() {
                 subtitle = "disableWorldRender 运行时切换、关闭动画三层 API(声明式/挂起式/零 API)、对话框动画与 Esc/遮罩",
                 onClick = { ComposeScreen.open { ScreenLifecycleDevScene() } },
             )
+
+            DevMenuButton(
+                title = "崩溃恢复测试 (Crash → 自动关屏 + 钩子)",
+                subtitle = "组合期/内容协程/点击回调抛异常 → 拆场景跳过退出动画直接关屏,并回调逐屏或全局崩溃钩子",
+                onClick = { ComposeScreen.open { CrashRecoveryDevScene() } },
+            )
         }
     }
 }

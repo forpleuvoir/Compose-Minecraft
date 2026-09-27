@@ -35,6 +35,19 @@ object ComposeScreenDefaults {
      * 业务模组可把本值绑定到自己的配置文件。
      */
     var animation: ScreenAnimation = ScreenAnimation.Default
+
+    /**
+     * 全局崩溃钩子:某个 [ComposeScreen] 因未捕获异常被平台收口关闭时回调
+     * (逐屏 [ComposeScreen.onCrash] 未提供时用它,见 [ScreenCrash])。
+     *
+     * 典型用途:提示用户、记录日志/上报、把用户送回一个安全界面。
+     *
+     * 契约:游戏主线程回调,每屏最多一次,发生在屏幕**真正关闭之前**;回调自身抛异常
+     * 只记录日志,不影响关屏流程。默认 null = 不做任何事(仅平台日志)。
+     *
+     * 业务模组可把本值绑定到自己的配置文件/初始化流程。
+     */
+    var onScreenCrash: ((ScreenCrash) -> Unit)? = null
 }
 
 /**

@@ -54,6 +54,8 @@ object ComposeWarmup {
     fun warmup(content: @Composable () -> Unit) = runCatching {
         val window = mc.window
         val scene = MinecraftComposeScene(window.width, window.height)
+        // 暖机场景没有屏幕宿主:内容协程的未捕获异常只记日志(默认会落到线程未捕获处理器)
+        scene.onUncaughtError = { logger.error("Compose warmup content failed: ${it.message}", it) }
         try {
             scene.setContent(content)
             scene.renderFrame()

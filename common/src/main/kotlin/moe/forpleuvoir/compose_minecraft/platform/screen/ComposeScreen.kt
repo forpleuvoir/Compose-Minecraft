@@ -33,6 +33,8 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 import net.minecraft.client.input.KeyEvent as MCKeyEvent
+import org.slf4j.LoggerFactory
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * 原版 [Screen] 桥接(参考 ibuki_gourd 的 ComposeScreen 模式):
@@ -86,6 +88,13 @@ import net.minecraft.client.input.KeyEvent as MCKeyEvent
  * [ScreenCloseCoordinator] —— 退出动画播完(或自动判定动画已停)才真正关屏并触发
  * [onClosed];内容侧用 [rememberScreenVisibilityState] / [ScreenExitEffect] 接入,
  * 关闭期间输入被吞掉(防连点)。独立屏幕形态的对话框见 [DialogComposeScreen]。
+ *
+ * 崩溃恢复:屏内未捕获异常(帧提取 / 输入分发 / 内容协程 / GUI 提交)一律被平台**收口**
+ * 成一次崩溃,不外泄给游戏主循环(外泄的后果:MC 崩溃报告后退出,或协程异常静默杀死
+ * 渲染线程 → 画面与输入全部卡死)。收口动作 = 拆掉场景(崩溃屏不可复活)+ 跳过退出动画
+ * 直接关屏(与正常关闭同一出口,故 [onClosed] 照常触发),并把 [ScreenCrash] 交给
+ * [onCrash](未提供时用全局 [ComposeScreenDefaults.onScreenCrash])。业务可借该钩子
+ * 提示用户 / 记录上报;屏关闭后仍可用 [crash] 读到这次崩溃的现场。
  */
 class ComposeScreen(
     val parent: Screen? = null,
@@ -130,6 +139,14 @@ class ComposeScreen(
      * 不该让父屏退场。
      */
     val exitParentOnOpen: Boolean = true,
+    /**
+     * 本屏崩溃(内容抛出未捕获异常)时的回调;null = 用全局 [ComposeScreenDefaults.onScreenCrash]。
+     *
+     * 回调契约见 [ScreenCrash]:游戏主线程、每屏最多一次、在屏**真正关闭之前**;
+     * 回调自身抛异常只记录日志,不影响关屏。需要读崩溃现场而屏已关的业务,可在
+     * [onClosed] 里读 [crash]。
+     */
+    private val onCrash: ((ScreenCrash) -> Unit)? = null,
     private val content: @Composable () -> Unit,
 ) : Screen(Component.literal("Compose Screen")) {
 
@@ -227,6 +244,18 @@ class ComposeScreen(
     /** 是否已执行最终收尾(关屏 + 清理),防重入。 */
     private var closed: Boolean = false
 
+    /**
+     * 崩溃现场(null = 未崩溃)。非 null 后本屏不再渲染/分发输入,并在下一帧帧提取时
+     * 走 [crashClose] 拆场景 + 关屏(见类 KDoc「崩溃恢复」)。
+     */
+    private var crashInfo: ScreenCrash? = null
+
+    /** 崩溃钩子是否已回调(一次性,拆场景与关屏分帧执行时不会重复上报)。 */
+    private var crashNotified: Boolean = false
+
+    /** 本屏最近一次崩溃的现场(null = 未崩溃过);崩溃屏关闭后仍可读。 */
+    val crash: ScreenCrash? get() = crashInfo
+
     // ── 复述系统(Narration)桥接状态 ──────────────────────────
     // 最近一次鼠标位置(像素,取自 mouseHandler 原始坐标):悬停朗读回退用
 
@@ -256,22 +285,33 @@ class ComposeScreen(
                     narrationPending = true
                 }
             }
-            scene.setContent {
-                CompositionLocalProvider(
-                    LocalScreenCloseCoordinator provides closeCoordinator,
-                    LocalScreenExitScope provides exitScope,
-                ) {
-                    // 平台级进出场动画:入场/退场由 animationSignal + animationTarget 驱动,
-                    // 真正关闭时由动画作为关闭参与者(播完才关屏)
-                    ScreenAnimationHost(
-                        animation = animation,
-                        animationSignal = animationSignal,
-                        animationTarget = animationTarget,
-                        onProgress = { animationProgress = it },
-                        content = content,
-                    )
+            // 崩溃恢复:内容协程未捕获异常(否则静默杀死渲染线程)、GUI 提交阶段异常
+            scene.onUncaughtError = { crash(ScreenCrashPhase.Effect, it) }
+            scene.renderer.onRenderFailure = { crash(ScreenCrashPhase.Draw, it) }
+            // 首次组合与后续重组都在帧内跑(后者由 extractRenderState 的守卫兜住),
+            // 这里的 try 兜的是**构造期**的首次组合:异常不能冒出构造函数(那会崩游戏)
+            try {
+                scene.setContent {
+                    CompositionLocalProvider(
+                        LocalScreenCloseCoordinator provides closeCoordinator,
+                        LocalScreenExitScope provides exitScope,
+                    ) {
+                        // 平台级进出场动画:入场/退场由 animationSignal + animationTarget 驱动,
+                        // 真正关闭时由动画作为关闭参与者(播完才关屏)
+                        ScreenAnimationHost(
+                            animation = animation,
+                            animationSignal = animationSignal,
+                            animationTarget = animationTarget,
+                            onProgress = { animationProgress = it },
+                            content = content,
+                        )
+                    }
                 }
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                crash(ScreenCrashPhase.Frame, t)
             }
+            // 组合失败也要挂上场景:崩溃收口需要它来拆场景(场景本身可安全关闭)
             composeScene = scene
         }
         // setScreen 先 removed 旧屏再 init 新屏,注册顺序保证 active 指向当前屏
@@ -335,7 +375,33 @@ class ComposeScreen(
 
     // ── 渲染 ──────────────────────────────────────────────────
 
+    /**
+     * 每帧提取:常规路径见 [extractFrame];本方法额外做**崩溃收口** ——
+     * 已崩溃则不再渲染内容、直接 [crashClose];本帧抛出的异常也不外泄给游戏主循环
+     * (外泄的后果是 MC 崩溃报告退出、或协程异常静默杀死渲染线程导致画面卡死),
+     * 而是收口成一次崩溃后关屏。
+     */
     override fun extractRenderState(
+        graphics: GuiGraphicsExtractor,
+        mouseX: Int,
+        mouseY: Int,
+        partialTick: Float,
+    ) {
+        if (crashInfo != null) {
+            crashClose(graphics, mouseX, mouseY, partialTick)
+            return
+        }
+        try {
+            extractFrame(graphics, mouseX, mouseY, partialTick)
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            crash(ScreenCrashPhase.Frame, t)
+            crashClose(graphics, mouseX, mouseY, partialTick)
+        }
+    }
+
+    /** 帧提取主体。 */
+    private fun extractFrame(
         graphics: GuiGraphicsExtractor,
         mouseX: Int,
         mouseY: Int,
@@ -462,6 +528,80 @@ class ComposeScreen(
         closeCoordinator.invokeClosedCallback()
     }
 
+    // ── 崩溃恢复(异常收口 → 拆场景 → 关屏 + 钩子)───────────────
+
+    /**
+     * 记录一次崩溃(幂等,首次为准)。只做标记 + 日志,**不动场景**:崩溃可能发生在场景的
+     * 组合/绘制栈内,此刻拆场景会重入组合;真正的收尾在下一帧 [extractRenderState] 里做。
+     *
+     * 阶段见 [ScreenCrashPhase]。协程阶段(Effect)的异常由场景的
+     * [MinecraftComposeScene.onUncaughtError] 转交,可能来自非主线程 —— 本方法只写字段,安全。
+     */
+    private fun crash(phase: ScreenCrashPhase, cause: Throwable) {
+        if (crashInfo != null) return
+        crashInfo = ScreenCrash(this, phase, cause)
+        LOGGER.error("Compose screen crashed during {}, closing it: {}", phase, cause.message, cause)
+    }
+
+    /**
+     * 崩溃收尾:拆场景(崩溃的组合已不可信)→ 跳过退出动画直接进入可关屏状态 →
+     * 回调崩溃钩子 → 按 [parent] 语义关屏(与正常关闭同一出口,[onClosed] 回调照常触发)。
+     *
+     * 只在帧提取内调用:关屏后要把新屏补提取进本帧,需要本帧的原版 extractor。
+     */
+    private fun crashClose(
+        graphics: GuiGraphicsExtractor,
+        mouseX: Int,
+        mouseY: Int,
+        partialTick: Float,
+    ) {
+        teardownScene()
+        closeCoordinator.finishNow()
+        notifyCrash()
+        if (mc.gui.screen() === this) {
+            performClose(graphics, mouseX, mouseY, partialTick)
+        }
+    }
+
+    /** 拆掉本屏场景(幂等):注销渲染器、释放世界渲染借用、销毁组合。 */
+    private fun teardownScene() {
+        composeScene?.let { ComposeGuiRenderer.unregister(it.renderer) }
+        releaseWorldBackdrop()
+        // 崩溃屏不可复活:组合与动画状态都不再可信,下次打开应重建场景
+        reopenable = false
+        composeScene?.let { runCatching { it.close() } }
+        composeScene = null
+    }
+
+    /**
+     * 回调崩溃钩子:逐屏 [onCrash] 优先,未提供时用全局 [ComposeScreenDefaults.onScreenCrash]。
+     * 主线程、每屏一次、发生在真正关屏之前;钩子自身抛异常只记录日志,不影响关屏。
+     */
+    private fun notifyCrash() {
+        if (crashNotified) return
+        crashNotified = true
+        val info = crashInfo ?: return
+        val hook = onCrash ?: ComposeScreenDefaults.onScreenCrash ?: return
+        runCatching { hook(info) }.onFailure {
+            LOGGER.error("Compose screen crash hook failed: {}", it.message, it)
+        }
+    }
+
+    /**
+     * 输入分发守卫:崩溃屏吞掉输入(它正在关闭);分发过程抛异常则记为崩溃并按 [default]
+     * 返回 —— 崩溃收尾由下一帧 [extractRenderState] 完成(输入回调里没有本帧 extractor)。
+     */
+    private inline fun <T> guardedInput(default: T, block: () -> T): T {
+        if (crashInfo != null) return default
+        return try {
+            block()
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            crash(ScreenCrashPhase.Input, t)
+            default
+        }
+    }
+
     /**
      * 空实现 —— 不渲染原版 Screen 的菜单背景遮罩
      * ([Screen.extractBackground] 默认走 extractBlurredBackground + extractMenuBackground,
@@ -493,9 +633,9 @@ class ComposeScreen(
      * Compose —— 双击由 Compose 手势检测器按事件时间戳自行判定(detectTapGestures /
      * 文本框选词),该标志仅经 [super.mouseClicked] 透传给 vanilla 子控件链。
      */
-    override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
+    override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean = guardedInput(true) {
         // 关闭动画期间吞掉输入:防止连点重复请求关闭 / 打断退出动画
-        if (closeCoordinator.isClosing) return true
+        if (closeCoordinator.isClosing) return@guardedInput true
         // IMBlocker: 文本框本就聚焦时不会再来一次 startInputMethod, 点击是候选被清后唯一的补救时机
         composeScene?.imeService?.refreshImBlockerFocus()
         val consumed = composeScene?.sendPointerEvent(
@@ -505,11 +645,11 @@ class ComposeScreen(
             keyboardModifiers = event.buttonInfo.modifiers().toPointerKeyboardModifiers(),
             button = PointerButton(event.buttonInfo.button()),
         )
-        return consumed?.anyMovementConsumed == true || super.mouseClicked(event, doubleClick)
+        consumed?.anyMovementConsumed == true || super.mouseClicked(event, doubleClick)
     }
 
-    override fun mouseReleased(event: MouseButtonEvent): Boolean {
-        if (closeCoordinator.isClosing) return true
+    override fun mouseReleased(event: MouseButtonEvent): Boolean = guardedInput(true) {
+        if (closeCoordinator.isClosing) return@guardedInput true
         val consumed = composeScene?.sendPointerEvent(
             eventType = PointerEventType.Release,
             position = mousePosition,
@@ -517,30 +657,32 @@ class ComposeScreen(
             keyboardModifiers = event.buttonInfo.modifiers().toPointerKeyboardModifiers(),
             button = PointerButton(event.buttonInfo.button()),
         )
-        return consumed?.anyMovementConsumed == true || super.mouseReleased(event)
+        consumed?.anyMovementConsumed == true || super.mouseReleased(event)
     }
 
     override fun mouseMoved(x: Double, y: Double) {
-        composeScene?.sendPointerEvent(
-            eventType = PointerEventType.Move,
-            position = mousePosition,
-            type = PointerType.Mouse,
-        )
-        super.mouseMoved(x, y)
+        guardedInput(Unit) {
+            composeScene?.sendPointerEvent(
+                eventType = PointerEventType.Move,
+                position = mousePosition,
+                type = PointerType.Mouse,
+            )
+            super.mouseMoved(x, y)
+        }
     }
 
-    override fun mouseDragged(event: MouseButtonEvent, dx: Double, dy: Double): Boolean {
+    override fun mouseDragged(event: MouseButtonEvent, dx: Double, dy: Double): Boolean = guardedInput(true) {
         val consumed = composeScene?.sendPointerEvent(
             eventType = PointerEventType.Move,
             position = mousePosition,
             type = PointerType.Mouse,
             keyboardModifiers = event.buttonInfo.modifiers().toPointerKeyboardModifiers(),
         )
-        return consumed?.anyMovementConsumed == true || super.mouseDragged(event, dx, dy)
+        consumed?.anyMovementConsumed == true || super.mouseDragged(event, dx, dy)
     }
 
-    override fun mouseScrolled(x: Double, y: Double, scrollX: Double, scrollY: Double): Boolean {
-        if (closeCoordinator.isClosing) return true
+    override fun mouseScrolled(x: Double, y: Double, scrollX: Double, scrollY: Double): Boolean = guardedInput(true) {
+        if (closeCoordinator.isClosing) return@guardedInput true
         val consumed =
             composeScene?.sendPointerEvent(
                 eventType = PointerEventType.Scroll,
@@ -548,7 +690,7 @@ class ComposeScreen(
                 type = PointerType.Mouse,
                 scrollDelta = scrollDelta(scrollX, scrollY),
             )
-        return consumed?.anyMovementConsumed == true || super.mouseScrolled(x, y, scrollX, scrollY)
+        consumed?.anyMovementConsumed == true || super.mouseScrolled(x, y, scrollX, scrollY)
     }
 
     // ── 键盘输入(阶段 F)──────────────────────────────────────
@@ -561,19 +703,19 @@ class ComposeScreen(
      * 文本并清除组合区,导致后续 preedit 更新在错误位置重新插入组合文本(与官方桌面 AWT
      * 组合期间按键不达应用的行为一致)。
      */
-    override fun keyPressed(event: MCKeyEvent): Boolean {
-        if (closeCoordinator.isClosing) return true
+    override fun keyPressed(event: MCKeyEvent): Boolean = guardedInput(false) {
+        if (closeCoordinator.isClosing) return@guardedInput true
         // IMBlocker: 自动聚焦的文本框若从未被点击, 首次按键(含切换输入法的组合键)也要能补救登记
         composeScene?.imeService?.refreshImBlockerFocus()
-        return composeScene?.imeService?.isComposing == true
+        composeScene?.imeService?.isComposing == true
                 && event.key in IME_COMPOSITION_KEYS
                 || composeScene?.sendKeyEvent(event.toCompose(KeyEventType.KeyDown)) == true
                 || super.keyPressed(event)
     }
 
-    override fun keyReleased(event: MCKeyEvent): Boolean {
-        if (closeCoordinator.isClosing) return true
-        return composeScene?.imeService?.isComposing == true
+    override fun keyReleased(event: MCKeyEvent): Boolean = guardedInput(false) {
+        if (closeCoordinator.isClosing) return@guardedInput true
+        composeScene?.imeService?.isComposing == true
                 && event.key in IME_COMPOSITION_KEYS
                 || composeScene?.sendKeyEvent(event.toCompose(KeyEventType.KeyUp)) == true
                 || super.keyReleased(event)
@@ -591,10 +733,10 @@ class ComposeScreen(
      * 触发 preedit null),组合期间先通知 service 计数(组合结束时用于定位光标)。
      */
     @OptIn(InternalComposeUiApi::class)
-    override fun charTyped(event: CharacterEvent): Boolean {
-        val scene = composeScene ?: return false
+    override fun charTyped(event: CharacterEvent): Boolean = guardedInput(false) {
+        val scene = composeScene ?: return@guardedInput false
         if (!scene.isCharAccepted(event.codepoint)) {
-            return false
+            return@guardedInput false
         }
         scene.imeService?.onCharTyped(event.codepoint)
         val typedEvent = ComposeKeyEvent(
@@ -602,7 +744,7 @@ class ComposeScreen(
             type = KeyEventType.KeyDown,
             codePoint = event.codepoint,
         )
-        return scene.sendKeyEvent(typedEvent)
+        scene.sendKeyEvent(typedEvent)
     }
 
     /**
@@ -610,9 +752,9 @@ class ComposeScreen(
      * 后的 null)转发到 [moe.forpleuvoir.compose_minecraft.platform.textinput.MinecraftTextInputService.onPreeditChanged],由 service 转换为
      * Compose EditCommand 写入编辑缓冲(下划线组合文本/组合区清理/光标定位)。
      */
-    override fun preeditUpdated(event: PreeditEvent?): Boolean {
+    override fun preeditUpdated(event: PreeditEvent?): Boolean = guardedInput(true) {
         composeScene?.imeService?.onPreeditChanged(event)
-        return true
+        true
     }
 
     // ── 生命周期 ─────────────────────────────────────────────
@@ -723,7 +865,7 @@ class ComposeScreen(
 
     // ── 复述系统(Narration)桥接 ──────────────────────────────
 
-    override fun updateNarratedWidget(output: NarrationElementOutput) {
+    override fun updateNarratedWidget(output: NarrationElementOutput) = guardedInput(Unit) {
         NarratedHelper.updateNarratedWidget(composeScene, mousePosition, output)
     }
 
@@ -754,6 +896,9 @@ class ComposeScreen(
          */
         private const val QUIET_FRAMES_BEFORE_CLOSE = 2
 
+        /** 崩溃日志(含屏、阶段与堆栈;崩溃不外泄给游戏主循环,日志是唯一线索)。 */
+        private val LOGGER = LoggerFactory.getLogger(ComposeScreen::class.java)
+
         /**
          * 关闭当前 Compose 屏幕(父屏幕语义):等价于对当前屏调用 [ComposeScreen.requestClose]
          * —— 进入关闭流程(退出动画播完再切屏),有父屏则回到父屏,无父屏回游戏/主菜单。
@@ -783,7 +928,8 @@ class ComposeScreen(
          *
          * 其余参数:[disableWorldRender] 本屏停画世界(默认取全局值)、[pauseGame] 是否暂停游戏、
          * [closeOnEsc] Esc 是否关屏、[animation] 进出场动画、[exitParentOnOpen] 打开时父屏是否
-         * 一并退场(父子交叉;[renderParentScreen] 为真时不退场)。
+         * 一并退场(父子交叉;[renderParentScreen] 为真时不退场)、[onCrash] 本屏崩溃回调
+         * (null = 用全局 [ComposeScreenDefaults.onScreenCrash])。
          *
          * 注意 [content] 是最后一个参数 —— 保持 `ComposeScreen.open { ... }`
          * trailing lambda 调用形式与早期版本兼容。
@@ -800,6 +946,7 @@ class ComposeScreen(
             closeOnEsc: Boolean = true,
             animation: ScreenAnimation = ComposeScreenDefaults.animation,
             exitParentOnOpen: Boolean = true,
+            onCrash: ((ScreenCrash) -> Unit)? = null,
             content: @Composable () -> Unit,
         ): ComposeScreen {
             val resolvedParent = parent ?: mc.gui.screen()
@@ -814,6 +961,7 @@ class ComposeScreen(
                 closeOnEsc = closeOnEsc,
                 animation = animation,
                 exitParentOnOpen = exitParentOnOpen,
+                onCrash = onCrash,
                 content = content,
             )
             mc.gui.setScreen(screen)
