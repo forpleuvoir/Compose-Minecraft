@@ -25,11 +25,13 @@ import moe.forpleuvoir.compose_minecraft.platform.render.plugins.SpriteDrawData
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.TextureDrawData
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.UVMapping
 import net.minecraft.client.renderer.RenderPipelines
+import net.minecraft.client.renderer.entity.state.EntityRenderState
 import net.minecraft.resources.Identifier
 import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.player.Player
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.level.Level
+import org.joml.Quaternionf
 import kotlin.math.roundToInt
 
 /**
@@ -117,11 +119,18 @@ fun DrawScope.drawEntity(
     entity: Entity,
     size: Float = this.size.width.coerceAtMost(this.size.height),
     color: Color = Color.White,
+    rotationX: Float = 0f,
+    rotationY: Float = 0f,
+    fill: Float = 0.85f,
+    offsetY: Float = 0f,
+    cameraAngle: Quaternionf? = null,
+    renderState: EntityRenderState? = null,
+    rotation: Quaternionf? = null,
 ) {
     drawIntoCanvas { canvas ->
         canvas.recordCustomDraw(
             McEntityPlugin.TAG,
-            EntityDrawData(entity, size.roundToInt()),
+            EntityDrawData(entity, size.roundToInt(), rotationX = rotationX, rotationY = rotationY, fill = fill, offsetY = offsetY, cameraAngle = cameraAngle, renderState = renderState, rotation = rotation),
             buildPaint(color),
             null
         )
@@ -181,8 +190,21 @@ fun MinecraftEntity(
     entity: Entity,
     modifier: Modifier = Modifier,
     size: DpSize = DpSize(48.dp, 64.dp),
+    rotationX: Float = 0f,
+    rotationY: Float = 0f,
+    fill: Float = 0.85f,
+    offsetY: Float = 0f,
+    cameraAngle: Quaternionf? = null,
 ) {
     Canvas(modifier.size(size)) {
-        drawEntity(entity, this.size.width.coerceAtMost(this.size.height))
+        drawEntity(
+            entity,
+            this.size.width.coerceAtMost(this.size.height),
+            rotationX = rotationX,
+            rotationY = rotationY,
+            fill = fill,
+            offsetY = offsetY,
+            cameraAngle = cameraAngle,
+        )
     }
 }
