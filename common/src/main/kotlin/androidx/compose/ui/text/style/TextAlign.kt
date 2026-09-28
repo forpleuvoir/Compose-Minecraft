@@ -126,9 +126,9 @@ inline fun TextAlign.takeOrElse(block: () -> TextAlign): TextAlign {
  * `Center` / `Right` / `End` → true;`Left` / `Start` / `Unspecified` → false;
  * `Justify` → false(平台未实现按词拉伸,布局端按 `Start` 降级)。
  *
- * 用途:布局端据此决定文本节点是否占用容器宽度 —— 行偏移会把行推出"内容宽度",
- * 若节点仍按内容宽上报,上层 `TextLayoutResult.hasVisualOverflow`
- * (`size.width < 段落宽`)会成立并把偏移后的行裁掉。
+ * 该对齐**不参与尺寸计算**:文本节点宽度只由内容与约束决定(见
+ * `ParagraphLayoutCache`/`MultiParagraphLayoutCache`);偏移的容器宽度由平台段落
+ * 取自身 `constraints`(见 `MinecraftParagraph.lineX`)。
  */
 internal val TextAlign.isOffsetAlign: Boolean
     get() = this == TextAlign.Center || this == TextAlign.Right || this == TextAlign.End

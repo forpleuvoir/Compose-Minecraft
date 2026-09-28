@@ -29,7 +29,6 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.platform.StyleSegment
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.isOffsetAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -174,7 +173,7 @@ internal class ParagraphLayoutCache(
             if (finalConstraints != prevConstraints) {
                 // ensure size and overflow is still accurate
                 val localParagraph = paragraph!!
-                val layoutWidth = occupiedWidth(finalConstraints, localParagraph.width)
+                val layoutWidth = localParagraph.width
                 val localSize =
                     finalConstraints.constrain(
                         IntSize(layoutWidth.ceilToIntPx(), localParagraph.height.ceilToIntPx())
@@ -195,7 +194,7 @@ internal class ParagraphLayoutCache(
                 val localSize =
                     finalConstraints.constrain(
                         IntSize(
-                            occupiedWidth(finalConstraints, it.width).ceilToIntPx(),
+                            it.width.ceilToIntPx(),
                             it.height.ceilToIntPx(),
                         )
                     )
@@ -206,22 +205,6 @@ internal class ParagraphLayoutCache(
             }
         return true
     }
-
-    /**
-     * 平台适配点:文本节点**占用宽度**。
-     *
-     * 默认 = 段落内容宽度([contentWidth],本平台 `Paragraph.width` 语义 = 最大行宽)。
-     * 但请求了行偏移对齐(`Center`/`Right`/`End`)且容器宽度有界时,占用整个容器宽度:
-     * 对齐会把行推离内容盒,若节点仍按内容宽上报,上层
-     * `TextLayoutResult.hasVisualOverflow`(`size.width < 段落宽`)成立 → 偏移后的行被裁掉。
-     * 语义即"请求对齐 = 请求容器宽度"(与块级元素 `text-align` 一致)。
-     */
-    private fun occupiedWidth(constraints: Constraints, contentWidth: Float): Float =
-        if (textAlign.isOffsetAlign && constraints.hasBoundedWidth) {
-            constraints.maxWidth.toFloat()
-        } else {
-            contentWidth
-        }
 
     private fun useMinLinesConstrainer(
         constraints: Constraints,

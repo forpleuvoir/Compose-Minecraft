@@ -31,7 +31,6 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.platform.StyleSegment
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.isOffsetAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -264,15 +263,6 @@ internal class MultiParagraphLayoutCache(
         finalConstraints: Constraints,
         multiParagraph: MultiParagraph,
     ): TextLayoutResult {
-        // 平台适配点:请求行偏移对齐且容器宽度有界时占用容器宽度 —— 否则
-        // size.width(内容宽)< multiParagraph.width 会让 hasVisualOverflow 成立,
-        // 偏移后的行被 TextAnnotatedStringNode/SelectionController 的裁剪吃掉。
-        val layoutWidth =
-            if (textAlign.isOffsetAlign && multiParagraph.width.isFinite()) {
-                multiParagraph.width
-            } else {
-                min(multiParagraph.intrinsics.maxIntrinsicWidth, multiParagraph.width)
-            }
         return TextLayoutResult(
             TextLayoutInput(
                 text,
@@ -290,7 +280,11 @@ internal class MultiParagraphLayoutCache(
             ),
             multiParagraph,
             finalConstraints.constrain(
-                IntSize(layoutWidth.ceilToIntPx(), multiParagraph.height.ceilToIntPx())
+                IntSize(
+                    min(multiParagraph.intrinsics.maxIntrinsicWidth, multiParagraph.width)
+                        .ceilToIntPx(),
+                    multiParagraph.height.ceilToIntPx(),
+                )
             ),
         )
     }
@@ -556,17 +550,11 @@ internal class MultiParagraphLayoutCache(
                     multiParagraph,
                     constraints.constrain(
                         IntSize(
-                            // 平台适配点:同 textLayoutResult —— 对齐生效时占用容器宽度
-                            (
-                                if (textAlign.isOffsetAlign && multiParagraph.width.isFinite()) {
-                                    multiParagraph.width
-                                } else {
-                                    min(
-                                        multiParagraph.intrinsics.maxIntrinsicWidth,
-                                        multiParagraph.width,
-                                    )
-                                }
-                                ).ceilToIntPx(),
+                            min(
+                                multiParagraph.intrinsics.maxIntrinsicWidth,
+                                multiParagraph.width,
+                            )
+                                .ceilToIntPx(),
                             multiParagraph.height.ceilToIntPx(),
                         ),
                     ),
