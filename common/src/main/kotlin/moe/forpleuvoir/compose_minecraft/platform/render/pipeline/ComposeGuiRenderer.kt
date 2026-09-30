@@ -352,6 +352,19 @@ class ComposeGuiRenderer : GuiCommandSink {
     var onRenderFailure: ((Throwable) -> Unit)? = null
 
     /**
+     * 本帧背景模糊半径(采样像素数):null = 不模糊。
+     *
+     * extract 阶段由 [ComposeScreen.extractBackground] 按屏策略写入,gui 阶段读取:
+     * - [moe.forpleuvoir.compose_minecraft.mixin.GuiRendererMixin]:非 null 时在提交
+     *   Compose 内容**之前**执行 blur 后处理(原版 GUI 无 after-blur 段 draw 时补做一次),
+     *   因此已画入主渲染目标的内容(世界 / 原版父屏 / 原版 GUI)被模糊,Compose 内容保持锐利;
+     * - [moe.forpleuvoir.compose_minecraft.mixin.GameRendererMixin]:非 null 时替换本帧
+     *   Globals UBO 的 `MenuBlurRadius`(box_blur 后处理的模糊半径)。
+     */
+    @JvmField
+    var backgroundBlurRadius: Int? = null
+
+    /**
      * 提交当前帧收集的 Compose 内容。由 [GuiRendererMixin] 在 gui 阶段、
      * 原版 GuiRenderer.render 的 draw() 调用**之前**调用
      * (Compose 先画,原版随后绘制,F3 调试覆盖层盖在 Compose 之上;

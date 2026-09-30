@@ -84,6 +84,11 @@ import kotlin.coroutines.cancellation.CancellationException
  * 需要世界当背景时用 [WorldBackdropEffect] / [WorldBackdropWhileAnimating] 按需借用 ——
  * 借用凭据是"屏还开着 / 动画还在跑",不是时长。生效点见 `GameRendererMixin`。
  *
+ * 背景模糊:默认与原版 [Screen] 一致([backgroundBlur] = [ScreenBackgroundBlur.Vanilla],
+ * 跟随「菜单背景模糊度」设置)。模糊对象是提交 Compose 内容之前已画入主渲染目标的内容
+ * (世界、原版父屏、原版 GUI),Compose 内容保持锐利;可逐屏切换为不模糊或指定半径。
+ * 生效点见 `GuiRendererMixin` / `GameRendererMixin`。
+ *
  * 关闭流程:[onClose] / [requestClose] **不再立即切屏**,而是交给
  * [ScreenCloseCoordinator] —— 退出动画播完(或自动判定动画已停)才真正关屏并触发
  * [onClosed];内容侧用 [rememberScreenVisibilityState] / [ScreenExitEffect] 接入,
@@ -147,6 +152,18 @@ class ComposeScreen(
      * [onClosed] 里读 [crash]。
      */
     private val onCrash: ((ScreenCrash) -> Unit)? = null,
+    /**
+     * 本屏背景模糊策略(可在运行时切换,**下一帧生效**);取值见 [ScreenBackgroundBlur]。
+     *
+     * 默认取 [ComposeScreenDefaults.backgroundBlur](默认 [ScreenBackgroundBlur.Vanilla] =
+     * 跟随原版「菜单背景模糊度」设置)。模糊对象是提交 Compose 内容之前已画入主渲染目标的内容
+     * (世界、原版父屏、原版 GUI);Compose 内容本身保持锐利。
+     *
+     * 生效点在 [extractBackground]:每帧把本策略解析出的模糊半径写给场景渲染器,
+     * 由渲染管线在提交 Compose 内容之前按原版位置执行模糊(见
+     * [moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposeGuiRenderer.backgroundBlurRadius])。
+     */
+    var backgroundBlur: ScreenBackgroundBlur = ComposeScreenDefaults.backgroundBlur,
     private val content: @Composable () -> Unit,
 ) : Screen(Component.literal("Compose Screen")) {
 
@@ -603,9 +620,11 @@ class ComposeScreen(
     }
 
     /**
-     * 空实现 —— 不渲染原版 Screen 的菜单背景遮罩
-     * ([Screen.extractBackground] 默认走 extractBlurredBackground + extractMenuBackground,
-     * 即模糊 + 半透明黑色遮罩)。Compose 内容自绘背景(业务背景色/图片),不需要原版遮罩。
+     * 背景处理:把本屏 [backgroundBlur] 解析出的模糊半径写给场景渲染器
+     * (见 [moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposeGuiRenderer.backgroundBlurRadius])。
+     *
+     * 不调用 super:原版 [Screen.extractBackground] 会绘制菜单背景(模糊请求 +
+     * 半透明黑色底纹纹理),Compose 屏的背景由业务内容自绘。
      */
     override fun extractBackground(
         graphics: GuiGraphicsExtractor,
@@ -613,7 +632,23 @@ class ComposeScreen(
         mouseY: Int,
         partialTick: Float,
     ) {
-        // 空实现:跳过原版菜单背景遮罩
+        composeScene?.renderer?.backgroundBlurRadius = resolveBackgroundBlurRadius()
+    }
+
+    /**
+     * 本屏当前生效的背景模糊半径(采样像素数):null = 不模糊。
+     *
+     * - [ScreenBackgroundBlur.None]:不模糊;
+     * - [ScreenBackgroundBlur.Vanilla]:取原版「菜单背景模糊度」设置,值 < 1 时不模糊;
+     * - [ScreenBackgroundBlur.Fixed]:用指定半径,忽略原版设置,半径 < 1 时不模糊,
+     *   超过 [ScreenBackgroundBlur.Fixed.MAX_RADIUS] 按上限处理。
+     */
+    private fun resolveBackgroundBlurRadius(): Int? = when (val blur = backgroundBlur) {
+        ScreenBackgroundBlur.None -> null
+        ScreenBackgroundBlur.Vanilla -> mc.options.menuBackgroundBlurriness.takeIf { it >= 1 }
+        is ScreenBackgroundBlur.Fixed -> blur.radius
+            .takeIf { it >= 1 }
+            ?.coerceAtMost(ScreenBackgroundBlur.Fixed.MAX_RADIUS)
     }
 
     // ── 鼠标输入(阶段 F)──────────────────────────────────────
@@ -929,7 +964,8 @@ class ComposeScreen(
          * 其余参数:[disableWorldRender] 本屏停画世界(默认取全局值)、[pauseGame] 是否暂停游戏、
          * [closeOnEsc] Esc 是否关屏、[animation] 进出场动画、[exitParentOnOpen] 打开时父屏是否
          * 一并退场(父子交叉;[renderParentScreen] 为真时不退场)、[onCrash] 本屏崩溃回调
-         * (null = 用全局 [ComposeScreenDefaults.onScreenCrash])。
+         * (null = 用全局 [ComposeScreenDefaults.onScreenCrash])、[backgroundBlur]
+         * 背景模糊策略(默认取全局 [ComposeScreenDefaults.backgroundBlur])。
          *
          * 注意 [content] 是最后一个参数 —— 保持 `ComposeScreen.open { ... }`
          * trailing lambda 调用形式与早期版本兼容。
@@ -947,6 +983,7 @@ class ComposeScreen(
             animation: ScreenAnimation = ComposeScreenDefaults.animation,
             exitParentOnOpen: Boolean = true,
             onCrash: ((ScreenCrash) -> Unit)? = null,
+            backgroundBlur: ScreenBackgroundBlur = ComposeScreenDefaults.backgroundBlur,
             content: @Composable () -> Unit,
         ): ComposeScreen {
             val resolvedParent = parent ?: mc.gui.screen()
@@ -962,6 +999,7 @@ class ComposeScreen(
                 animation = animation,
                 exitParentOnOpen = exitParentOnOpen,
                 onCrash = onCrash,
+                backgroundBlur = backgroundBlur,
                 content = content,
             )
             mc.gui.setScreen(screen)

@@ -37,6 +37,17 @@ object ComposeScreenDefaults {
     var animation: ScreenAnimation = ScreenAnimation.Default
 
     /**
+     * 新开的 [ComposeScreen] 默认使用的背景模糊策略。
+     *
+     * 默认 [ScreenBackgroundBlur.Vanilla] = 跟随原版「菜单背景模糊度」设置(与原版
+     * [net.minecraft.client.gui.screens.Screen] 的背景处理一致);要始终不模糊就置
+     * [ScreenBackgroundBlur.None],要独立于原版设置就置 [ScreenBackgroundBlur.Fixed]。
+     *
+     * 业务模组可把本值绑定到自己的配置文件。
+     */
+    var backgroundBlur: ScreenBackgroundBlur = ScreenBackgroundBlur.Vanilla
+
+    /**
      * 全局崩溃钩子:某个 [ComposeScreen] 因未捕获异常被平台收口关闭时回调
      * (逐屏 [ComposeScreen.onCrash] 未提供时用它,见 [ScreenCrash])。
      *

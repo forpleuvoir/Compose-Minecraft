@@ -67,6 +67,17 @@ object DialogComposeScreenDefaults {
      * 单个对话框仍可用 `animation = ...` 覆盖。
      */
     var animation: DialogAnimation = DialogAnimation.Default
+
+    /**
+     * 新建对话框默认使用的背景模糊策略。
+     *
+     * 默认 [ScreenBackgroundBlur.None] = 不模糊 —— 对话框靠自身半透明遮罩压暗背景
+     * (与原版 [DialogAnimationDefaults.scrimColor] 的遮罩语义一致);要模糊对话框背后的
+     * 世界 / 原版父屏就置 [ScreenBackgroundBlur.Vanilla] 或 [ScreenBackgroundBlur.Fixed]。
+     *
+     * 业务模组可把本值绑定到自己的配置文件。
+     */
+    var backgroundBlur: ScreenBackgroundBlur = ScreenBackgroundBlur.None
 }
 
 /**
@@ -116,6 +127,9 @@ sealed interface DialogAnimation {
  *   [DialogComposeScreenDefaults.disableWorldRender](默认 false = 不禁用 = 渲染世界)。
  *   对话框背后是原版屏或世界时(半透明遮罩会透出),应保持 false,否则透出的是空背景
  * @param pauseGame 是否暂停游戏;默认继承父屏状态(父屏不暂停则对话框也不暂停)
+ * @param animation 进出场动画(遮罩 + 面板缩放);默认取 [DialogComposeScreenDefaults.animation]
+ * @param backgroundBlur 背景模糊策略;默认取 [DialogComposeScreenDefaults.backgroundBlur]
+ *   ([ScreenBackgroundBlur.None] = 不模糊,靠遮罩压暗背景)
  * @param onDismiss 真正关屏后的回调
  */
 fun DialogComposeScreen(
@@ -128,6 +142,7 @@ fun DialogComposeScreen(
     dismissOnClickOutside: Boolean = true,
     onDismiss: (() -> Unit)? = null,
     animation: DialogAnimation = DialogComposeScreenDefaults.animation,
+    backgroundBlur: ScreenBackgroundBlur = DialogComposeScreenDefaults.backgroundBlur,
     content: @Composable () -> Unit,
 ): ComposeScreen {
     val screen = ComposeScreen(
@@ -141,6 +156,7 @@ fun DialogComposeScreen(
         animation = ScreenAnimation.None,
         // 遮罩把父屏留在原地,不让父屏退场(否则会出现"父屏先消失、遮罩才盖上来"的闪动)
         exitParentOnOpen = false,
+        backgroundBlur = backgroundBlur,
         content = { DialogContent(dismissOnClickOutside, animation, content) },
     )
     onDismiss?.let(screen::onClosed)
@@ -162,6 +178,7 @@ fun openDialogComposeScreen(
     dismissOnClickOutside: Boolean = true,
     onDismiss: (() -> Unit)? = null,
     animation: DialogAnimation = DialogComposeScreenDefaults.animation,
+    backgroundBlur: ScreenBackgroundBlur = DialogComposeScreenDefaults.backgroundBlur,
     content: @Composable () -> Unit,
 ): ComposeScreen {
     val screen = DialogComposeScreen(
@@ -174,6 +191,7 @@ fun openDialogComposeScreen(
         dismissOnClickOutside = dismissOnClickOutside,
         onDismiss = onDismiss,
         animation = animation,
+        backgroundBlur = backgroundBlur,
         content = content,
     )
     // 父屏为 ComposeScreen 时标记可复活(与 ComposeScreen.open 同约定):
