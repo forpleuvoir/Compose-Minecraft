@@ -1137,13 +1137,13 @@ internal object GeometryTessellator {
                 StrokeJoin.Bevel -> emitBevel(px, py, inX, inY, outX, outY)
 
                 StrokeJoin.Miter -> {
-                    // 角平分线方向,长度 h/cos(θ/2);Skia 截断判据:
-                    // miterLimit·sin(θ/2) < 1 → 退化 Bevel(默认 limit 4 ↔ θ < ~29° 截断)
+                    // 角平分线方向,长度 h/cos(|外转角|/2);Skia 截断判据:
+                    // miterLimit·cos(|外转角|/2) < 1 → 退化 Bevel(默认 limit 4 ↔ 外转角 > ~151° 截断)
                     var mx = inX + outX
                     var my = inY + outY
                     val ml = sqrt(mx * mx + my * my)
-                    val sinHalf = sin(abs(angle) / 2.0).toFloat()
-                    if (ml > 1e-6f && miterLimit > 0f && miterLimit * sinHalf >= 1f) {
+                    val miterFinite = cos(abs(angle) / 2.0).toFloat()
+                    if (ml > 1e-6f && miterLimit > 0f && miterLimit * miterFinite >= 1f) {
                         mx /= ml
                         my /= ml
                         val cosHalf = mx * inX + my * inY
@@ -1821,12 +1821,17 @@ internal object GeometryTessellator {
                 }
 
                 MinecraftPath.PathSegmentType.Close -> {
-                    // 平台适配点:仅在当前位置 != 起点时补闭合边;
-                    // 若已回到起点,不添加重复点 —— 否则零长度闭合边会使
-                    // strokeRing 闭合 join 的法线退化为零向量,首尾 join 丢失(裂缝)。
-                    if (hasPoint && (lastX != startX || lastY != startY)) {
-                        current.add(startX)
-                        current.add(startY)
+                    // 平台适配点:末点与起点亚像素重合时丢弃末点,由前一点直接闭合 ——
+                    // 否则极短闭合边两侧的拐角接近 180°,闭合 join 退化成可见缺口。
+                    if (hasPoint) {
+                        val closingGap = dist(lastX, lastY, startX, startY)
+                        if (closingGap < 0.05f / aaScale && current.size >= 6) {
+                            current.removeAt(current.size - 1)
+                            current.removeAt(current.size - 1)
+                        } else if (closingGap > 0f) {
+                            current.add(startX)
+                            current.add(startY)
+                        }
                     }
                     flush(closed = true)
                     lastX = startX

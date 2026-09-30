@@ -29,7 +29,10 @@ import moe.forpleuvoir.compose_minecraft.platform.ui.draw.toPaintSnapshot
 import net.minecraft.network.chat.Style
 import net.minecraft.resources.Identifier
 import kotlin.math.PI
+import kotlin.math.acos
+import kotlin.math.ceil
 import kotlin.math.cos
+import kotlin.math.max
 import kotlin.math.sin
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -80,6 +83,9 @@ class MinecraftPaint(
     override fun toString(): String =
         "MinecraftPaint(color=$color, alpha=$alpha, style=$style)"
 }
+
+/** 圆弧折线化的弦高上限(局部单位,绘制矩阵缩放为 1 时即物理像素) */
+private const val ARC_FLATTEN_TOLERANCE = 0.1f
 
 /** Minecraft 平台 Path 实现(命令记录式) */
 internal class MinecraftPath(
@@ -413,14 +419,13 @@ internal class MinecraftPath(
                 )
 
                 is PathCommand.ArcTo   -> {
-                    // 圆弧近似为线段
                     val cx = (command.left + command.right) / 2f
                     val cy = (command.top + command.bottom) / 2f
                     val rx = (command.right - command.left) / 2f
                     val ry = (command.bottom - command.top) / 2f
                     val startRad = command.startAngleDegrees * PI.toFloat() / 180f
                     val sweepRad = command.sweepAngleDegrees * PI.toFloat() / 180f
-                    val steps = maxOf(2, (abs(sweepRad) / (PI / 8.0)).toInt())
+                    val steps = arcSteps(max(abs(rx), abs(ry)), sweepRad)
                     for (i in 1..steps) {
                         val angle = startRad + sweepRad * i / steps
                         val px = cx + rx * cos(angle)
@@ -436,6 +441,17 @@ internal class MinecraftPath(
     }
 
     private fun abs(v: Float): Float = if (v < 0) -v else v
+
+    /**
+     * 圆弧折线化段数:单段弦高不超过 [ARC_FLATTEN_TOLERANCE];半径不超过该容差时整圆一段。
+     */
+    private fun arcSteps(radius: Float, sweepRad: Float): Int {
+        // 半径远大于容差时 1 - 容差/半径 会舍入到 1,钳制上限以保持步角非零
+        val cosHalf = if (radius > ARC_FLATTEN_TOLERANCE)
+            (1f - ARC_FLATTEN_TOLERANCE / radius).coerceIn(-1f, 0.999999f)
+        else -1f
+        return maxOf(2, ceil(abs(sweepRad) / (2f * acos(cosHalf))).toInt())
+    }
 
     internal class PathSegmentData(val type: PathSegmentType, val points: FloatArray)
 
