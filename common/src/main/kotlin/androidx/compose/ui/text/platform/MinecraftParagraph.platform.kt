@@ -498,7 +498,9 @@ internal class MinecraftParagraphIntrinsics(
 
     /**
      * 每字符字体绑定(取代 charScales 相对系数体系):
-     * 段级字号 = 该段独立 emPx 的字体解析;未指定段字号的字符继承基础绑定。
+     * 段级字号 = 该段独立 emPx 的字体解析;段样式与基础样式不同的段按其 seg.style
+     * 解析(mc.font 通道粗体等样式影响 advance,测量须与渲染同源);字号与样式均同
+     * 基础的段复用基础绑定。
      */
     internal val charFonts: List<ResolvedFont> = run {
         if (segments.isEmpty()) return@run List(text.length) { resolvedFont }
@@ -506,15 +508,17 @@ internal class MinecraftParagraphIntrinsics(
         var offset = 0
         for (seg in segments) {
             val end = minOf(offset + seg.text.length, arr.size)
-            val f = seg.fontSizeSp?.let { sp ->
+            val f = if (seg.fontSizeSp == null && seg.style == style) {
+                resolvedFont
+            } else {
                 FontResolver.resolveForRun(
                     seg.style.fontOriginal ?: style.fontOriginal,
                     moe.forpleuvoir.compose_minecraft.platform.render.text.MeasureSpec(
-                        sp * density.density * density.fontScale,
+                        seg.fontSizeSp?.let { sp -> sp * density.density * density.fontScale } ?: scale,
                         style = seg.style,
                     ),
                 )
-            } ?: resolvedFont
+            }
             for (j in offset until end) arr[j] = f
             offset += seg.text.length
         }
