@@ -25,8 +25,8 @@ import androidx.compose.ui.unit.IntSize
 import com.mojang.blaze3d.platform.cursor.CursorType
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CoroutineExceptionHandler
-import kotlinx.coroutines.Dispatchers
 import moe.forpleuvoir.compose_minecraft.platform.CompositionLocalRegistry
+import moe.forpleuvoir.compose_minecraft.platform.MinecraftMainThreadDispatcher
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposeGuiRenderer
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.MinecraftRenderContext
@@ -199,8 +199,9 @@ class MinecraftComposeScene(
         density = Density(density),
         size = IntSize(width.coerceAtLeast(1), height.coerceAtLeast(1)),
         // 主线程驱动:MC 的 extract/render 都在主线程,recompose 同步刷新;
+        // 调度器把来自其他线程的协程恢复(全局快照通知、delay 到期)收敛回主线程;
         // 附带异常处理器,把内容协程的未捕获异常交给 onUncaughtError(否则线程静默死亡)
-        coroutineContext = Dispatchers.Unconfined + uncaughtErrorHandler,
+        coroutineContext = MinecraftMainThreadDispatcher + uncaughtErrorHandler,
         platformContext = platformContext,
         // MC 每帧都会调用 render(),无需额外 invalidate 调度
         invalidate = {},

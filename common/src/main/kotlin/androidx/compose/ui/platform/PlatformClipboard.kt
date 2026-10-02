@@ -24,7 +24,7 @@ import net.minecraft.client.Minecraft
  * 经 MC `KeyboardHandler.getClipboard()/setClipboard()` 访问系统剪贴板
  * (MC 内部封装 GLFW 剪贴板,不直接依赖 LWJGL,也不引入 AWT/Skiko/Desktop)。
  *
- * 注意:MC 剪贴板调用需在主线程;Compose 场景协程为 Dispatchers.Unconfined,
+ * 注意:MC 剪贴板调用需在主线程;Compose 场景协程限定在 MC 主线程,
  * 复制/粘贴调用链保持在主线程。
  */
 internal object MinecraftClipboard {
