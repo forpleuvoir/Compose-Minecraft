@@ -303,6 +303,9 @@ class MinecraftComposeScene(
         // 每帧重放后渲染回调(在 renderContext.render 之后 → 元素位于列表
         // 尾部,画在全部 Compose 内容之上;guiScale 通道例外,见 KDoc)。
         vanillaDrawState.runPostFrameCallbacks(renderer, graphics, guiScale)
+        // overlay 收割:原版通道 tooltip 等「立即提取」产物按 guiScale 换算注入
+        // 列表尾部 —— 画在全部 Compose 内容之上(不受原版通道「在 Compose 之下」限制)
+        vanillaDrawState.harvestOverlay(renderer, guiScale)
     }
 
     /** 释放场景(组合、Recomposer 等) */

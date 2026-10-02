@@ -28,6 +28,7 @@ import net.minecraft.client.renderer.state.gui.GuiItemRenderState
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState
 import net.minecraft.client.renderer.state.gui.pip.OversizedItemRenderState
 import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState
+import org.joml.Matrix3x2f
 import org.joml.Matrix4f
 import org.joml.Vector2f
 import moe.forpleuvoir.compose_minecraft.platform.render.state.ItemRenderState
@@ -77,6 +78,21 @@ interface GuiCommandSink {
      * 默认空实现(不支持 PIP 的 sink 忽略)。
      */
     fun addPicturesInPictureState(state: PictureInPictureRenderState) = Unit
+
+    /**
+     * 追加一个来自原版通道(GUI 单位坐标)的元素,按 [scale](= guiScale)换算进
+     * 1:1 像素空间:顶点在 buildVertices 出口统一缩放(元素原样转发,自定义
+     * [GuiElementRenderState] 子类同样生效),scissor/bounds 同步换算。
+     * 默认退化为不缩放提交(不支持缩放的 sink 保底可见)。
+     */
+    fun addScaledElement(element: GuiElementRenderState, scale: Float) = addElement(element)
+
+    /**
+     * 追加一个来自原版通道(GUI 单位坐标)的文本,按 [scale](= guiScale)换算进
+     * 1:1 像素空间(pose 左乘缩放矩阵,scissor 同步换算)。
+     * 默认退化为不缩放提交(不支持缩放的 sink 保底可见)。
+     */
+    fun addScaledText(text: GuiTextRenderState, scale: Float) = addText(text)
 }
 
 /**
@@ -115,13 +131,14 @@ class ComposeGuiRenderer : GuiCommandSink {
      */
     private val items = ArrayList<Item>()
 
-    /** 单个有序命令:元素/文本/物品/实体画中画/画中画五选一 */
+    /** 单个有序命令:元素/文本/物品/实体画中画/画中画五选一;[scale] = 原版通道坐标换算(1f = 已像素空间) */
     private class Item(
         val element: GuiElementRenderState? = null,
         val text: GuiTextRenderState? = null,
         val itemState: ItemRenderState? = null,
         val entityState: EntityPipRenderState? = null,
         val pipState: PictureInPictureRenderState? = null,
+        val scale: Float = 1f,
     )
 
     /**
@@ -273,6 +290,16 @@ class ComposeGuiRenderer : GuiCommandSink {
     override fun addPicturesInPictureState(state: PictureInPictureRenderState) {
         flushTextBatch()
         items.add(Item(pipState = state))
+    }
+
+    override fun addScaledElement(element: GuiElementRenderState, scale: Float) {
+        flushTextBatch()
+        items.add(Item(element = element, scale = scale))
+    }
+
+    override fun addScaledText(text: GuiTextRenderState, scale: Float) {
+        flushTextBatch()
+        items.add(Item(text = text, scale = scale))
     }
 
     /**
@@ -443,11 +470,17 @@ class ComposeGuiRenderer : GuiCommandSink {
         previousDraw = null
         for (item in items) {
             when {
-                item.element != null -> addElementToMesh(item.element)
+                item.element != null -> addElementToMesh(
+                    if (item.scale != 1f) ScaledElementRenderState(item.element, item.scale)
+                    else item.element
+                )
                 item.text != null -> {
                     val text = item.text
-                    val pose = text.pose
-                    val scissor = text.scissor
+                    val s = item.scale
+                    val pose =
+                        if (s != 1f) Matrix3x2f().scaling(s, s).mul(text.pose)
+                        else text.pose
+                    val scissor = if (s != 1f) text.scissor?.scaled(s) else text.scissor
                     text.ensurePrepared().visit(object : Font.GlyphVisitor {
                         override fun acceptRenderable(renderable: TextRenderable) {
                             addElementToMesh(GlyphRenderState(pose, renderable, scissor))
@@ -467,13 +500,12 @@ class ComposeGuiRenderer : GuiCommandSink {
      * 不写死 16×16,支持任意 size/动画。画在 Compose 内容之上(原版 item 同批次语义)。
      */
 
-/** 单物品离屏渲染:每个模型 identity 一个独立 renderer/纹理(防止同帧互相覆盖)。 */
+    /** 单物品离屏渲染:每个模型身份一个独立 renderer/纹理(防止同帧互相覆盖)。 */
     private fun prepareItem(entry: ItemRenderState, mc: Minecraft) {
-        // 缓存键必须是**稳定**的:[ItemRenderState.modelIdentity] 由 updateForTopItem 每帧重建、
-        // hashCode 不稳定,用它当键会每帧 miss → 每个物品每帧新建离屏渲染器 + 新纹理,
-        // 用它当键会每帧全部 miss,每个可见物品每帧都要重建离屏渲染器与纹理。
-        // 用 [ItemRenderState.identityKey](物品单例)并把尺寸一起入键:同一物品在不同尺寸下
-        // (网格 42dp / 容器 32dp 等)不会来回 resize 同一张纹理。
+        // 缓存键 = identityKey(缺省回退 modelIdentity:模型链 + foil + tint + select 分支
+        // 的 List,内容相等即命中)+ 尺寸 —— 同类型不同组件(附魔/自定义模型/染色)
+        // 各自持有纹理互不覆盖;同一物品在不同尺寸(网格 42dp / 容器 32dp 等)
+        // 不会来回 resize 同一张纹理。
         val key = (entry.identityKey ?: entry.itemStackRenderState.modelIdentity) to entry.size
         val renderer = itemPipRenderers.getOrPut(key) {
             ComposeOversizedItemRenderer { addElementToMesh(it) }
@@ -535,6 +567,74 @@ class ComposeGuiRenderer : GuiCommandSink {
     private fun scissorChanged(newScissor: ScreenRectangle?, oldScissor: ScreenRectangle?): Boolean {
         if (newScissor === oldScissor) return false
         return if (newScissor != null) newScissor != oldScissor else true
+    }
+
+    /**
+     * 原版通道元素的缩放包装(「整批附加 guiScale 矩阵」机制):
+     * 元素**原样**持有(模组自定义 [GuiElementRenderState] 子类同样生效),
+     * 顶点在 buildVertices 出口经 [ScaledVertexConsumer] 统一缩放
+     * (GUI 单位 → 1:1 像素),scissor/bounds 同步换算。
+     */
+    private class ScaledElementRenderState(
+        private val delegate: GuiElementRenderState,
+        private val scale: Float,
+    ) : GuiElementRenderState {
+        override fun pipeline(): RenderPipeline = delegate.pipeline()
+        override fun textureSetup(): TextureSetup = delegate.textureSetup()
+        override fun scissorArea(): ScreenRectangle? = delegate.scissorArea()?.scaled(scale)
+        override fun bounds(): ScreenRectangle? = delegate.bounds()?.scaled(scale)
+        override fun buildVertices(vertexConsumer: VertexConsumer) =
+            delegate.buildVertices(ScaledVertexConsumer(vertexConsumer, scale))
+    }
+
+    /**
+     * 缩放顶点消费者:所有 pose 应用(addVertexWith2DPose 等默认方法)最终都
+     * 汇聚到 addVertex(float,float,float),在此对 x/y 统一乘 [scale] 即完成
+     * 整元素缩放;其余属性原样透传(链式返回本包装,保证后续调用仍走缩放)。
+     */
+    private class ScaledVertexConsumer(
+        private val delegate: VertexConsumer,
+        private val scale: Float,
+    ) : VertexConsumer {
+        override fun addVertex(x: Float, y: Float, z: Float): VertexConsumer {
+            delegate.addVertex(x * scale, y * scale, z)
+            return this
+        }
+
+        override fun setColor(r: Int, g: Int, b: Int, a: Int): VertexConsumer {
+            delegate.setColor(r, g, b, a)
+            return this
+        }
+
+        override fun setColor(color: Int): VertexConsumer {
+            delegate.setColor(color)
+            return this
+        }
+
+        override fun setUv(u: Float, v: Float): VertexConsumer {
+            delegate.setUv(u, v)
+            return this
+        }
+
+        override fun setUv1(u: Int, v: Int): VertexConsumer {
+            delegate.setUv1(u, v)
+            return this
+        }
+
+        override fun setUv2(u: Int, v: Int): VertexConsumer {
+            delegate.setUv2(u, v)
+            return this
+        }
+
+        override fun setNormal(x: Float, y: Float, z: Float): VertexConsumer {
+            delegate.setNormal(x, y, z)
+            return this
+        }
+
+        override fun setLineWidth(width: Float): VertexConsumer {
+            delegate.setLineWidth(width)
+            return this
+        }
     }
 
     /** 绘制阶段:像素正交投影 + 绑定主渲染目标 + 逐 draw 提交(照抄原版 executeDrawRange/executeDraw)。 */
@@ -725,4 +825,13 @@ internal fun Int.premultipliedForPipeline(): Int {
     val g = ((this ushr 8) and 0xFF) * a / 255
     val b = (this and 0xFF) * a / 255
     return (a shl 24) or (r shl 16) or (g shl 8) or b
+}
+
+/** GUI 单位矩形 × scale → 像素矩形(左/上 floor、右/下 ceil,保守覆盖不裁边) */
+private fun ScreenRectangle.scaled(s: Float): ScreenRectangle {
+    val l = kotlin.math.floor(left() * s).toInt()
+    val t = kotlin.math.floor(top() * s).toInt()
+    val r = kotlin.math.ceil(right() * s).toInt()
+    val b = kotlin.math.ceil(bottom() * s).toInt()
+    return ScreenRectangle(l, t, r - l, b - t)
 }

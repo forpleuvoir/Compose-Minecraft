@@ -50,6 +50,8 @@ object McItemPlugin : MinecraftRenderPlugin {
         val color = context.paint?.let { p -> p.color.toArgb(p.alpha) } ?: -1
 
         // 提交物品渲染状态(局部坐标原点 + 1:1 pose + size 目标尺寸 + 调制色)
+        // identityKey = 模型身份(模型链 + foil + tint + select 分支,原版 itemModelIdentities
+        // 同款)—— 同类型不同组件(附魔/自定义模型/染色)各自持有离屏纹理,不互相覆盖
         context.sink.addItem(
             ItemRenderState(
                 pose = context.matrix.toMatrix3x2f(),
@@ -59,7 +61,7 @@ object McItemPlugin : MinecraftRenderPlugin {
                 size = dd.size,
                 color = color,
                 scissorArea = context.scissor?.toScreenRectangle(),
-                identityKey = dd.stack.item,
+                identityKey = state.modelIdentity,
             )
         )
         return true

@@ -14,17 +14,22 @@ import androidx.compose.ui.node.requireLayoutCoordinates
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.IntOffset
 import com.mojang.blaze3d.pipeline.RenderPipeline
+import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
 import net.minecraft.client.gui.Font
+import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.client.gui.render.TextureSetup
+import net.minecraft.client.gui.screens.inventory.tooltip.DefaultTooltipPositioner
 import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.client.renderer.state.gui.ColoredRectangleRenderState
+import net.minecraft.client.renderer.state.gui.GuiRenderState
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState
 import net.minecraft.locale.Language
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.FormattedText
+import net.minecraft.resources.Identifier
 import net.minecraft.util.ARGB
 import net.minecraft.util.FormattedCharSequence
 import org.joml.Matrix3x2f
@@ -70,6 +75,8 @@ import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposeGuiRend
  *   ComposeGuiRenderer 在原版普通 GUI 之后、F3 之前提交),因此 `guiScaleEnabled
  *   = true` 时无论 vanillaDraw 还是 postVanillaDraw,内容都位于 Compose 之下;
  *   postVanillaDraw 的"最顶"语义**仅在 1:1 通道成立**(KDoc 各处同此);
+ *   **例外**:[VanillaDrawScope.tooltip] 经平台 overlay extractor 立即提取、
+ *   帧末注入 Compose 层尾部,画在全部 Compose 内容之上;
  * - F3 调试覆盖层(after-blur 段)始终在本场景之上。
  *
  * ## 为什么需要两种通道(历史)
@@ -179,6 +186,36 @@ class VanillaDrawState internal constructor() {
     internal val postFrameCallbacks =
         mutableListOf<(VanillaGuiGraphics, GuiGraphicsExtractor?, Float) -> Unit>()
 
+    /** 当前帧鼠标位置(GUI 单位;由 ComposeScreen.extractRenderState 随 [graphics] 一并写入,overlay extractor 用) */
+    internal var mouseX: Int = 0
+    internal var mouseY: Int = 0
+
+    /**
+     * overlay extractor(懒创建,帧级):原版通道「立即提取」绘制([VanillaDrawScope.tooltip])
+     * 的目标 —— 提取走原版代码(模组 mixin 生效),产物**不进**原版 GuiRenderState,
+     * 帧末经 [harvestOverlay] 按 guiScale 换算注入 Compose 层尾部(画在 Compose 之上)。
+     */
+    private var overlayState: GuiRenderState? = null
+    private var overlayExtractor: GuiGraphicsExtractor? = null
+
+    /** 取当前帧 overlay extractor(首次调用时创建,鼠标取本帧 [mouseX]/[mouseY]) */
+    internal fun overlay(): GuiGraphicsExtractor =
+        overlayExtractor ?: GuiRenderState().also { overlayState = it }
+            .let { state -> GuiGraphicsExtractor(mc, state, mouseX, mouseY).also { overlayExtractor = it } }
+
+    /**
+     * 收割本帧 overlay 提取产物(由 MinecraftComposeScene.renderFrame 在后渲染回调
+     * 之后调用):全部元素/文本按 [scale](= guiScale)换算注入 sink 尾部 —— 画在全部
+     * Compose 内容之上。元素在前、文本在后(tooltip 背景/文字的上下关系与原版一致)。
+     */
+    internal fun harvestOverlay(sink: GuiCommandSink, scale: Float) {
+        val state = overlayState ?: return
+        overlayState = null
+        overlayExtractor = null
+        state.forEachElement({ sink.addScaledElement(it, scale) }, GuiRenderState.TraverseRange.ALL)
+        state.forEachText { sink.addScaledText(it, scale) }
+    }
+
     /**
      * 每帧重放全部前渲染回调(由 MinecraftComposeScene.renderFrame 在
      * scene.render 之后、renderContext.render 之前调用)。1:1 桥元素注入收集器
@@ -268,6 +305,8 @@ class VanillaDrawScope(
     val size: Size,
     internal val bridge: VanillaGuiGraphics?,
     val graphics: GuiGraphicsExtractor?,
+    /** 帧级 vanilla 绘制状态(overlay extractor 来源;tooltip 等「立即提取」API 用) */
+    internal val drawState: VanillaDrawState? = null,
 ) {
     /** 本节点左上角对应的绘制空间坐标(1:1 = 窗口像素;原版通道 = GUI 单位) */
     val guiOrigin: IntOffset get() = IntOffset(guiX(0f), guiY(0f))
@@ -372,6 +411,40 @@ class VanillaDrawScope(
     /** 出栈一个裁剪矩形(与 [enableScissor] 配对) */
     fun disableScissor() {
         if (guiScaleEnabled) graphics?.disableScissor() else bridge?.disableScissor()
+    }
+
+    // ── 立即绘制(overlay;仅原版通道)────────────────────────────────
+
+    /**
+     * 立即绘制原版 tooltip(**仅原版通道**;1:1 通道调用为空操作)。
+     *
+     * 与 `graphics.setTooltipForNextFrame` 的区别:后者提取进原版 GuiRenderState,
+     * 由原版 GuiRenderer 绘制 —— 位于 Compose 场景**之下**(被不透明内容盖住,
+     * 见 [Modifier.vanillaDraw] KDoc 的原版通道限制)。本方法经平台 overlay
+     * extractor 调原版 [GuiGraphicsExtractor.tooltip] **立即提取** —— 提取全程
+     * 原版代码(`TooltipRenderUtil` 九宫格背景 / `ClientTooltipComponent` / 字体
+     * 渲染,模组对这些类的 mixin 全部生效),产物帧末注入 Compose 层**尾部**,
+     * 画在全部 Compose 内容之上。
+     *
+     * 坐标语义 = GUI 单位(与本通道其他原版 API 一致,用 [guiX]/[guiY] 换算)。
+     *
+     * @param style tooltip 样式(背景/边框 sprite 命名空间;null = 原版默认)
+     */
+    fun tooltip(font: Font, lines: List<FormattedCharSequence>, x: Int, y: Int, style: Identifier? = null) {
+        if (!guiScaleEnabled) return
+        drawState?.overlay()?.tooltip(
+            font,
+            lines.map { ClientTooltipComponent.create(it) },
+            x, y,
+            DefaultTooltipPositioner.INSTANCE,
+            style,
+        )
+    }
+
+    /** [tooltip] 的 Component 重载(经 `Component.getVisualOrderText` 转换) */
+    @JvmName("tooltipComponents")
+    fun tooltip(font: Font, lines: List<Component>, x: Int, y: Int, style: Identifier? = null) {
+        tooltip(font, lines.map { it.visualOrderText }, x, y, style)
     }
 }
 
@@ -615,9 +688,9 @@ private class VanillaDrawNode(
         val scope = if (guiScaleEnabled) {
             val g = graphics
             if (g == null) return   // 原版通道但本帧 extractor 缺失 → 跳过
-            VanillaDrawScope(guiScaleEnabled, guiScale, geometryOrigin, geometrySize, null, g)
+            VanillaDrawScope(guiScaleEnabled, guiScale, geometryOrigin, geometrySize, null, g, state)
         } else {
-            VanillaDrawScope(guiScaleEnabled, guiScale, geometryOrigin, geometrySize, bridge, null)
+            VanillaDrawScope(guiScaleEnabled, guiScale, geometryOrigin, geometrySize, bridge, null, state)
         }
         onDraw(scope)
     }

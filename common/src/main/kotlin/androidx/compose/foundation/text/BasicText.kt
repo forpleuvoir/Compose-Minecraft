@@ -281,7 +281,8 @@ fun BasicText(
             if (defaultStyle.fontOriginal == null) defaultStyle.withFont(defaultFont) else defaultStyle
         }
 
-    // 平台适配点:展平为带自身样式的段;每段缺失属性用 defaultStyle 补缺(applyTo 语义)
+    // 平台适配点:展平为带继承合并样式的段(段自身 → 逐层祖先,MC visit 语义);
+    // 仍缺失的属性用 defaultStyle 补缺(applyTo 语义)
     val segments =
         remember(component, effectiveDefaultStyle) {
             component.flatten().map { seg ->

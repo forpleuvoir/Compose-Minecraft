@@ -90,7 +90,7 @@ internal data class PlaceholderSpan(
 /**
  * 平台适配点:MC [Component] 展平后的样式段 —— [text] 使用 [style] 绘制。
  * 由 `BasicText(component)` 经 `component.flatten()` 展平得到,
- * 每段 style 已是"Component 自身属性优先、缺失用 defaultStyle 补"的合并结果(MC applyTo 语义)。
+ * 每段 style 已是「段自身 → 逐层祖先 → defaultStyle」的合并结果(MC visit/applyTo 语义)。
  */
 data class StyleSegment(
     val style: Style,

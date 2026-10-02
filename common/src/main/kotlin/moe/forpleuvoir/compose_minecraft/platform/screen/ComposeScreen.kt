@@ -450,6 +450,8 @@ class ComposeScreen(
         // 本屏收集器);本参数仍供 requestCursor 等原版通道使用,见下方 I9 光标块。
         composeScene?.let { scene ->
             scene.vanillaDrawState.graphics = graphics
+            scene.vanillaDrawState.mouseX = mouseX
+            scene.vanillaDrawState.mouseY = mouseY
             MinecraftRenderPlugins.currentGraphics = graphics
             try {
                 scene.renderFrame()

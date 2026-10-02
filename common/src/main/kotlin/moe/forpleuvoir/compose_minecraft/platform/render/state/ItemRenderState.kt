@@ -24,9 +24,11 @@ class ItemRenderState(
     val color: Int = -1,
     val scissorArea: ScreenRectangle? = null,
     /**
-     * 离屏渲染器缓存的稳定 key(如 [ItemStack.item] 单例);缺省回退 [modelIdentity]。
-     * [modelIdentity](List)由 [updateForTopItem] 每帧重建,hashCode 不稳定会导致
-     * 缓存每帧 miss → 每帧新建纹理爆显存,故需要稳定 key。
+     * 离屏渲染器缓存 key;缺省回退 [modelIdentity]。
+     * [modelIdentity](26.2 = 模型链实例 + foil + tint + select 分支的 List,原版
+     * itemModelIdentities 图集缓存的同款身份)内容相等即缓存命中,跨帧稳定 ——
+     * 组件差异(附魔/自定义模型/染色)产生不同身份,各自持有纹理;
+     * 视觉相同仅数据不同的 stack 共享同一渲染器。需要更粗粒度共享时才显式传入。
      */
     val identityKey: Any? = null,
 ) : ScreenArea {
