@@ -117,6 +117,8 @@ internal class MinecraftTextLayout(
     val maxWidth: Float,
     /** 平台适配点(InlineContent):占位符排版原子(按声明序;布局时按 start 排序)。 */
     val placeholders: List<PlaceholderSpan> = emptyList(),
+    /** 软换行开关:false = 只按显式 `\n` 分段,不做 UAX #14 折行(整段按一行排版)。 */
+    internal val softWrap: Boolean = true,
     /**
      * 基础字体绑定(总设计 A3/I2):段级字号缺省、省略号等基础 run,以及
      * **空文本占位行**的度量来源 —— 空文本无字符索引可取,故由调用方显式传入。
@@ -278,7 +280,7 @@ internal class MinecraftTextLayout(
             )
             return result
         }
-        val wrap = maxWidth.isFinite() && maxWidth > 0
+        val wrap = softWrap && maxWidth.isFinite() && maxWidth > 0
         // UAX #14 断点表(font-system 重构):整串一次构建,懒加载 ——
         // 仅存在受限宽度分段时才付 BreakIterator 的 O(n) 成本
         var breakOffsets: IntArray? = null
@@ -547,6 +549,8 @@ internal class MinecraftParagraph(
     private val maxLines: Int,
     private val overflow: TextOverflow,
     private val constraints: Constraints,
+    /** 软换行开关：false = 只按显式 `\n` 分段，不做 UAX #14 折行（软换行文本为 true）。 */
+    private val softWrap: Boolean = true,
 ) : Paragraph {
 
     private val layout: MinecraftTextLayout = run {
@@ -557,6 +561,7 @@ internal class MinecraftParagraph(
         MinecraftTextLayout(
             intrinsics.text, maxWidth,
             intrinsics.placeholderSpans,
+            softWrap = softWrap,
             baseFont = intrinsics.resolvedFont,
         ) { i -> intrinsics.charFonts[i] }
     }
@@ -663,8 +668,14 @@ internal class MinecraftParagraph(
     override val lastBaseline: Float
         get() = lineTop(visibleLineCount - 1) + lineAt(visibleLineCount - 1).baselinePx
 
+    /**
+     * 溢出判定：可见行数超过 [maxLines]，或可见行宽超出布局宽度。
+     *
+     * 后者覆盖「不软换行的单行文本超出可用宽度」——此时行数不超标，但该行仍需按宽度省略。
+     */
     override val didExceedMaxLines: Boolean
-        get() = maxLines != DefaultMaxLines && layout.lines.size > maxLines
+        get() = maxLines != DefaultMaxLines &&
+            (layout.lines.size > maxLines || layout.width > layout.maxWidth)
 
     override val lineCount: Int get() = visibleLineCount
 
@@ -1232,6 +1243,7 @@ internal fun ActualParagraph(
     scale: Float = 1f,
     // 平台适配点:段落水平对齐(默认未设置 = 旧行为)
     textAlign: TextAlign = TextAlign.Unspecified,
+    softWrap: Boolean = true,
 ): Paragraph = MinecraftParagraph(
     MinecraftParagraphIntrinsics(
         text = text,
@@ -1247,6 +1259,7 @@ internal fun ActualParagraph(
     maxLines,
     overflow,
     constraints,
+    softWrap,
 )
 
 internal fun ActualParagraph(
@@ -1254,11 +1267,13 @@ internal fun ActualParagraph(
     maxLines: Int,
     overflow: TextOverflow,
     constraints: Constraints,
+    softWrap: Boolean = true,
 ): Paragraph = MinecraftParagraph(
     paragraphIntrinsics as MinecraftParagraphIntrinsics,
     maxLines,
     overflow,
     constraints,
+    softWrap,
 )
 
 internal fun ActualParagraphIntrinsics(

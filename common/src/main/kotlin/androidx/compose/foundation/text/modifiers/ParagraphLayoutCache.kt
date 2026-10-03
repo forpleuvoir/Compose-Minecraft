@@ -336,6 +336,7 @@ internal class ParagraphLayoutCache(
                 ),
             maxLines = finalMaxLines(softWrap, overflow, maxLines),
             overflow = overflow,
+            softWrap = softWrap,
         )
     }
 
@@ -430,6 +431,7 @@ internal class ParagraphLayoutCache(
                 finalConstraints,
                 maxLines,
                 overflow,
+                softWrap,
             ),
             layoutSize,
         )

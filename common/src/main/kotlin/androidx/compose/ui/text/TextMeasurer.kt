@@ -351,6 +351,7 @@ class TextMeasurer(
                         // This is a fallback behavior for ellipsis. Native
                         maxLines = finalMaxLines,
                         overflow = overflow,
+                        softWrap = softWrap,
                     )
 
                 return TextLayoutResult(

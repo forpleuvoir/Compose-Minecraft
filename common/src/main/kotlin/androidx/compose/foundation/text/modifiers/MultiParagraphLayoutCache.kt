@@ -410,6 +410,7 @@ internal class MultiParagraphLayoutCache(
                 ),
             maxLines = finalMaxLines(softWrap, overflow, maxLines),
             overflow = overflow,
+            softWrap = softWrap,
         )
     }
 
@@ -530,6 +531,7 @@ internal class MultiParagraphLayoutCache(
                         ),
                     maxLines = finalMaxLines(softWrap, overflow, maxLines),
                     overflow = overflow,
+                    softWrap = softWrap,
                 )
             val result =
                 TextLayoutResult(

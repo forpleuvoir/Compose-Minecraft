@@ -61,6 +61,8 @@ class MultiParagraph(
     constraints: Constraints,
     val maxLines: Int = DefaultMaxLines,
     overflow: TextOverflow = TextOverflow.Clip,
+    /** 软换行开关；false 时子段落只按显式 `\n` 分段，不做 UAX #14 折行。 */
+    val softWrap: Boolean = true,
 ) {
 
     /**
@@ -318,6 +320,7 @@ class MultiParagraph(
         overflow: TextOverflow = TextOverflow.Clip,
         // 平台适配点:段落水平对齐(默认未设置 = 旧行为)
         textAlign: TextAlign = TextAlign.Unspecified,
+        softWrap: Boolean = true,
     ) : this(
         intrinsics =
             MultiParagraphIntrinsics(
@@ -332,6 +335,7 @@ class MultiParagraph(
         maxLines = maxLines,
         overflow = overflow,
         constraints = constraints,
+        softWrap = softWrap,
     )
 
     private val annotatedString
@@ -432,6 +436,7 @@ class MultiParagraph(
                     ),
                     maxLines - currentLineCount,
                     overflow,
+                    softWrap,
                 )
 
             val paragraphTop = currentHeight

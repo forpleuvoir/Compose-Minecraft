@@ -354,12 +354,14 @@ fun Paragraph(
  *   that fit with ellipsis is true. Minimum components of the [Constraints] object are no-op.
  * @param maxLines the maximum number of lines that the text can have
  * @param overflow specifies how visual overflow should be handled
+ * @param softWrap 软换行开关；false 时只按显式 `\n` 分段，不做 UAX #14 折行（整段按一行排版）
  */
 fun Paragraph(
     paragraphIntrinsics: ParagraphIntrinsics,
     constraints: Constraints,
     maxLines: Int = DefaultMaxLines,
     overflow: TextOverflow = TextOverflow.Clip,
-): Paragraph = ActualParagraph(paragraphIntrinsics, maxLines, overflow, constraints)
+    softWrap: Boolean = true,
+): Paragraph = ActualParagraph(paragraphIntrinsics, maxLines, overflow, constraints, softWrap)
 
 internal fun Float.ceilToInt(): Int = ceil(this).toInt()
