@@ -666,6 +666,16 @@ class ComposeScreen(
         get() = platformContext.textInputService as? MinecraftTextInputService
 
     /**
+     * 已转发按下、尚未转发的鼠标按钮位集(第 n 位对应 `buttonInfo.button()` == n)。
+     *
+     * 原版鼠标按下只可能来自窗口客户区:窗口边框 / 标题栏 / 最大化按钮上的按下由系统按非客户区
+     * 处理(不产生客户区消息),而抬起在窗口持有鼠标捕获期间仍会作为客户区消息到达 —— 桥因此会
+     * 收到没有配对按下的抬起。Compose 的指针语义(含图层 Dialog / Popup 的「点击外部关闭」,
+     * 见 [androidx.compose.ui.window.Dialog])把一次孤立抬起当成完整点击,故此类抬起一律吞掉。
+     */
+    private var forwardedPressedButtons: Int = 0
+
+    /**
      * MC 原生 doubleClick 标志(`MouseHandler` 按 250ms/down-to-down/同屏同键计算)不转发给
      * Compose —— 双击由 Compose 手势检测器按事件时间戳自行判定(detectTapGestures /
      * 文本框选词),该标志仅经 [super.mouseClicked] 透传给 vanilla 子控件链。
@@ -675,24 +685,37 @@ class ComposeScreen(
         if (closeCoordinator.isClosing) return@guardedInput true
         // IMBlocker: 文本框本就聚焦时不会再来一次 startInputMethod, 点击是候选被清后唯一的补救时机
         composeScene?.imeService?.refreshImBlockerFocus()
+        val button = event.buttonInfo.button()
         val consumed = composeScene?.sendPointerEvent(
             eventType = PointerEventType.Press,
             position = mousePosition,
             type = PointerType.Mouse,
             keyboardModifiers = event.buttonInfo.modifiers().toPointerKeyboardModifiers(),
-            button = PointerButton(event.buttonInfo.button()),
+            button = PointerButton(button),
         )
+        // 只在事件确实转发进场景时登记配对,否则抬键会被当成新点击
+        if (consumed != null) forwardedPressedButtons = forwardedPressedButtons or (1 shl button)
         consumed?.anyMovementConsumed == true || super.mouseClicked(event, doubleClick)
     }
 
+    /**
+     * 鼠标抬起转发到 Compose;[forwardedPressedButtons] 中没有该按钮时只吞掉不转发 ——
+     * 真实点击(按下 + 抬起)照常转发。
+     */
     override fun mouseReleased(event: MouseButtonEvent): Boolean = guardedInput(true) {
+        val button = event.buttonInfo.button()
+        val paired = (forwardedPressedButtons shr button) and 1 == 1
+        if (!paired) {
+            return@guardedInput true
+        }
+        forwardedPressedButtons = forwardedPressedButtons and (1 shl button).inv()
         if (closeCoordinator.isClosing) return@guardedInput true
         val consumed = composeScene?.sendPointerEvent(
             eventType = PointerEventType.Release,
             position = mousePosition,
             type = PointerType.Mouse,
             keyboardModifiers = event.buttonInfo.modifiers().toPointerKeyboardModifiers(),
-            button = PointerButton(event.buttonInfo.button()),
+            button = PointerButton(button),
         )
         consumed?.anyMovementConsumed == true || super.mouseReleased(event)
     }
