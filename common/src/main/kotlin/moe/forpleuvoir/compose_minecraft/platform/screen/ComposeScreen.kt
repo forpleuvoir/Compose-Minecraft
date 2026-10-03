@@ -105,10 +105,12 @@ class ComposeScreen(
     val parent: Screen? = null,
     renderParentScreen: Boolean = false,
     /**
-     * 场景密度:默认 1f(1dp == 1 像素,场景尺寸 = 窗口像素);
+     * 初始场景密度:默认 1f(1dp == 1 像素,场景尺寸 = 窗口像素);
      * 传 >1f 放大 UI(官方桌面 density 语义,文本字号同步放大)。
+     *
+     * 运行期读写请用同名的 [ComposeScreen.density] 属性。
      */
-    val density: Float = 1f,
+    density: Float = 1f,
     /**
      * 本屏初始是否**禁用**世界渲染(运行时读写请用同名的 [ComposeScreen.disableWorldRender] 属性)。
      *
@@ -188,6 +190,19 @@ class ComposeScreen(
 
     /** 本屏持有的 Compose 场景(可复活:removed 保留场景时非空,否则重建) */
     private var composeScene: MinecraftComposeScene? = null
+
+    /**
+     * 平台适配点:场景密度,运行期可写(1dp == N 像素;1f 时场景坐标即窗口像素)。
+     *
+     * 写入转发给场景([MinecraftComposeScene.density])→ 主 owner 密度(快照状态)→ 组合里的
+     * `LocalDensity`,与窗口尺寸在同一帧的组合阶段一起生效;图层内容按注册处的 `LocalDensity`
+     * 实时读取,一并跟随。场景尚未创建(首帧 extractRenderState 之前)时只记录取值。
+     */
+    var density: Float = density
+        set(value) {
+            field = value
+            composeScene?.density = value
+        }
 
     /**
      * 可复活标记 —— true 时 [removed] 不销毁场景(关闭返回父屏后状态保留),

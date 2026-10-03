@@ -212,6 +212,21 @@ class MinecraftComposeScene(
         compositionLocals = { CompositionLocalRegistry.values }
     }
 
+    /**
+     * 平台适配点:场景密度,运行期可写(1dp == [density] 像素;1f 时场景坐标即窗口像素)。
+     *
+     * 写入即改 [ComposeScene.density] → 主 owner 密度(快照状态)→ 组合里的 `LocalDensity`
+     * (CompositionLocals 按 owner 密度下发),因此与窗口尺寸在同一帧的组合阶段一起生效,
+     * 不产生"尺寸已变、密度仍是旧值"的中间帧;图层不单独持有密度,其内容按注册处的
+     * `LocalDensity` 实时读取,一并跟随。
+     */
+    var density: Float = density
+        set(value) {
+            if (field == value) return
+            field = value
+            scene.density = Density(value)
+        }
+
     /** 设置场景内容(同 [ComposeScene.setContent]) */
     fun setContent(content: @Composable () -> Unit) {
         scene.setContent {
