@@ -67,11 +67,30 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
         var output = FloatArray(384)
         var count = 0
 
-        /** :DrawVerticesCommand 的逐顶点色(其余命令为 null) */
+        /**
+         * 逐顶点色：[:DrawVerticesCommand] 自带，或渐变填充按「图层局部坐标」采样得到；
+         * 其余命令为 null，整条走单色 [colorArgb]。
+         */
         var outColors3D: IntArray? = null
+        var colorCount = 0
+        // 渐变填充：预置顶点色缓冲（容量随三角形数量翻倍）
+        if (paint.shader != null) outColors3D = IntArray(96)
 
-        /** 追加一个 3D 变换后的三角形;返回 false 表示任一顶点在相机后方 */
-        fun emitTriangle(ax: Float, ay: Float, bx: Float, by: Float, cx: Float, cy: Float) {
+        /** 追加一个顶点色（容量不足时翻倍） */
+        fun emitColor(argb: Int) {
+            val colors = outColors3D ?: return
+            val grown = if (colorCount + 1 > colors.size) colors.copyOf((colors.size * 2).coerceAtLeast(3)) else colors
+            outColors3D = grown
+            grown[colorCount++] = argb
+        }
+
+        /** 按图层局部坐标采样渐变（与 2D 路径同源），透视插值交给 GPU */
+        fun gradientColors(vertices: FloatArray): IntArray? = paint.shader?.let {
+            ColorEvaluator.gradientVertexColors(it, vertices, paint.alpha, paint.colorFilter)
+        }
+
+        /** 追加一个 3D 变换后的三角形；返回 false 表示任一顶点在相机后方。[colors] 非空时同时输出 3 个顶点色 */
+        fun emitTriangle(ax: Float, ay: Float, bx: Float, by: Float, cx: Float, cy: Float, colors: IntArray? = null) {
             val pa = map3D(m2, layer3D, ax, ay) ?: return
             val pb = map3D(m2, layer3D, bx, by) ?: return
             val pc = map3D(m2, layer3D, cx, cy) ?: return
@@ -80,12 +99,25 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
             output[count + 3] = pb[0]; output[count + 4] = pb[1]; output[count + 5] = OPAQUE_COVERAGE
             output[count + 6] = pc[0]; output[count + 7] = pc[1]; output[count + 8] = OPAQUE_COVERAGE
             count += 9
+            if (colors != null) {
+                emitColor(colors[0])
+                emitColor(colors[1])
+                emitColor(colors[2])
+            }
         }
 
-        // 矩形 / 退化圆角矩形:4 角 → 2 三角形
+        // 矩形 / 退化圆角矩形:4 角 → 2 三角形(渐变填充时逐角采样)
         fun quad(left: Float, top: Float, right: Float, bottom: Float) {
-            emitTriangle(left, top, right, top, right, bottom)
-            emitTriangle(left, top, right, bottom, left, bottom)
+            val corners = gradientColors(
+                floatArrayOf(left, top, 0f, right, top, 0f, right, bottom, 0f, left, bottom, 0f),
+            )
+            if (corners == null) {
+                emitTriangle(left, top, right, top, right, bottom)
+                emitTriangle(left, top, right, bottom, left, bottom)
+            } else {
+                emitTriangle(left, top, right, top, right, bottom, intArrayOf(corners[0], corners[1], corners[2]))
+                emitTriangle(left, top, right, bottom, left, bottom, intArrayOf(corners[0], corners[2], corners[3]))
+            }
         }
 
         fun tessellated(tessellate: (GeometryTessellator.Sink) -> Unit) {
@@ -95,19 +127,30 @@ internal class PerspectiveBackend(internal var sink: GuiCommandSink) {
             tessellate(triangleSink)
             if (triangleSink.vertexCount < 3) return
             val src = triangleSink.toArray()
+            // 渐变填充:顶点色按图层局部坐标采样,顺序与下面的三角形输出一一对应
+            val gradientVertexColors = gradientColors(src)
             var i = 0
+            var vertex = 0
             while (i + 2 < src.size) {
                 val pa = map3D(m2, layer3D, src[i], src[i + 1])
                 val pb = map3D(m2, layer3D, src[i + 3], src[i + 4])
                 val pc = map3D(m2, layer3D, src[i + 6], src[i + 7])
                 if (pa != null && pb != null && pc != null) {
                     if (count + 9 > output.size) output = output.copyOf(output.size * 2)
-                    output[count] = pa[0]; output[count + 1] = pa[1]; output[count + 2] = OPAQUE_COVERAGE
-                    output[count + 3] = pb[0]; output[count + 4] = pb[1]; output[count + 5] = OPAQUE_COVERAGE
-                    output[count + 6] = pc[0]; output[count + 7] = pc[1]; output[count + 8] = OPAQUE_COVERAGE
+                    // coverage 取三角化算出的值(不再强制 OPAQUE):保留边缘/描边的 AA，
+                    // 否则实心填充会让描边看起来比 2D 路径粗一圈
+                    output[count] = pa[0]; output[count + 1] = pa[1]; output[count + 2] = src[i + 2]
+                    output[count + 3] = pb[0]; output[count + 4] = pb[1]; output[count + 5] = src[i + 5]
+                    output[count + 6] = pc[0]; output[count + 7] = pc[1]; output[count + 8] = src[i + 8]
                     count += 9
+                    if (gradientVertexColors != null) {
+                        emitColor(gradientVertexColors[vertex])
+                        emitColor(gradientVertexColors[vertex + 1])
+                        emitColor(gradientVertexColors[vertex + 2])
+                    }
                 }
                 i += 9
+                vertex += 3
             }
         }
 

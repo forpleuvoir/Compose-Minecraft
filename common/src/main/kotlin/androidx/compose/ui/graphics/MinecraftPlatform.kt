@@ -1400,6 +1400,12 @@ internal class MinecraftCanvas internal constructor(
                     strokeWidth = p.strokeWidth, strokeCap = p.strokeCap,
                     filterQuality = p.filterQuality,
                     colorFilter = effFilter, blendMode = effBlend,
+                    // 渐变与描边细节必须一起带过去:3D 后端按「图层局部坐标」逐顶点采样渐变,
+                    // 丢掉 shader 渐变填充的几何就没有颜色来源(渲染成黑)
+                    shader = p.shader,
+                    strokeJoin = p.strokeJoin,
+                    strokeMiterLimit = p.strokeMiterLimit,
+                    pathEffect = p.pathEffect,
                 )
             } else {
                 PaintSnapshot(
@@ -1411,6 +1417,10 @@ internal class MinecraftCanvas internal constructor(
                     filterQuality = p.filterQuality,
                     colorFilter = effFilter,
                     blendMode = effBlend,
+                    shader = p.shader,
+                    strokeJoin = p.strokeJoin,
+                    strokeMiterLimit = p.strokeMiterLimit,
+                    pathEffect = p.pathEffect,
                 )
             }
         }
@@ -1480,8 +1490,19 @@ internal class MinecraftCanvas internal constructor(
                 ambientColorArgb, spotColorArgb,
             )
 
-            is DrawImageRectCommand    -> null
-            else                       -> null // DrawCustomCommand 等自定义命令
+            // 自绘命令(物品/精灵/实体/纹理插件)与图片命令:3D 下无法表达纹理透视,
+            // 按与文本相同的 2D 仿射近似回放 —— 形状被压平,位置由 layer3D 的透视映射给出
+            is DrawCustomCommand       -> DrawCustomCommand(
+                combine(matrix), clip, paint, layer3D = null, tag = tag, data = data,
+            )
+
+            is DrawImageRectCommand    -> DrawImageRectCommand(
+                combine(matrix), clip, paint,
+                image, srcOffsetX, srcOffsetY, srcWidth, srcHeight,
+                dstOffsetX, dstOffsetY, dstWidth, dstHeight,
+            )
+
+            else                       -> null
         }
     }
 
