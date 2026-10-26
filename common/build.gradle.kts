@@ -43,6 +43,10 @@ dependencies {
     // scene 移植(PlatformArchitectureComponentsOwner 等)依赖的导航事件库
     api(libs.navigationevent)
 
+    // CMP 1.12 的 ui 模块新增依赖(androidx 侧)
+    api(libs.androidxLifecycleViewmodelCompose)
+    api(libs.androidxLifecycleViewmodelSavedstate)
+
     // IMBlocker 输入法兼容的可选依赖(soft dependency)。
     // 版本 id 取 neoforge 变体: common 经 neoForm 编译 Minecraft, 与 neoforge 模块同源
     // (沿用 ibuki_gourd 旧分工)。

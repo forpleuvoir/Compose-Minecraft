@@ -557,17 +557,15 @@ class ComposeGuiRenderer : GuiCommandSink {
             previousScissorArea = scissorArea
             previousDraw = vertexBuffer.appendDraw(
                 pipeline.getVertexFormatBinding(0)!!,
-                pipeline.getPrimitiveTopology(),
+                pipeline.primitiveTopology,
             )
             draws.add(Draw(previousDraw!!, pipeline, textureSetup, scissorArea))
         }
         elementState.buildVertices(vertexBuffer.getVertexBuilder(previousDraw!!))
     }
 
-    private fun scissorChanged(newScissor: ScreenRectangle?, oldScissor: ScreenRectangle?): Boolean {
-        if (newScissor === oldScissor) return false
-        return if (newScissor != null) newScissor != oldScissor else true
-    }
+    private fun scissorChanged(newScissor: ScreenRectangle?, oldScissor: ScreenRectangle?): Boolean =
+        newScissor != oldScissor
 
     /**
      * 原版通道元素的缩放包装(「整批附加 guiScale 矩阵」机制):

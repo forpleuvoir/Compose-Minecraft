@@ -29,7 +29,7 @@ object ComposePipelineCache {
     fun compiled(pipeline: RenderPipeline): CompiledRenderPipeline {
         cache?.get(pipeline)?.let { return it }
         reset()
-        return cache!!.get(pipeline) ?: error("Failed to compile pipeline ${pipeline.getLocation()}")
+        return cache!!.get(pipeline) ?: error("Failed to compile pipeline ${pipeline.location}")
     }
 
     /** 丢弃已编译管线并重建缓存(资源重载后 shader / include 内容变化时调用)。 */

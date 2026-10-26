@@ -7,7 +7,6 @@ import com.mojang.renderpearl.api.pipeline.ColorTargetState
 import com.mojang.renderpearl.api.pipeline.RenderPipeline
 import com.mojang.renderpearl.api.pipeline.BlendFactor
 import com.mojang.renderpearl.api.pipeline.BlendOp
-import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
 import com.mojang.logging.LogUtils
 import androidx.compose.ui.graphics.BlendMode
@@ -297,7 +296,7 @@ internal object BlendPipelines {
             try {
                 ComposePipelineCache.compiled(p)
             } catch (e: Exception) {
-                LOGGER.error("Compose-Minecraft: failed to compile blend pipeline {}", p.getLocation(), e)
+                LOGGER.error("Compose-Minecraft: failed to compile blend pipeline {}", p.location, e)
             }
         }
     }

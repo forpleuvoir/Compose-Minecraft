@@ -177,6 +177,8 @@ dependencies {
 
     // scene 移植(PlatformArchitectureComponentsOwner 等)依赖的导航事件库
     bundledApi(libs.navigationevent.asCoordinates()) { composeExclude() }
+    bundledApi(libs.androidxLifecycleViewmodelCompose.asCoordinates()) { composeExclude() }
+    bundledApi(libs.androidxLifecycleViewmodelSavedstate.asCoordinates()) { composeExclude() }
 }
 
 /*

@@ -77,6 +77,8 @@ dependencies {
     includeInternal(api(libs.lifecycleViewmodelSavedstate.asCoordinates()) { composeExclude() })
     includeInternal(api(libs.savedstateCompose.asCoordinates()) { composeExclude() })
     includeInternal(api(libs.navigationevent.asCoordinates()) { composeExclude() })
+    includeInternal(api(libs.androidxLifecycleViewmodelCompose.asCoordinates()) { composeExclude() })
+    includeInternal(api(libs.androidxLifecycleViewmodelSavedstate.asCoordinates()) { composeExclude() })
 }
 
 // devOnly source set(参考 ibuki_gourd):开发/测试代码只在 dev run classpath 生效,不进发布 jar
