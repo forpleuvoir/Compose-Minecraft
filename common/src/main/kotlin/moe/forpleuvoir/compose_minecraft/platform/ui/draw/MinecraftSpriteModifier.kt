@@ -10,7 +10,7 @@ import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.unit.IntSize
-import com.mojang.blaze3d.pipeline.RenderPipeline
+import com.mojang.renderpearl.api.pipeline.RenderPipeline
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.McTexturePlugin
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.SpriteDrawData
 import net.minecraft.client.renderer.RenderPipelines

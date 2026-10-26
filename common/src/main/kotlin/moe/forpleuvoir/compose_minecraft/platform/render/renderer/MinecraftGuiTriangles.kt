@@ -1,23 +1,19 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.renderer
 import moe.forpleuvoir.compose_minecraft.platform.render.util.BlendPipelines
-import moe.forpleuvoir.compose_minecraft.mc
 
-import com.mojang.blaze3d.PrimitiveTopology
-import com.mojang.blaze3d.pipeline.BlendFunction
-import com.mojang.blaze3d.pipeline.ColorTargetState
-import com.mojang.blaze3d.pipeline.RenderPipeline
-import com.mojang.blaze3d.shaders.ShaderSource
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology
+import com.mojang.renderpearl.api.pipeline.BlendFunction
+import com.mojang.renderpearl.api.pipeline.ColorTargetState
+import com.mojang.renderpearl.api.pipeline.RenderPipeline
 import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
 import com.mojang.blaze3d.vertex.VertexConsumer
-import com.mojang.logging.LogUtils
 import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.client.gui.render.TextureSetup
 import net.minecraft.client.renderer.BindGroupLayouts
 import net.minecraft.client.renderer.state.gui.GuiElementRenderState
 import net.minecraft.resources.Identifier
 import org.joml.Matrix3x2fc
-import org.slf4j.Logger
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.MinecraftRenderContext
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,8 +42,6 @@ import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.MinecraftRende
 /** 平台 GUI 三角形渲染管线与编译管理 */
 internal object MinecraftGuiTriangles {
 
-    private val LOGGER: Logger = LogUtils.getLogger()
-
     /**
      * 自定义三角形 pipeline(填充):与 GUI 相同的渲染语义(纯色、TRANSLUCENT
      * alpha 混合、DynamicTransforms/Projection 绑定),拓扑为 [PrimitiveTopology.TRIANGLES],
@@ -66,7 +60,7 @@ internal object MinecraftGuiTriangles {
             .withLocation(Identifier.fromNamespaceAndPath("compose_minecraft", "pipeline/gui_triangles"))
             .withVertexShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles"))
             .withFragmentShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles"))
-            .withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
+            .withBindGroupLayout(BindGroupLayouts.PROJECTION)
             .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
             .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR_LINE_WIDTH)
             .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
@@ -85,7 +79,7 @@ internal object MinecraftGuiTriangles {
             .withLocation(Identifier.fromNamespaceAndPath("compose_minecraft", "pipeline/gui_triangles_stroke"))
             .withVertexShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles_stroke"))
             .withFragmentShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles_stroke"))
-            .withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
+            .withBindGroupLayout(BindGroupLayouts.PROJECTION)
             .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
             .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR_LINE_WIDTH)
             .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
@@ -106,7 +100,7 @@ internal object MinecraftGuiTriangles {
             .withLocation(Identifier.fromNamespaceAndPath("compose_minecraft", "pipeline/gui_shadow"))
             .withVertexShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_shadow"))
             .withFragmentShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_shadow"))
-            .withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
+            .withBindGroupLayout(BindGroupLayouts.PROJECTION)
             .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
             .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR_LINE_WIDTH)
             .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
@@ -126,20 +120,9 @@ internal object MinecraftGuiTriangles {
      */
     fun ensureCompiled() {
         if (compiled) return
-        val device = RenderSystem.getDevice()
-        val resourceProvider = mc.resourceManager
-        val shaderSource = ShaderSource { id, type ->
-            val location = type.idConverter().idToFile(id)
-            try {
-                resourceProvider.getResourceOrThrow(location).openAsReader().use { it.readText() }
-            } catch (e: Exception) {
-                LOGGER.error("Compose-Minecraft: failed to read shader {}", location, e)
-                null
-            }
-        }
-        device.precompilePipeline(pipeline, shaderSource)
-        device.precompilePipeline(strokePipeline, shaderSource)
-        device.precompilePipeline(shadowPipeline, shaderSource)
+        RenderSystem.getCompiledPipeline(pipeline)
+        RenderSystem.getCompiledPipeline(strokePipeline)
+        RenderSystem.getCompiledPipeline(shadowPipeline)
         compiled = true
     }
 }

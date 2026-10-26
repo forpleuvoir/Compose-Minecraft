@@ -6,7 +6,7 @@ import moe.forpleuvoir.compose_minecraft.platform.render.ext.blit
 import moe.forpleuvoir.compose_minecraft.platform.render.state.ItemRenderState
 
 import androidx.compose.ui.unit.IntSize
-import com.mojang.blaze3d.pipeline.RenderPipeline
+import com.mojang.renderpearl.api.pipeline.RenderPipeline
 import moe.forpleuvoir.compose_minecraft.platform.ui.tooltip.TooltipLine
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.Font

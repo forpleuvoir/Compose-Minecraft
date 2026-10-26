@@ -33,7 +33,7 @@ class DevSceneInitializer : MinecraftInitializer {
         val key = KeyMappingHelper.registerKeyMapping(
             KeyMapping(
                 "key.compose_minecraft.test",
-                InputConstants.Type.KEYSYM,
+                InputConstants.Type.KEYBOARD,
                 InputConstants.KEY_NUMPAD1,
                 category
             )

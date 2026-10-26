@@ -17,28 +17,28 @@ savedstate = "1.4.0"
 navigationevent = "1.0.1"
 
 #minecraft
-minecraft = "26.2"
-minecraftRange = "[26.2,26.3)"
+minecraft = "26.3"
+minecraftRange = "[26.3,26.4)"
 
 #mixin
-mixin = "0.8.5"
-mixinExtras = "0.5.3"
+mixin = "0.8.7"
+mixinExtras = "0.5.5"
 
 #Fabric, 检查 https://fabricmc.net/versions.html
-fabricApi = "0.157.0+26.2"
-fabricLoader = "0.19.3"
-fabricLoom = "1.17.19"
-fabricKotlin = "1.13.12+kotlin.2.4.0"
-modMenu = "20.0.1"
+fabricApi = "0.165.0+26.3"
+fabricLoader = "0.20.1"
+fabricLoom = "1.19.3"
+fabricKotlin = "1.14.2+kotlin.2.4.21"
+modMenu = "21.0.0"
 
 #NeoForge, 检查 https://projects.neoforged.net/
-neoforgedModDev = "2.0.143"
-neoForm = "26.2-2"
-neoforge = "26.2.0.59"
-neoforgeRange = "[4,)"
+neoforgedModDev = "2.0.148"
+neoForm = "26.3-1"
+neoforge = "26.3.0.99"
+neoforgeRange = "[26.3,)"
 
-forgeKotlin = "6.3.0"
-forgeKotlinRange = "[6.3.0,)"
+forgeKotlin = "6.4.0"
+forgeKotlinRange = "[6.4.0,)"
 
 [libraries]
 #Minecraft

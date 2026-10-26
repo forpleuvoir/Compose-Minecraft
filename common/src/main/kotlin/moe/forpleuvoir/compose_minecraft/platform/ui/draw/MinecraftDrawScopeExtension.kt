@@ -13,8 +13,8 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toIntSize
-import com.mojang.blaze3d.pipeline.RenderPipeline
-import com.mojang.blaze3d.textures.FilterMode
+import com.mojang.renderpearl.api.pipeline.RenderPipeline
+import com.mojang.renderpearl.api.textures.FilterMode
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.EntityDrawData
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.ItemStackDrawData
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.McEntityPlugin

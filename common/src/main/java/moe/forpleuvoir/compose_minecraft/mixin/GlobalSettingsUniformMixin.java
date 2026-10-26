@@ -1,6 +1,6 @@
 package moe.forpleuvoir.compose_minecraft.mixin;
 
-import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.renderer.GlobalSettingsUniform;
 import org.spongepowered.asm.mixin.Final;

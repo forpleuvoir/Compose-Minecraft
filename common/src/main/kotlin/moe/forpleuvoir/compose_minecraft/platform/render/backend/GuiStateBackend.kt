@@ -897,7 +897,7 @@ internal class GuiStateBackend : GeometryBackend {
      * 把一条图片绘制命令转成 [BlitRenderState](图片管线)。
      *
      * - 纹理:CPU 像素(0xAARRGGBB)→ [MinecraftImageTextureCache] 上传为
-     *   [com.mojang.blaze3d.textures.GpuTexture],按位图身份缓存,首次绘制上传一次;
+     *   [com.mojang.renderpearl.api.textures.GpuTexture],按位图身份缓存,首次绘制上传一次;
      * - pipeline:[RenderPipelines.GUI_TEXTURED](带纹理 GUI 管线,与纯色 GUI 不同);
      * - UV:归一化(src 矩形 / 纹理尺寸,MC 语义 0..1);
      * - 颜色:官方 drawImage 语义 **不调制颜色** —— 位图内容直出,恒白色调制,

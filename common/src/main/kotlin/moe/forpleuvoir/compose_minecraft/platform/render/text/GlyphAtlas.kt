@@ -1,9 +1,9 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.text
 
-import com.mojang.blaze3d.GpuFormat
+import com.mojang.renderpearl.api.GpuFormat
 import com.mojang.blaze3d.systems.RenderSystem
-import com.mojang.blaze3d.textures.FilterMode
-import com.mojang.blaze3d.textures.GpuTexture
+import com.mojang.renderpearl.api.textures.FilterMode
+import com.mojang.renderpearl.api.textures.GpuTexture
 import net.minecraft.client.gui.render.TextureSetup
 import org.lwjgl.system.MemoryUtil
 

@@ -1,13 +1,11 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.util
-import moe.forpleuvoir.compose_minecraft.mc
 
-import com.mojang.blaze3d.PrimitiveTopology
-import com.mojang.blaze3d.pipeline.BlendFunction
-import com.mojang.blaze3d.pipeline.ColorTargetState
-import com.mojang.blaze3d.pipeline.RenderPipeline
-import com.mojang.blaze3d.platform.BlendFactor
-import com.mojang.blaze3d.platform.BlendOp
-import com.mojang.blaze3d.shaders.ShaderSource
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology
+import com.mojang.renderpearl.api.pipeline.BlendFunction
+import com.mojang.renderpearl.api.pipeline.ColorTargetState
+import com.mojang.renderpearl.api.pipeline.RenderPipeline
+import com.mojang.renderpearl.api.pipeline.BlendFactor
+import com.mojang.renderpearl.api.pipeline.BlendOp
 import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
 import com.mojang.logging.LogUtils
@@ -185,7 +183,7 @@ internal object BlendPipelines {
                 .withLocation(Identifier.fromNamespaceAndPath("compose_minecraft", "pipeline/gui_blend_${mode.toString().lowercase()}"))
                 .withVertexShader(Identifier.fromNamespaceAndPath("minecraft", "core/gui"))
                 .withFragmentShader(Identifier.fromNamespaceAndPath("minecraft", "core/gui"))
-                .withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
+                .withBindGroupLayout(BindGroupLayouts.PROJECTION)
                 .withColorTargetState(ColorTargetState(fn))
                 .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR)
                 .withPrimitiveTopology(PrimitiveTopology.QUADS)
@@ -226,7 +224,7 @@ internal object BlendPipelines {
         RenderPipeline.builder()
             .withLocation(Identifier.fromNamespaceAndPath("compose_minecraft", "pipeline/gui_textured_blend_${mode.toString().lowercase()}"))
             .withBindGroupLayout(BindGroupLayouts.GLOBALS)
-            .withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
+            .withBindGroupLayout(BindGroupLayouts.PROJECTION)
             .withVertexShader(VANILLA_TEXTURED_SHADER)
             .withFragmentShader(fragmentShader)
             .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
@@ -246,7 +244,7 @@ internal object BlendPipelines {
                 .withLocation(Identifier.fromNamespaceAndPath("compose_minecraft", "pipeline/gui_triangles_blend_${mode.toString().lowercase()}"))
                 .withVertexShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles"))
                 .withFragmentShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles"))
-                .withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
+                .withBindGroupLayout(BindGroupLayouts.PROJECTION)
                 .withColorTargetState(ColorTargetState(fn))
                 .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR_LINE_WIDTH)
                 .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
@@ -263,7 +261,7 @@ internal object BlendPipelines {
                 .withLocation(Identifier.fromNamespaceAndPath("compose_minecraft", "pipeline/gui_triangles_stroke_blend_${mode.toString().lowercase()}"))
                 .withVertexShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles_stroke"))
                 .withFragmentShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles_stroke"))
-                .withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
+                .withBindGroupLayout(BindGroupLayouts.PROJECTION)
                 .withColorTargetState(ColorTargetState(fn))
                 .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR_LINE_WIDTH)
                 .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
@@ -283,17 +281,6 @@ internal object BlendPipelines {
      * 自动编译兜底,次帧起本方法接管。
      */
     fun ensureCompiled() {
-        val device = RenderSystem.getDevice()
-        val resourceProvider = mc.resourceManager
-        val shaderSource = ShaderSource { id, type ->
-            val location = type.idConverter().idToFile(id)
-            try {
-                resourceProvider.getResourceOrThrow(location).openAsReader().use { it.readText() }
-            } catch (e: Exception) {
-                LOGGER.error("Compose-Minecraft: failed to read shader {}", location, e)
-                null
-            }
-        }
         val pipelines = mutableListOf<RenderPipeline>()
         pipelines += guiPipelines.values
         pipelines += trianglePipelines.values
@@ -303,7 +290,7 @@ internal object BlendPipelines {
         for (p in pipelines) {
             if (!compiledPipelines.add(p)) continue
             try {
-                device.precompilePipeline(p, shaderSource)
+                RenderSystem.getCompiledPipeline(p)
             } catch (e: Exception) {
                 LOGGER.error("Compose-Minecraft: failed to compile blend pipeline {}", p.getLocation(), e)
             }

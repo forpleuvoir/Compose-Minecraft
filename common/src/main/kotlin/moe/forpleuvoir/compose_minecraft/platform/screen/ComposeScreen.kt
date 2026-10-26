@@ -17,6 +17,7 @@ import com.mojang.blaze3d.platform.InputConstants
 import com.mojang.blaze3d.platform.cursor.CursorType
 import moe.forpleuvoir.compose_minecraft.platform.textinput.ComposeInputBridge.scrollDelta
 import moe.forpleuvoir.compose_minecraft.platform.textinput.ComposeInputBridge.toCompose
+import moe.forpleuvoir.compose_minecraft.platform.textinput.ComposeInputBridge.toPointerButton
 import moe.forpleuvoir.compose_minecraft.platform.textinput.ComposeInputBridge.toPointerKeyboardModifiers
 import moe.forpleuvoir.compose_minecraft.platform.textinput.MinecraftTextInputService
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposeGuiRenderer
@@ -706,7 +707,7 @@ class ComposeScreen(
             position = mousePosition,
             type = PointerType.Mouse,
             keyboardModifiers = event.buttonInfo.modifiers().toPointerKeyboardModifiers(),
-            button = PointerButton(button),
+            button = button.toPointerButton(),
         )
         // 只在事件确实转发进场景时登记配对,否则抬键会被当成新点击
         if (consumed != null) forwardedPressedButtons = forwardedPressedButtons or (1 shl button)
@@ -730,7 +731,7 @@ class ComposeScreen(
             position = mousePosition,
             type = PointerType.Mouse,
             keyboardModifiers = event.buttonInfo.modifiers().toPointerKeyboardModifiers(),
-            button = PointerButton(button),
+            button = button.toPointerButton(),
         )
         consumed?.anyMovementConsumed == true || super.mouseReleased(event)
     }

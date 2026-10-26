@@ -2,9 +2,9 @@ package moe.forpleuvoir.compose_minecraft.platform.render.plugins
 
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.unit.IntSize
-import com.mojang.blaze3d.pipeline.RenderPipeline
+import com.mojang.renderpearl.api.pipeline.RenderPipeline
 import com.mojang.blaze3d.systems.RenderSystem
-import com.mojang.blaze3d.textures.FilterMode
+import com.mojang.renderpearl.api.textures.FilterMode
 import moe.forpleuvoir.compose_minecraft.platform.render.CustomDrawContext
 import moe.forpleuvoir.compose_minecraft.platform.render.MinecraftRenderPlugin
 import moe.forpleuvoir.compose_minecraft.platform.render.ext.blitSprite

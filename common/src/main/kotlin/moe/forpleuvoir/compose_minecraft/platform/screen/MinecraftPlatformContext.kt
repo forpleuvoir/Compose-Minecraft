@@ -13,7 +13,6 @@ import com.mojang.blaze3d.platform.cursor.CursorType
 import com.mojang.blaze3d.platform.cursor.CursorTypes
 import kotlinx.coroutines.awaitCancellation
 import moe.forpleuvoir.compose_minecraft.platform.textinput.MinecraftTextInputService
-import org.lwjgl.glfw.GLFW
 
 /**
  * Minecraft 平台的 [PlatformContext] 实现(自 [MinecraftComposeScene] 内联匿名对象迁移)。
@@ -43,8 +42,8 @@ open class MinecraftPlatformContext(
 ) : PlatformContext.Empty() {
 
     companion object {
-        val RESIZE_NWSE = CursorType.createStandardCursor(GLFW.GLFW_RESIZE_NWSE_CURSOR, "resize_nwse", CursorType.DEFAULT)
-        val RESIZE_NESW = CursorType.createStandardCursor(GLFW.GLFW_RESIZE_NESW_CURSOR, "resize_nesw", CursorType.DEFAULT)
+        val RESIZE_NWSE = CursorType.createStandardCursor(5, "resize_nwse", CursorType.DEFAULT)
+        val RESIZE_NESW = CursorType.createStandardCursor(6, "resize_nesw", CursorType.DEFAULT)
 
         /**
          * Compose [PointerIcon] → MC 原版 [CursorType] 映射(I9 指针图标):

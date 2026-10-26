@@ -13,7 +13,7 @@ import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.requireLayoutCoordinates
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.IntOffset
-import com.mojang.blaze3d.pipeline.RenderPipeline
+import com.mojang.renderpearl.api.pipeline.RenderPipeline
 import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.GuiCommandSink
 import net.minecraft.client.gui.Font
@@ -438,6 +438,7 @@ class VanillaDrawScope(
             x, y,
             DefaultTooltipPositioner.INSTANCE,
             style,
+            false,
         )
     }
 

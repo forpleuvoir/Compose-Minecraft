@@ -1,7 +1,7 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.state
 import moe.forpleuvoir.compose_minecraft.platform.render.renderer.MinecraftGuiTriangles
 
-import com.mojang.blaze3d.pipeline.RenderPipeline
+import com.mojang.renderpearl.api.pipeline.RenderPipeline
 import com.mojang.blaze3d.vertex.VertexConsumer
 import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.client.gui.render.TextureSetup

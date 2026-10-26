@@ -1,6 +1,7 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.ext
 
 import androidx.compose.ui.util.fastCoerceAtMost
+import com.mojang.renderpearl.api.pipeline.RenderPipeline
 import kotlin.math.absoluteValue
 import moe.forpleuvoir.compose_minecraft.mc
 import moe.forpleuvoir.compose_minecraft.platform.render.plugins.Corner
@@ -43,7 +44,7 @@ import org.joml.Matrix3x2f
  * 拿不到 sprite(资源未就绪)时静默跳过。
  */
 fun GuiCommandSink.blitSprite(
-    pipeline: com.mojang.blaze3d.pipeline.RenderPipeline,
+    pipeline: RenderPipeline,
     location: Identifier,
     x: Int,
     y: Int,
@@ -74,7 +75,7 @@ fun GuiCommandSink.blitSprite(
  * 同款 —— 玩家皮肤头像等 [Identifier] 直接纹理使用,UV 为像素偏移。
  */
 fun GuiCommandSink.blit(
-    pipeline: com.mojang.blaze3d.pipeline.RenderPipeline,
+    pipeline: RenderPipeline,
     textureId: Identifier,
     x: Int,
     y: Int,
@@ -109,7 +110,7 @@ fun GuiCommandSink.blit(
 
 /** 整 sprite 拉伸绘制(原版 blitSprite(TextureAtlasSprite) 语义)。 */
 private fun GuiCommandSink.blitSprite(
-    pipeline: com.mojang.blaze3d.pipeline.RenderPipeline,
+    pipeline: RenderPipeline,
     guiSprite: GuiSprite,
     x: Int,
     y: Int,
@@ -130,7 +131,7 @@ private fun GuiCommandSink.blitSprite(
  * 画布(尺寸 spriteWidth x spriteHeight)中的像素偏移,UV 经 getU/getV 归一化。
  */
 private fun GuiCommandSink.blitSprite(
-    pipeline: com.mojang.blaze3d.pipeline.RenderPipeline,
+    pipeline: RenderPipeline,
     guiSprite: GuiSprite,
     spriteWidth: Int,
     spriteHeight: Int,
@@ -155,7 +156,7 @@ private fun GuiCommandSink.blitSprite(
 
 /** 原版 blitNineSlicedSprite:九宫格拆 9 段,border 按宽高一半钳制。 */
 private fun GuiCommandSink.blitNineSlicedSprite(
-    pipeline: com.mojang.blaze3d.pipeline.RenderPipeline,
+    pipeline: RenderPipeline,
     guiSprite: GuiSprite,
     nineSlice: GuiSpriteScaling.NineSlice,
     x: Int,
@@ -268,7 +269,7 @@ private fun GuiCommandSink.blitNineSlicedSprite(
  * 否则以"画布中间块"为 tile 平铺(GuiCommandSink.blitTiledSprite)。
  */
 private fun GuiCommandSink.blitNineSliceInnerSegment(
-    pipeline: com.mojang.blaze3d.pipeline.RenderPipeline,
+    pipeline: RenderPipeline,
     guiSprite: GuiSprite,
     nineSlice: GuiSpriteScaling.NineSlice,
     x: Int,
@@ -307,7 +308,7 @@ private fun GuiCommandSink.blitNineSliceInnerSegment(
 
 /** 原版 blitTiledSprite:以画布子区域(textureX..textureX+tileWidth)为 tile 平铺目标矩形。 */
 private fun GuiCommandSink.blitTiledSprite(
-    pipeline: com.mojang.blaze3d.pipeline.RenderPipeline,
+    pipeline: RenderPipeline,
     guiSprite: GuiSprite,
     x: Int,
     y: Int,
@@ -349,7 +350,7 @@ private fun GuiCommandSink.blitTiledSprite(
 
 /** 原版 innerBlit:一张 UV 矩形提交 [BlitRenderState](默认 GUI_TEXTURED 管线)。 */
 private fun GuiCommandSink.innerBlit(
-    pipeline: com.mojang.blaze3d.pipeline.RenderPipeline,
+    pipeline: RenderPipeline,
     guiSprite: GuiSprite,
     x0: Int,
     x1: Int,
@@ -388,7 +389,7 @@ private fun GuiCommandSink.innerBlit(
  */
 @Suppress("UnnecessaryVariable")
 fun GuiCommandSink.pushNineSliced(
-    pipeline: com.mojang.blaze3d.pipeline.RenderPipeline,
+    pipeline: RenderPipeline,
     uv: UVMapping,
     corner: Corner,
     size: androidx.compose.ui.unit.IntSize,
@@ -457,7 +458,7 @@ fun GuiCommandSink.pushNineSliced(
 
 /** 九宫格单段:像素 UV 归一化后提交 [BlitRenderState](像素九宫格组内部用)。 */
 private fun GuiCommandSink.segment(
-    pipeline: com.mojang.blaze3d.pipeline.RenderPipeline,
+    pipeline: RenderPipeline,
     x: Int,
     y: Int,
     w: Int,

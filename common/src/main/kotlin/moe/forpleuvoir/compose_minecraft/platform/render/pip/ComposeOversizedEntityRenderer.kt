@@ -2,14 +2,14 @@ package moe.forpleuvoir.compose_minecraft.platform.render.pip
 import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.premultipliedForPipeline
 import moe.forpleuvoir.compose_minecraft.mc
 
-import com.mojang.blaze3d.GpuFormat
+import com.mojang.renderpearl.api.GpuFormat
 import com.mojang.blaze3d.ProjectionType
 import com.mojang.blaze3d.platform.Lighting
-import com.mojang.blaze3d.systems.GpuDevice
+import com.mojang.renderpearl.api.device.GpuDevice
 import com.mojang.blaze3d.systems.RenderSystem
-import com.mojang.blaze3d.textures.FilterMode
-import com.mojang.blaze3d.textures.GpuTexture
-import com.mojang.blaze3d.textures.GpuTextureView
+import com.mojang.renderpearl.api.textures.FilterMode
+import com.mojang.renderpearl.api.textures.GpuTexture
+import com.mojang.renderpearl.api.textures.GpuTextureView
 import com.mojang.blaze3d.vertex.PoseStack
 import net.minecraft.client.gui.render.GuiRenderer
 import net.minecraft.client.gui.render.TextureSetup
@@ -26,6 +26,9 @@ import net.minecraft.client.renderer.state.level.CameraRenderState
 import org.joml.Matrix3x2f
 import org.joml.Quaternionf
 import org.joml.Quaternionfc
+import org.joml.Vector4fc
+import java.util.Optional
+import java.util.OptionalDouble
 import org.joml.Vector3fc
 
 /**
@@ -68,8 +71,6 @@ class ComposeOversizedEntityRenderer(
             return
         }
         prepareTexturesAndProjection(needsResize, width, height)
-        RenderSystem.outputColorTextureOverride = textureView
-        RenderSystem.outputDepthTextureOverride = depthTextureView
         val modelViewStack = RenderSystem.getModelViewStack()
         modelViewStack.pushMatrix()
         val poseStack = PoseStack()
@@ -79,10 +80,22 @@ class ComposeOversizedEntityRenderer(
         val scale = guiScale * renderState.scale()
         poseStack.scale(scale, scale, -scale)
         renderToTexture(renderState, poseStack)
-        featureRenderDispatcher.renderAllFeatures(submitNodeStorage)
+        featureRenderDispatcher.prepareFrame(submitNodeStorage).use { frame ->
+            RenderSystem.getDevice()
+                .createCommandEncoder()
+                .createRenderPass(
+                    { "Compose PIP" },
+                    textureView!!,
+                    Optional.empty<Vector4fc>(),
+                    depthTextureView,
+                    OptionalDouble.empty(),
+                )
+                .use { renderPass ->
+                    RenderSystem.bindDefaultUniforms(renderPass)
+                    FeatureRenderDispatcher.renderAllFeatures(renderPass, frame)
+                }
+        }
         modelViewStack.popMatrix()
-        RenderSystem.outputColorTextureOverride = null
-        RenderSystem.outputDepthTextureOverride = null
         blitTexture(renderState, color, pose)
     }
 
@@ -99,7 +112,7 @@ class ComposeOversizedEntityRenderer(
         val translation: Vector3fc = renderState.translation()
         poseStack.translate(translation.x(), translation.y(), translation.z())
         val h = renderState.renderState().boundingBoxHeight
-        poseStack.mulPose(renderState.rotation())
+        poseStack.rotate(renderState.rotation())
         poseStack.translate(0f, -h / 2f, 0f)
         val overriddenCameraAngle: Quaternionfc? = renderState.overrideCameraAngle()
         val cameraRenderState = CameraRenderState()

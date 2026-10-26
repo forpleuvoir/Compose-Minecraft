@@ -100,12 +100,12 @@ open class MinecraftTextInputService : PlatformTextInputService {
         request = null
         legacyOnEditCommand = onEditCommand
         legacyValue = value
-        textInputManager.startTextInput()
+        textInputManager.startTextInput(this)
     }
 
     /** 新版 API 会话在 RootNodeOwner.TextInputSession.startInputMethod 中调用(无参重载) */
     override fun startInput() {
-        textInputManager.startTextInput()
+        textInputManager.startTextInput(this)
     }
 
     override fun stopInput() {
@@ -123,7 +123,7 @@ open class MinecraftTextInputService : PlatformTextInputService {
     }
 
     override fun showSoftwareKeyboard() {
-        textInputManager.startTextInput()
+        textInputManager.startTextInput(this)
     }
 
     override fun hideSoftwareKeyboard() {
@@ -166,7 +166,7 @@ open class MinecraftTextInputService : PlatformTextInputService {
         committedCharCount = 0
         focusedRect = null
         syncedRect = null
-        textInputManager.startTextInput()
+        textInputManager.startTextInput(this)
         // 换绑请求时旧会话必须先注销, 否则失效候选会留在 IMBlocker 的焦点表里
         imBlockerSession?.close()
         imBlockerSession = IMBlockerCompat.requestTextInputFocus(newRequest)

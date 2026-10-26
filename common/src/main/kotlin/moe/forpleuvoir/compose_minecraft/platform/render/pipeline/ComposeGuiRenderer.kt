@@ -2,8 +2,8 @@ package moe.forpleuvoir.compose_minecraft.platform.render.pipeline
 import moe.forpleuvoir.compose_minecraft.mc
 
 import com.mojang.blaze3d.ProjectionType
-import com.mojang.blaze3d.pipeline.RenderPipeline
-import com.mojang.blaze3d.systems.RenderPass
+import com.mojang.renderpearl.api.pipeline.RenderPipeline
+import com.mojang.renderpearl.api.commands.RenderPass
 import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.VertexConsumer
 import moe.forpleuvoir.compose_minecraft.platform.render.text.FontResolver
@@ -635,6 +635,11 @@ class ComposeGuiRenderer : GuiCommandSink {
             delegate.setLineWidth(width)
             return this
         }
+
+        override fun setUv3(u: Float, v: Float): VertexConsumer {
+            delegate.setUv3(u, v)
+            return this
+        }
     }
 
     /** 绘制阶段:像素正交投影 + 绑定主渲染目标 + 逐 draw 提交(照抄原版 executeDrawRange/executeDraw)。 */
@@ -652,7 +657,7 @@ class ComposeGuiRenderer : GuiCommandSink {
                 { "Compose GUI" },
                 mainRenderTarget.getColorTextureView()!!,
                 Optional.empty(),
-                if (mainRenderTarget.useDepth) mainRenderTarget.getDepthTextureView()!! else null,
+                if (mainRenderTarget.hasDepth()) mainRenderTarget.getDepthTextureView()!! else null,
                 OptionalDouble.empty(),
             )
             .use { renderPass ->
@@ -678,7 +683,7 @@ class ComposeGuiRenderer : GuiCommandSink {
     private fun executeDraw(drawState: Draw, renderPass: RenderPass) {
         val executeInfo = vertexBuffer.getExecuteInfo(drawState.draw) ?: return
         val pipeline = drawState.pipeline
-        renderPass.setPipeline(pipeline)
+        renderPass.setPipeline(RenderSystem.getCompiledPipeline(pipeline))
         renderPass.setVertexBuffer(0, executeInfo.vertexBuffer().slice())
         val scissorArea = drawState.scissorArea
         if (scissorArea != null) {
@@ -688,13 +693,13 @@ class ComposeGuiRenderer : GuiCommandSink {
         }
         val textureSetup = drawState.textureSetup
         if (textureSetup.texure0() != null) {
-            renderPass.bindTexture("Sampler0", textureSetup.texure0(), textureSetup.sampler0())
+            renderPass.setUniform("Sampler0", textureSetup.texure0(), textureSetup.sampler0())
         }
         if (textureSetup.texure1() != null) {
-            renderPass.bindTexture("Sampler1", textureSetup.texure1(), textureSetup.sampler1())
+            renderPass.setUniform("Sampler1", textureSetup.texure1(), textureSetup.sampler1())
         }
         if (textureSetup.texure2() != null) {
-            renderPass.bindTexture("Sampler2", textureSetup.texure2(), textureSetup.sampler2())
+            renderPass.setUniform("Sampler2", textureSetup.texure2(), textureSetup.sampler2())
         }
         renderPass.setIndexBuffer(executeInfo.indexBuffer(), executeInfo.indexType())
         renderPass.drawIndexed(executeInfo.indexCount(), 1, executeInfo.firstIndex(), executeInfo.baseVertex(), 0)
