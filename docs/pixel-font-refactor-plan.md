@@ -173,7 +173,7 @@ binding 提供(一份实现);删除两处手抄。
 
 - 原版字形基线锚点硬编码 = 行顶+7:`GlyphBitmap.getTop() = 7 − bearingTop`;
   缺失字体集 `getFontSetRaw → missingFontSet = AllMissingGlyphProvider` = 方框字形。
-- 26.2 默认字体**无阿拉伯文/泰文**;`include/unifont.json` providers 为空
+- 26.2/26.3 默认字体**无阿拉伯文/泰文**;`include/unifont.json` providers 为空
   ⇒ 这两类文字纯原版也方框(回退屏对照组印证)。
 - fusion_pixel 两变体:upm=1200,OS/2 行高 1600units → 自然行盒 16px@em12;
   **hmtx 在 ASCII+CJK 全区间逐字符相等**(GPOS 有差异)⇒ 度量互通。

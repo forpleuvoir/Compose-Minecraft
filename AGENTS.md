@@ -95,7 +95,7 @@ buildSrc/                      # Gradle 约定插件(multiloader-common / multil
 common/                        # 平台核心(单模块)
   src/main/kotlin/
     moe/forpleuvoir/compose_minecraft/platform/     # 自有代码:Screen 桥接、场景宿主、渲染上下文
-    androidx/compose/**                            # 从 CMP 1.11 移植的运行时源码(expect/actual 剥离)
+    androidx/compose/**                            # 移植的运行时源码(源码基线 CMP 1.11;运行时依赖 1.12.2)
   src/devOnly/kotlin/           # dev 测试代码(dev scene),仅 Fabric dev run 生效
 fabric/                        # Fabric loader 模块(includeInternal 内嵌依赖)
 neoforge/                      # NeoForge loader 模块(jarJar 内嵌依赖,无 devOnly)
@@ -169,8 +169,9 @@ build_project(rebuild=true)
     正确解法 = 样式并入 MeasureSpec + 测量直接询问渲染器的权威计宽
     (`mc.font.splitter`),并顺手消灭所有自算宽度公式。
 
-- **对照官方源码**:`androidx/compose/**` 是 CMP 1.11 移植源码,官方 sources jar 在本地
-  Gradle 缓存中(foundation-desktop / ui-text-desktop 等)。改动前先对照官方实现,
+- **对照官方源码**:`androidx/compose/**` 是 CMP 1.11 移植源码(运行时依赖已升 1.12.2,
+  见「Compose 版本策略」),官方 sources jar 在本地 Gradle 缓存中
+  (foundation-desktop / ui-text-desktop 等)。改动前先对照官方实现,
   避免引入与官方语义不符的自研逻辑。
 - **警惕占位实现**:移植中常见 `= this` / `= null` / `= false` / `map` 恒返回 `null`
   等占位(expect/actual 剥离后未补全)。"某功能完全失效/行为怪异"时优先排查这类占位。
@@ -226,7 +227,7 @@ build_project(rebuild=true)
 
 ### 矩阵/旋转调试踩坑记录(T.13 旋转中心"公转"案)
 
-- **MC 26.2 运行时 JOML 的 pose 乘法是"行主序"**:`org.joml.Matrix3x2f.transformPosition`
+- **MC 26.2/26.3 运行时 JOML 的 pose 乘法是"行主序"**:`org.joml.Matrix3x2f.transformPosition`
   实测按 `x' = m00*x + m10*y + m20` 计算(标准列主序应为 `x' = m00*x + m01*y + m20`)。
   向 MC 提交 pose 时若按列主序直接构造 `Matrix3x2f(values[0], values[4], values[1], ...)`,
   2x2 旋转矩阵会被**转置** → 旋转方向反转,且绕 pivot 旋转时**中心随角度摆动**
@@ -326,7 +327,7 @@ repositories 中声明(注意 `settings.gradle.kts` 里那个 Modrinth 仓库只
   动画级 `WorldBackdropWhileAnimating(state)`(非 idle 期间持有)。**任一方借用即渲染** ——
   子屏 `disableWorldRender = true` 但父屏(默认值)在借用时世界照旧渲染,这是计数语义的必然结果。
 - 生效点 `GameRendererMixin`:`@Inject(method = "renderLevel", at = HEAD, cancellable)`,条件 =
-  无人借用 **且** 当前屏是 `ComposeScreen`。26.2 已无 `shouldRenderLevel` 局部量,不能再改标志位;
+  无人借用 **且** 当前屏是 `ComposeScreen`。26.2/26.3 已无 `shouldRenderLevel` 局部量,不能再改标志位;
   `renderLevel` 只有两个调用点(`GameRenderer.render` 与 `Minecraft.grabPanoramixScreenshot`),
   后者不在 Compose 屏场景故不受影响。
 - ⚠️ 整方法取消会一并跳过 `renderLevel` 内的雾 / 投影 / 深度设置(GUI 走自己的正交投影与清屏),
@@ -420,6 +421,74 @@ repositories 中声明(注意 `settings.gradle.kts` 里那个 Modrinth 仓库只
 
 - 业务自接动画(第 2 / 3 层)时把 `animation` 设为 `ScreenAnimation.None`,否则平台滑动与业务动画会叠加。
 - `pauseGame` / `closeOnEsc` 为构造参数;`ComposeScreen` 是 final 类,可定制行为一律走构造参数(不开子类)。
+
+## MC 26.3 迁移要点(必须遵守)
+
+26.3 把渲染栈整体换掉、输入后端换成 SDL,下列结论均已在本仓库实机验证过,改动相关代码前必读。
+
+### 渲染栈:blaze3d → renderpearl
+
+`com.mojang.blaze3d` 的图形对象迁到新库 `com.mojang.renderpearl.api`:
+
+| 26.2 及更早 | 26.3 |
+|---|---|
+| `blaze3d.pipeline.{RenderPipeline, BlendFunction, ColorTargetState}` | `renderpearl.api.pipeline.{…}` |
+| `blaze3d.platform.{BlendFactor, BlendOp}` | `renderpearl.api.pipeline.{…}` |
+| `blaze3d.{PrimitiveTopology, GpuFormat}` | `renderpearl.api.pipeline.PrimitiveTopology` / `renderpearl.api.GpuFormat` |
+| `blaze3d.shaders.ShaderSource` | `renderpearl.api.pipeline.ShaderSource`(接口) |
+| `blaze3d.textures.{GpuTexture, GpuTextureView, FilterMode}` | `renderpearl.api.textures.{…}` |
+| `blaze3d.systems.GpuDevice` / `RenderPass` | `renderpearl.api.device.GpuDevice` / `renderpearl.api.commands.RenderPass` |
+| `blaze3d.buffers.GpuBuffer` | `renderpearl.api.buffers.GpuBuffer` |
+
+留在 `blaze3d` 的:`systems.RenderSystem`、`vertex.*`、`platform.*`、`font.*`、
+`pipeline.{RenderTarget, MainTarget, TextureTarget}`、`framegraph.*`。
+
+### 模组 pipeline 必须自建 PipelineCache
+
+`RenderSystem.getCompiledPipeline` 走的是全局 fallback cache,而它的 `ShaderSource`
+由 `Minecraft` 用 `vanillaPackResources.asResourceManager()` 建立 —— **只认 vanilla 命名空间**,
+模组 `assets/<modid>/shaders/**` 与 `#include` 一律读不到(报 "Couldn't find source for VERTEX shader")。
+故本平台的模组管线统一经 `platform/render/pipeline/ComposePipelineCache.kt`:
+自持 `PipelineCache(RenderSystem.getDevice(), ResourceManagerShaderSource())`,
+其中 ShaderSource 走 `mc.resourceManager` 并用 `ShaderManager.listAllIncludes` 提供 include 表。
+
+### 管线与着色器的新约束
+
+- pipeline 声明必须同时含 `BindGroupLayouts.PROJECTION` 与 `DYNAMIC_TRANSFORMS`
+  (26.2 的 `MATRICES_PROJECTION` 已拆分),否则编译报
+  `Unable to find shader defined uniform (DynamicTransforms)`;
+- shader 的每个 `in`/`out` 必须带 `layout(location = N)`(顶点输入按 VertexFormat 顺序 0,1,2),
+  并加 `#extension GL_ARB_separate_shader_objects : require` —— 26.3 经 shaderc 编 SPIR-V,缺 location 直接失败;
+- `DynamicTransforms` UBO 字段顺序为 `ModelViewMat, TextureMat, ColorModulator, ModelOffset`
+  (与 26.2 的前后顺序不同,写错不报错但颜色/UV 错位);
+- 纹理绑定由 `renderPass.bindTexture(name, view, sampler)` 改为 `renderPass.setUniform(name, view, sampler)`;
+- `setPipeline` 现在收 `CompiledRenderPipeline`;`MainTarget.useDepth` → `hasDepth()`。
+
+### 输入:后端换成 SDL
+
+- `InputConstants` 的键码是 **SDL scancode**(A=4、0=39、Space=44),不再是 GLFW keycode;
+  与 Compose `Key`(AWT VK)不同值,**必须逐键显式映射**(见 `ComposeInputBridge`);
+- 鼠标按钮号 **1 基**(左=1、中=2、右=3),而 Compose `PointerButton` 是 0 基
+  (Primary=0、Secondary=1、Tertiary=2),必须换算(见 `Int.toPointerButton()`);
+- `KEY_LSUPER` / `KEY_RSUPER` 常量已不存在(Meta 键无桥接,修饰键位仍读 `MOD_SUPER`);
+- `InputConstants.Type` 只剩 `KEYBOARD` / `MOUSE`(`KEYSYM` → `KEYBOARD`);
+- 光标走 SDL 系统光标码:`CursorType.createStandardCursor(码, 名称, 回落)`,
+  NWSE=5 / NESW=6 / NS=8 / EW=7 / ALL=9 / NO=10 / HAND=11;
+- `TextInputManager.startTextInput(owner)` 需要 owner;tooltip API 多一个
+  `extraSpaceAfterFirstLine` 参数。
+
+### 物品与数据组件的装载顺序
+
+`ItemStack` 读取物品 holder 的 data components,而组件只在**服务端资源(世界)装载后**绑定,
+主菜单阶段构造会抛 `Components not bound yet`。dev 场景与任何"未进世界"路径都不得构造 ItemStack。
+
+### Compose 版本策略
+
+- 运行时依赖 **CMP 1.12.2**(runtime-retain 1.12.1、`navigationevent-compose` 1.1.0、
+  `androidx.lifecycle:lifecycle-viewmodel-compose(-savedstate):2.11.0`);
+- 移植源码基线保持 **1.11**:文本/样式以当前本地实现为绝对基准,不跟进上游 1.12 的 text/style 重写
+  (1.12 的文本类修复全部落在 `skikoMain`/`iosMain`,本平台不走 Skia/UIKit,无可移植内容);
+- 1.12 新增的三项平台能力暂不跟进:`LayerOutsets`、`MeshGradientPainter`、`PopupProperties.blockPointerInputOutside`。
 
 ## 已知限制
 

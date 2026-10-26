@@ -22,8 +22,8 @@
 | 属性 | 值 |
 |---|---|
 | Mod ID | `compose_minecraft` |
-| 版本 | `26.2-0.1.0` |
-| Loader | Fabric(0.19.x+ / Loom 1.17.x)、NeoForge(26.2.x) |
+| 版本 | `26.3-0.2.0` |
+| Loader | Fabric(loader 0.20.x / Loom 1.19.x)、NeoForge(26.3.x) |
 | 运行时依赖 | Kotlin for Forge(Fabric 端 Fabric Kotlin) |
 | 平台包 | `moe.forpleuvoir.compose_minecraft.platform` |
 
@@ -33,8 +33,8 @@
 
 把对应 Loader 的发布 JAR 放入 `mods/` 文件夹即可:
 
-- `compose_minecraft-fabric-26.2-0.1.0.jar`
-- `compose_minecraft-neoforge-26.2-0.1.0.jar`
+- `compose_minecraft-fabric-26.3-0.2.0.jar`
+- `compose_minecraft-neoforge-26.3-0.2.0.jar`
 
 平台 JAR 已内嵌完整 Compose 运行时(约 4166 个 `androidx.compose.*` 类),
 消费者 Mod **不需要** 再引入任何 Compose/Skiko 依赖,也不要重复嵌入。
@@ -46,7 +46,7 @@
 ```json
 {
   "depends": {
-    "compose_minecraft": ">=26.2-0.1.0"
+    "compose_minecraft": ">=26.3-0.2.0"
   }
 }
 ```
@@ -59,7 +59,7 @@
 [[dependencies.compose_minecraft]]
 modId = "compose_minecraft"
 type = "required"
-versionRange = "[26.2-0.1.0,)"
+versionRange = "[26.3-0.2.0,)"
 ordering = "NONE"
 side = "CLIENT"
 ```

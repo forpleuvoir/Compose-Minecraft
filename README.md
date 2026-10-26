@@ -4,19 +4,19 @@
 
 ## 特性
 
-- **无 Skia / Skiko / Desktop / Material**:所有绘制直接进入 Minecraft 当前帧的
-  `GuiRenderState`,与渲染后端(Vulkan/OpenGL)无关;
-- **原版 `Screen` 桥接**:Compose 场景通过原版 Screen 挂入 Minecraft,
-  渲染、输入、生命周期全走原版机制(无 mixin、无帧钩子);
+- **无 Skia / Skiko / Desktop / Material**:绘制由 `ComposeGuiRenderer` 独立工作流提交
+  到 Minecraft 主帧缓冲(不经原版 `GuiRenderState` 节点树,与 Vulkan/OpenGL 后端无关);
+- **原版 `Screen` 桥接 + 渲染帧钩子**:Compose 场景通过原版 `Screen` 挂入 Minecraft,
+  渲染经 `GuiRendererMixin`(`GuiRenderer.render()` 的 `draw()` 之后)提交,输入与生命周期走原版机制;
 - **完整输入与焦点**:指针(点击/拖拽/滚轮)、键盘、Tab 与方向键焦点导航;
-- **MC Font 文本**:测量与绘制统一使用 Minecraft 字体;
+- **MC 字体文本**:`PlatformFont` 注册表(fusion_pixel / 系统矢量 / 原版位图三链),测量与绘制统一走 Minecraft 字体通道;
 - **内嵌完整 Compose 运行时**:发布 JAR 自带 `androidx.compose.*` 运行时,
   消费者无需再引入任何 Compose/Skiko 依赖。
 
 ## 快速开始
 
 ```kotlin
-import moe.forpleuvoir.compose_minecraft.minecraft.ComposeScreen
+import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 
 // 在客户端主线程打开 Compose 屏幕
 ComposeScreen.open {
