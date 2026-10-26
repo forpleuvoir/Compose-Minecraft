@@ -1,4 +1,5 @@
 #version 330
+#extension GL_ARB_separate_shader_objects : require
 
 // Compose-Minecraft 自定义 GUI 三角形着色器(片元,描边专用)
 //
@@ -24,15 +25,15 @@
 
 layout(std140) uniform DynamicTransforms {
     mat4 ModelViewMat;
+    mat4 TextureMat;
     vec4 ColorModulator;
     vec3 ModelOffset;
-    mat4 TextureMat;
 };
 
-in vec4 vertexColor;
-in float edgeCoverage;
+layout(location = 0) in vec4 vertexColor;
+layout(location = 1) in float edgeCoverage;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
 
 void main() {
     vec4 color = vertexColor;

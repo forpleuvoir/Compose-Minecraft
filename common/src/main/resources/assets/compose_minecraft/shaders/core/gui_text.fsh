@@ -1,4 +1,5 @@
 #version 330
+#extension GL_ARB_separate_shader_objects : require
 
 // Compose-Minecraft TrueType 文本渲染着色器(片元,T.TT)
 //
@@ -11,17 +12,17 @@
 
 layout(std140) uniform DynamicTransforms {
     mat4 ModelViewMat;
+    mat4 TextureMat;
     vec4 ColorModulator;
     vec3 ModelOffset;
-    mat4 TextureMat;
 };
 
 uniform sampler2D Sampler0;
 
-in vec2 texCoord0;
-in vec4 vertexColor;
+layout(location = 0) in vec2 texCoord0;
+layout(location = 1) in vec4 vertexColor;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
 
 // 小字号可读性:轻度 gamma 提压(中间调增强),对齐系统渲染器的"实"感;
 // 线性覆盖度直出会偏淡/发虚(与 DirectWrite 等对比实测反馈)

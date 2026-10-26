@@ -1,5 +1,6 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.util
 
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposePipelineCache
 import com.mojang.renderpearl.api.pipeline.PrimitiveTopology
 import com.mojang.renderpearl.api.pipeline.BlendFunction
 import com.mojang.renderpearl.api.pipeline.ColorTargetState
@@ -184,6 +185,7 @@ internal object BlendPipelines {
                 .withVertexShader(Identifier.fromNamespaceAndPath("minecraft", "core/gui"))
                 .withFragmentShader(Identifier.fromNamespaceAndPath("minecraft", "core/gui"))
                 .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+                .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
                 .withColorTargetState(ColorTargetState(fn))
                 .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR)
                 .withPrimitiveTopology(PrimitiveTopology.QUADS)
@@ -225,6 +227,7 @@ internal object BlendPipelines {
             .withLocation(Identifier.fromNamespaceAndPath("compose_minecraft", "pipeline/gui_textured_blend_${mode.toString().lowercase()}"))
             .withBindGroupLayout(BindGroupLayouts.GLOBALS)
             .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+            .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
             .withVertexShader(VANILLA_TEXTURED_SHADER)
             .withFragmentShader(fragmentShader)
             .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
@@ -245,6 +248,7 @@ internal object BlendPipelines {
                 .withVertexShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles"))
                 .withFragmentShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles"))
                 .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+                .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
                 .withColorTargetState(ColorTargetState(fn))
                 .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR_LINE_WIDTH)
                 .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
@@ -262,6 +266,7 @@ internal object BlendPipelines {
                 .withVertexShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles_stroke"))
                 .withFragmentShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles_stroke"))
                 .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+                .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
                 .withColorTargetState(ColorTargetState(fn))
                 .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR_LINE_WIDTH)
                 .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
@@ -290,7 +295,7 @@ internal object BlendPipelines {
         for (p in pipelines) {
             if (!compiledPipelines.add(p)) continue
             try {
-                RenderSystem.getCompiledPipeline(p)
+                ComposePipelineCache.compiled(p)
             } catch (e: Exception) {
                 LOGGER.error("Compose-Minecraft: failed to compile blend pipeline {}", p.getLocation(), e)
             }

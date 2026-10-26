@@ -1,4 +1,5 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.renderer
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposePipelineCache
 import moe.forpleuvoir.compose_minecraft.platform.render.util.BlendPipelines
 
 import com.mojang.renderpearl.api.pipeline.PrimitiveTopology
@@ -61,6 +62,7 @@ internal object MinecraftGuiTriangles {
             .withVertexShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles"))
             .withFragmentShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles"))
             .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+            .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
             .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
             .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR_LINE_WIDTH)
             .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
@@ -80,6 +82,7 @@ internal object MinecraftGuiTriangles {
             .withVertexShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles_stroke"))
             .withFragmentShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_triangles_stroke"))
             .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+            .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
             .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
             .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR_LINE_WIDTH)
             .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
@@ -101,6 +104,7 @@ internal object MinecraftGuiTriangles {
             .withVertexShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_shadow"))
             .withFragmentShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_shadow"))
             .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+            .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
             .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
             .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR_LINE_WIDTH)
             .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
@@ -120,9 +124,9 @@ internal object MinecraftGuiTriangles {
      */
     fun ensureCompiled() {
         if (compiled) return
-        RenderSystem.getCompiledPipeline(pipeline)
-        RenderSystem.getCompiledPipeline(strokePipeline)
-        RenderSystem.getCompiledPipeline(shadowPipeline)
+        ComposePipelineCache.compiled(pipeline)
+        ComposePipelineCache.compiled(strokePipeline)
+        ComposePipelineCache.compiled(shadowPipeline)
         compiled = true
     }
 }

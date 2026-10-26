@@ -1,5 +1,6 @@
 package moe.forpleuvoir.compose_minecraft.platform.render.text
 
+import moe.forpleuvoir.compose_minecraft.platform.render.pipeline.ComposePipelineCache
 import com.mojang.renderpearl.api.pipeline.PrimitiveTopology
 import com.mojang.renderpearl.api.pipeline.BlendFunction
 import com.mojang.renderpearl.api.pipeline.ColorTargetState
@@ -33,6 +34,7 @@ internal object MinecraftGuiText {
             .withVertexShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_text"))
             .withFragmentShader(Identifier.fromNamespaceAndPath("compose_minecraft", "core/gui_text"))
             .withBindGroupLayout(net.minecraft.client.renderer.BindGroupLayouts.PROJECTION)
+            .withBindGroupLayout(net.minecraft.client.renderer.BindGroupLayouts.DYNAMIC_TRANSFORMS)
             .withBindGroupLayout(net.minecraft.client.renderer.BindGroupLayouts.SAMPLER0)
             .withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
             .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX_COLOR)
@@ -47,7 +49,7 @@ internal object MinecraftGuiText {
     /** 确保 pipeline 的 shader 已编译(幂等;主线程、渲染上下文活跃时调用) */
     fun ensureCompiled() {
         if (compiled) return
-        RenderSystem.getCompiledPipeline(pipeline)
+        ComposePipelineCache.compiled(pipeline)
         compiled = true
     }
 }

@@ -18,8 +18,6 @@ import moe.forpleuvoir.compose_minecraft.platform.screen.ComposeScreen
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.minecraftItem
 import moe.forpleuvoir.compose_minecraft.platform.ui.draw.minecraftTexture
 import net.minecraft.resources.Identifier
-import net.minecraft.world.item.ItemStack
-import net.minecraft.world.item.Items
 
 @Composable
 fun AlphaTestScene() {
@@ -43,10 +41,14 @@ fun AlphaTestScene() {
                 .size(100.dp)
                 .background(Color(0xFF66CCFF))
         )
-        Box(
-            Modifier
-                .size(100.dp)
-                .minecraftItem(mc.player?.mainHandItem?:ItemStack(Items.DIAMOND))
-        )
+        // ItemStack 读取物品 holder 的 data components,而组件仅在服务端资源(世界)装载后绑定,
+        // 主菜单下构造会抛 "Components not bound yet";故仅在已有玩家时渲染手持物品。
+        mc.player?.mainHandItem?.let { stack ->
+            Box(
+                Modifier
+                    .size(100.dp)
+                    .minecraftItem(stack)
+            )
+        }
     }
 }

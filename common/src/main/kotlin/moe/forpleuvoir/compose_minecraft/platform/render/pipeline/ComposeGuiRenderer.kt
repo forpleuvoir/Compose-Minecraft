@@ -683,7 +683,7 @@ class ComposeGuiRenderer : GuiCommandSink {
     private fun executeDraw(drawState: Draw, renderPass: RenderPass) {
         val executeInfo = vertexBuffer.getExecuteInfo(drawState.draw) ?: return
         val pipeline = drawState.pipeline
-        renderPass.setPipeline(RenderSystem.getCompiledPipeline(pipeline))
+        renderPass.setPipeline(ComposePipelineCache.compiled(pipeline))
         renderPass.setVertexBuffer(0, executeInfo.vertexBuffer().slice())
         val scissorArea = drawState.scissorArea
         if (scissorArea != null) {
